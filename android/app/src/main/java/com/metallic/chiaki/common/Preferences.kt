@@ -74,6 +74,16 @@ class Preferences(context: Context)
 		get() = sharedPreferences.getBoolean(touchpadOnlyEnabledKey, false)
 		set(value) { sharedPreferences.edit().putBoolean(touchpadOnlyEnabledKey, value).apply() }
 
+	val menuButtonEnabledKey get() = resources.getString(R.string.preferences_menu_button_enabled_key)
+	var menuButtonEnabled
+		get() = sharedPreferences.getBoolean(menuButtonEnabledKey, false)
+		set(value) { sharedPreferences.edit().putBoolean(menuButtonEnabledKey, value).apply() }
+
+	val menuButtonOpacityKey get() = resources.getString(R.string.preferences_menu_button_opacity_key)
+	var menuButtonOpacity
+		get() = sharedPreferences.getInt(menuButtonOpacityKey, 50)
+		set(value) { sharedPreferences.edit().putInt(menuButtonOpacityKey, value).apply() }
+
 	val rumbleEnabledKey get() = resources.getString(R.string.preferences_rumble_enabled_key)
 	var rumbleEnabled
 		get() = sharedPreferences.getBoolean(rumbleEnabledKey, true)
