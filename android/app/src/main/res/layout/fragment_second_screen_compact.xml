@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    tools:ignore="RtlHardcoded,RtlSymmetry">
+
+    <com.metallic.chiaki.touchcontrols.ControlsBackgroundView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.metallic.chiaki.touchcontrols.ButtonView
+        android:id="@+id/menuButtonView"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:padding="8dp"
+        android:layout_marginTop="16dp"
+        android:contentDescription="@string/stream_menu_button"
+        app:drawableIdle="@drawable/control_button_menu"
+        app:drawablePressed="@drawable/control_button_menu_pressed"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <com.metallic.chiaki.touchcontrols.TouchpadView
+        android:id="@+id/touchpadView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:drawableIdle="@drawable/control_touchpad"
+        app:drawablePressed="@drawable/control_touchpad_pressed"
+        app:layout_constraintDimensionRatio="1920:942"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/swapButtonView"
+        app:layout_constraintBottom_toTopOf="@id/psButtonView"
+        android:layout_marginLeft="32dp"
+        android:layout_marginRight="32dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Padding is shifted to the left so the visible 40dp circle lines up with the touchpad's right edge -->
+    <com.metallic.chiaki.touchcontrols.ButtonView
+        android:id="@+id/swapButtonView"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:paddingLeft="16dp"
+        android:paddingRight="0dp"
+        android:layout_marginTop="16dp"
+        android:contentDescription="@string/stream_toggle_second_screen"
+        app:drawableIdle="@drawable/control_button_swap"
+        app:drawablePressed="@drawable/control_button_swap_pressed"
+        app:layout_constraintRight_toRightOf="@id/touchpadView"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <com.metallic.chiaki.touchcontrols.ButtonView
+        android:id="@+id/psButtonView"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:padding="8dp"
+        android:layout_marginBottom="16dp"
+        app:drawableIdle="@drawable/control_button_home"
+        app:drawablePressed="@drawable/control_button_home_pressed"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -75,6 +75,21 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:switchPadding="8dp" />
 
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:id="@+id/secondScreenToggleButton"
+                android:layout_width="48dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:contentDescription="@string/stream_toggle_second_screen"
+                android:visibility="gone"
+                app:icon="@drawable/ic_swap_vert"
+                app:iconPadding="0dp"
+                app:iconTint="@color/stream_material_button_icon_tint"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/displayModeToggle"
+                app:strokeColor="@color/stream_text"/>
+
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/displayModeToggle"
                 android:layout_width="wrap_content"

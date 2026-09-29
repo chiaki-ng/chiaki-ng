@@ -28,6 +28,13 @@ class TouchpadView @JvmOverloads constructor(
 
 	private val haptics = ButtonHaptics(context)
 
+	// Normally the touchpad only draws while actively touched, so it doesn't sit on
+	// top of gameplay video when idle. On a screen with no video behind it (e.g. a
+	// second-screen presentation) that leaves it invisible until touched, so this
+	// opts into always drawing it, same as the other buttons.
+	var alwaysVisible: Boolean = false
+		set(value) { field = value; invalidate() }
+
 	private val drawableIdle: Drawable?
 	private val drawablePressed: Drawable?
 
@@ -87,7 +94,8 @@ class TouchpadView @JvmOverloads constructor(
 	override fun onDraw(canvas: Canvas)
 	{
 		super.onDraw(canvas)
-		if(pointerTouches.values.find { !it.lifted } == null)
+		val touching = pointerTouches.values.find { !it.lifted } != null
+		if(!touching && !alwaysVisible)
 			return
 		val drawable = if(state.buttons and ControllerState.BUTTON_TOUCHPAD != 0U) drawablePressed else drawableIdle
 		drawable?.setBounds(paddingLeft, paddingTop, width - paddingRight, height - paddingBottom)

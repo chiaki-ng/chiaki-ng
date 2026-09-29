@@ -55,6 +55,8 @@ class StreamActivity : AppCompatActivity()
 
 	private val uiVisibilityHandler = Handler(Looper.getMainLooper())
 
+	private var secondDisplayController: SecondDisplayController? = null
+
 	override fun onCreate(savedInstanceState: Bundle?)
 	{
 		super.onCreate(savedInstanceState)
@@ -122,6 +124,25 @@ class StreamActivity : AppCompatActivity()
 			showOverlay()
 		}
 
+		if(viewModel.preferences.secondScreenControlsEnabled)
+		{
+			val controller = SecondDisplayController(this)
+			secondDisplayController = controller
+			controller.isActive
+				.onEach { secondScreenActiveChanged(it) }
+				.launchIn(lifecycleScope)
+			// Assign rather than OR-merge: `or` can only set button bits, never clear them. The
+			// on-screen fragments are hidden while this is active, so it's the only touch source.
+			controller.controllerState
+				.onEach { viewModel.input.touchControllerState = it }
+				.launchIn(lifecycleScope)
+			controller.onMenuRequested = { toggleOverlay() }
+			binding.secondScreenToggleButton.setOnClickListener {
+				controller.enabled = !controller.enabled
+				showOverlay()
+			}
+		}
+
 		//viewModel.session.attachToTextureView(textureView)
 		viewModel.session.attachToSurfaceView(binding.surfaceView)
 		viewModel.session.state.observe(this, Observer { this.stateChanged(it) })
@@ -165,18 +186,30 @@ class StreamActivity : AppCompatActivity()
 		super.onResume()
 		hideSystemUI()
 		viewModel.session.resume()
+		secondDisplayController?.start()
 	}
 
 	override fun onPause()
 	{
 		super.onPause()
 		viewModel.session.pause()
+		secondDisplayController?.stop()
 	}
 
 	override fun onDestroy()
 	{
 		super.onDestroy()
 		controlsJob?.cancel()
+	}
+
+	private fun secondScreenActiveChanged(active: Boolean)
+	{
+		findViewById<View>(R.id.controlsFragment)?.isVisible = !active && (viewModel.onScreenControlsEnabled.value ?: true)
+		findViewById<View>(R.id.touchpadOnlyFragment)?.isVisible = !active && (viewModel.touchpadOnlyEnabled.value ?: false)
+		binding.onScreenControlsSwitch.isVisible = !active
+		binding.touchpadOnlySwitch.isVisible = !active
+		binding.secondScreenToggleButton.isVisible = secondDisplayController?.hasDisplay == true
+		showOverlay()
 	}
 
 	private fun reconnect()
