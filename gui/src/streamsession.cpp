@@ -518,9 +518,11 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	mouse_touch_id=-1;
 	dpad_touch_id =-1;
 	chiaki_controller_state_set_idle(&dpad_touch_state);
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
 	chiaki_controller_state_set_idle(&automation_state);
 	video_width = connect_info.video_profile.width;
 	video_height = connect_info.video_profile.height;
+#endif
 	dpad_touch_value = QPair<uint16_t, uint16_t>(0,0);
 	dpad_touch_increment = connect_info.dpad_touch_increment;
 	dpad_touch_timer = new QTimer(this);
@@ -877,12 +879,14 @@ void StreamSession::SetLoginPIN(const QString &pin)
 	chiaki_session_set_login_pin(&session, (const uint8_t *)data.constData(), data.size());
 }
 
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
 // Merged via chiaki_controller_state_or: buttons are |'d, triggers take max, sticks take max-abs, so automation driving a stick suppresses weaker physical input on that axis
 void StreamSession::SetAutomationState(const ChiakiControllerState &state)
 {
 	automation_state = state;
 	SendFeedbackState();
 }
+#endif
 
 void StreamSession::GoHome()
 {
@@ -1246,7 +1250,9 @@ void StreamSession::DpadSendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
 	chiaki_controller_state_or(&state, &state, &automation_state);
+#endif
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)
@@ -1308,7 +1314,9 @@ void StreamSession::SendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
 	chiaki_controller_state_or(&state, &state, &automation_state);
+#endif
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)

@@ -54,10 +54,6 @@ set(SOURCE_FILES
 	src/qmlsvgprovider.cpp
 	include/systemdinhibit.h
 	src/systemdinhibit.cpp
-	include/automationbridge.h
-	src/automationbridge.cpp
-	include/automationframes.h
-	src/automationframes.cpp
 	)
 set(RESOURCE_FILES "")
 
@@ -75,6 +71,15 @@ if(CHIAKI_ENABLE_STEAMDECK_NATIVE AND LINUX)
 	list(APPEND SOURCE_FILES
 		include/sdinputcontext.h
 		src/sdinputcontext.cpp
+	)
+endif()
+
+if(CHIAKI_GUI_ENABLE_AUTOMATION)
+	list(APPEND SOURCE_FILES
+		include/automationbridge.h
+		src/automationbridge.cpp
+		include/automationframes.h
+		src/automationframes.cpp
 	)
 endif()
 
@@ -126,6 +131,14 @@ if(CHIAKI_ENABLE_SPEEX)
 endif()
 if(CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER)
 	target_compile_definitions(chiaki PRIVATE CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER)
+endif()
+if(CHIAKI_GUI_ENABLE_AUTOMATION)
+	target_compile_definitions(chiaki PRIVATE CHIAKI_GUI_ENABLE_AUTOMATION)
+	include(CheckLibraryExists)
+	check_library_exists(rt shm_open "" CHIAKI_HAVE_LIBRT)
+	if(CHIAKI_HAVE_LIBRT)
+		target_link_libraries(chiaki rt)
+	endif()
 endif()
 if(CHIAKI_ENABLE_SETSU)
 	target_link_libraries(chiaki setsu)

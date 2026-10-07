@@ -18,7 +18,7 @@ Item {
     readonly property bool useSeparateMenuWindow: Chiaki.window.runtimeRendererBackend === 1
     readonly property int streamMenuHeight: 200
     readonly property bool streamStatsVisible: Chiaki.settings.showStreamStats && Chiaki.session && !(menuController.open || menuController.closing) && !sessionLoading && !sessionError && !(Chiaki.settings.audioVideoDisabled & 0x02)
-    readonly property bool automationOsdVisible: Chiaki.session && !(menuController.open || menuController.closing) && !sessionLoading && !sessionError && !(Chiaki.settings.audioVideoDisabled & 0x02) && (ChiakiAutomation.osdLines.length > 0 || ChiakiAutomation.osdMarkers.length > 0)
+    readonly property bool automationOsdVisible: Chiaki.session && !(menuController.open || menuController.closing) && !sessionLoading && !sessionError && !(Chiaki.settings.audioVideoDisabled & 0x02)
     property int separateMenuX: 0
     property int separateMenuY: 0
     property int separateMenuWidth: 0
@@ -304,10 +304,14 @@ Item {
         }
     }
 
-    Item {
-        id: automationOsd
+    Loader {
         anchors.fill: parent
-        visible: view.automationOsdVisible
+        active: typeof ChiakiAutomation !== "undefined"
+
+        sourceComponent: Item {
+            id: automationOsd
+            anchors.fill: parent
+            visible: view.automationOsdVisible && (ChiakiAutomation.osdLines.length > 0 || ChiakiAutomation.osdMarkers.length > 0)
 
             readonly property int osdVideoWidth: (Chiaki.session && Chiaki.session.videoWidth > 0) ? Chiaki.session.videoWidth : 0
             readonly property int osdVideoHeight: (Chiaki.session && Chiaki.session.videoHeight > 0) ? Chiaki.session.videoHeight : 0
@@ -398,6 +402,7 @@ Item {
                     styleColor: "black"
                 }
             }
+        }
         }
     }
 

@@ -6,8 +6,10 @@
 #include "psnaccountid.h"
 #include "psntoken.h"
 #include "systemdinhibit.h"
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
 #include "automationbridge.h"
 #include "automationframes.h"
+#endif
 #include "chiaki/remote/holepunch.h"
 #ifdef Q_OS_MACOS
 #include "macWakeSleep.h"
@@ -296,6 +298,7 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
     qmlRegisterUncreatableType<QmlSettings>(uri, 1, 0, "ChiakiSettings", {});
     qmlRegisterUncreatableType<StreamSession>(uri, 1, 0, "ChiakiSession", {});
 
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
     automation_frames = new AutomationFrames(this);
     automation_bridge = new AutomationBridge(automation_frames, this);
     qmlRegisterSingletonInstance(uri, 1, 0, "ChiakiAutomation", automation_bridge);
@@ -307,8 +310,19 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
         if(session)
             session->SetAutomationState(state);
     });
+    connect(this, &QmlBackend::sessionChanged, automation_bridge, [this](StreamSession *s) {
+        if(!automation_bridge)
+            return;
+        if(!s)
+            automation_bridge->SetSessionState(QStringLiteral("idle"));
+        else if(s->IsConnected())
+            automation_bridge->SetSessionState(QStringLiteral("connected"));
+        else
+            automation_bridge->SetSessionState(QStringLiteral("connecting"));
+    });
     if(qEnvironmentVariableIsSet("CHIAKI_AUTOMATION"))
         automation_bridge->Start();
+#endif
 
     QObject *frame_obj = new QObject();
     frame_thread = new QThread(frame_obj);
@@ -1130,8 +1144,6 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
         ChiakiFfmpegFrame frame = chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost);
         if (!frame.frame)
             return;
-        if (automation_frames)
-            automation_frames->WriteFrame(frame.frame, frame.pts);
         logDecoderDeliveryStats(static_cast<qint64>(chiaki_time_now_monotonic_us()), frames_lost, frame.recovered);
         logDecoderFramePtsStats(static_cast<qint64>(chiaki_time_now_monotonic_us()), frame.pts, frame.duration);
         if (frame.recovered)
@@ -1154,6 +1166,11 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
             frame.recovered = true;
         }
 
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+        if (automation_frames)
+            automation_frames->WriteFrame(frame.frame, frame.pts);
+#endif
+
         const qint64 delivery_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
         QmlMainWindow *target_window = window;
         QMetaObject::invokeMethod(target_window, [target_window, frame, frames_lost, delivery_us]() mutable {
@@ -1161,6 +1178,7 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
         });
     });
 
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
     if(automation_bridge)
     {
         // The pi decoder feeds samples straight to the display and never
@@ -1174,6 +1192,7 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
             automation_bridge->SetSessionState(QStringLiteral("connected"));
         });
     }
+#endif
     StreamSession *session_for_connections = session;
     connect(session, &StreamSession::SessionQuit, this, [this, session_for_connections](ChiakiQuitReason reason, const QString &reason_str) {
         if (session != session_for_connections)

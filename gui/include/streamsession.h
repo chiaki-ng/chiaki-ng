@@ -228,9 +228,11 @@ class StreamSession : public QObject
 		QMap<int, uint8_t> touch_tracker;
 		int8_t mouse_touch_id;
 		ChiakiControllerState dpad_touch_state;
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
 		ChiakiControllerState automation_state;
 		int video_width = 0;
 		int video_height = 0;
+#endif
 		uint16_t dpad_touch_increment;
 		float trigger_override;
 		float haptic_override;
@@ -348,9 +350,11 @@ class StreamSession : public QObject
 	Q_INVOKABLE bool RequestIDR();
 		void ToggleMute();
 		void SetLoginPIN(const QString &pin);
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
 		void SetAutomationState(const ChiakiControllerState &state);
 		int GetVideoWidth() const { return video_width; }
 		int GetVideoHeight() const { return video_height; }
+#endif
 		void GoHome();
 		QString GetHost() { return host; }
 		bool GetConnected() { return connected; }
