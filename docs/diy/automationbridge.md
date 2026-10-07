@@ -72,7 +72,7 @@ frame (advisory; readers should primarily watch the ring itself). In `frames`,
 `width`/`height` are 0 until the first frame is published — take them from
 the ring header or `frame` events instead.
 
-## Shared-memory frame ring
+## Shared-memory frame ring (version 2)
 
 - Shared-memory object name: `chiaki-ab-f<pid>` (short, to fit the macOS
   30-byte `shm_open` name limit). The advertised locator is platform-specific
@@ -85,15 +85,19 @@ the ring header or `frame` events instead.
 - Windows lifecycle is kernel-managed (object dies with the last handle);
   on POSIX a stale object from a crashed writer is removed and recreated
   once on startup (the embedded pid makes a live-owner collision impossible).
-- Header (64 bytes, little-endian): `char magic[8] = "CHIAFRM1"` @0,
-  `u32 version` @8, `u32 slot_count` @12, `u32 slot_size` @16,
+- Header (64 bytes, little-endian): `char magic[8] = "CHIAFRM2"` @0,
+  `u32 version` (2) @8, `u32 slot_count` @12, `u32 slot_size` @16,
   `u32 width` @20, `u32 height` @24, `u32 reserved` (0) @28,
-  `u64 write_index` @32, `u32 creator_pid` @40, zero padding to 64.
-- Each slot: `u64 seq` (seqlock: odd while a write is in progress),
-  `u64 frame_index`, `double pts`, then the NV12 payload (`width*height*1.5`
+  `u32 write_index` @32, `u32 reserved` (0) @36, `u32 creator_pid` @40, zero padding to 64.
+- Each slot: `u32 seq` (seqlock: odd while a write is in progress),
+  `u16 width` @4, `u16 height` @6, `u64 frame_index` @8, `double pts` @16, then the NV12 payload (`width*height*1.5`
   bytes).
-- Reader discipline: read `seq`, copy payload, re-read `seq`; retry if it
-  changed or is odd. Frames may be dropped for slow consumers.
+- Slot dimensions belong to the same seqlock snapshot as the pixels. Use them to decode each slot, including after a resolution change. Header dimensions describe the latest publication only.
+- Aligned 32-bit counter accesses are atomic on all supported targets. On 32-bit targets, the 64-bit slot fields can tear, which the sequence recheck detects.
+- `write_index` and `seq` wrap modulo 2^32. Use the 64-bit `frame_index` to compare frame freshness.
+- Reader discipline: atomically load the aligned `u32 seq` with acquire ordering and retry if it is odd. Copy the slot metadata and payload into private memory, execute an acquire read fence, then atomically reload `seq`. Accept the copy only if both values are equal and even. Frames may be dropped for slow consumers.
+- The first acquire load keeps the copy after the initial sequence check. The read fence keeps the copy before the final sequence check. A final acquire load alone does not replace that fence. Both compiler and CPU ordering are required, including on ARM.
+- Use native interprocess atomic loads and read barriers. Plain loads, `volatile`, Python `struct.unpack_from`, and the Python GIL do not supply this ordering. For GCC/Clang, use `__atomic_load_n(seq, __ATOMIC_ACQUIRE)`, copy, `__atomic_thread_fence(__ATOMIC_ACQUIRE)`, then `__atomic_load_n(seq, __ATOMIC_RELAXED)`. These operations must be lock-free on the mapped 32-bit counter. If using `write_index` to select a slot, load it with acquire ordering too.
 - The server MUST NOT block the decoder thread on a slow or absent reader.
 
 ## Safety rules
