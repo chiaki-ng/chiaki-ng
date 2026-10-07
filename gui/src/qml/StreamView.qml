@@ -18,6 +18,7 @@ Item {
     readonly property bool useSeparateMenuWindow: Chiaki.window.runtimeRendererBackend === 1
     readonly property int streamMenuHeight: 200
     readonly property bool streamStatsVisible: Chiaki.settings.showStreamStats && Chiaki.session && !(menuController.open || menuController.closing) && !sessionLoading && !sessionError && !(Chiaki.settings.audioVideoDisabled & 0x02)
+    readonly property bool automationOsdVisible: Chiaki.session && !(menuController.open || menuController.closing) && !sessionLoading && !sessionError && !(Chiaki.settings.audioVideoDisabled & 0x02) && (ChiakiAutomation.osdLines.length > 0 || ChiakiAutomation.osdMarkers.length > 0)
     property int separateMenuX: 0
     property int separateMenuY: 0
     property int separateMenuWidth: 0
@@ -300,6 +301,103 @@ Item {
             id: networkIndicatorTimer
             running: Chiaki.session?.averagePacketLoss > (Chiaki.settings.wifiDroppedNotif * 0.01)
             interval: 400
+        }
+    }
+
+    Item {
+        id: automationOsd
+        anchors.fill: parent
+        visible: view.automationOsdVisible
+
+            readonly property int osdVideoWidth: (Chiaki.session && Chiaki.session.videoWidth > 0) ? Chiaki.session.videoWidth : 0
+            readonly property int osdVideoHeight: (Chiaki.session && Chiaki.session.videoHeight > 0) ? Chiaki.session.videoHeight : 0
+            // Matches the renderer's crop math: Normal = aspect fit, Zoom = fill (factor -1) or 2^factor x native size, Stretch = full view
+            readonly property rect videoRect: {
+                if (osdVideoWidth <= 0 || osdVideoHeight <= 0)
+                    return Qt.rect(0, 0, width, height);
+                let dw = width, dh = height;
+                if (Chiaki.window.videoMode == ChiakiWindow.VideoMode.Zoom) {
+                    if (Chiaki.window.ZoomFactor === -1) {
+                        const s = Math.max(width / osdVideoWidth, height / osdVideoHeight);
+                        dw = osdVideoWidth * s;
+                        dh = osdVideoHeight * s;
+                    } else {
+                        const z = Math.pow(2, Chiaki.window.ZoomFactor) / Screen.devicePixelRatio;
+                        dw = osdVideoWidth * z;
+                        dh = osdVideoHeight * z;
+                    }
+                } else if (Chiaki.window.videoMode != ChiakiWindow.VideoMode.Stretch) {
+                    const s = Math.min(width / osdVideoWidth, height / osdVideoHeight);
+                    dw = osdVideoWidth * s;
+                    dh = osdVideoHeight * s;
+                }
+                return Qt.rect((width - dw) / 2, (height - dh) / 2, dw, dh);
+            }
+
+        Column {
+            anchors {
+                left: parent.left
+                top: parent.top
+                margins: 12
+            }
+            spacing: 2
+
+            Repeater {
+                model: ChiakiAutomation.osdLines
+
+                delegate: Rectangle {
+                    width: osdLineText.implicitWidth + 8
+                    height: osdLineText.implicitHeight + 4
+                    color: "#80000000"
+
+                    Label {
+                        id: osdLineText
+                        x: 4
+                        y: 2
+                        text: modelData
+                        color: "white"
+                        font.family: "Monospace"
+                        font.pixelSize: 14
+                        style: Text.Outline
+                        styleColor: "black"
+                    }
+                }
+            }
+        }
+
+        Repeater {
+            model: ChiakiAutomation.osdMarkers
+
+            delegate: Rectangle {
+                id: markerRect
+                readonly property var marker: (typeof modelData === "object" && modelData !== null) ? modelData : ({})
+                readonly property real nx: Number(marker.x)
+                readonly property real ny: Number(marker.y)
+                readonly property real nw: Number(marker.w)
+                readonly property real nh: Number(marker.h)
+                readonly property color markerColor: (typeof marker.color === "string" && /^#[0-9a-fA-F]{6}$/.test(marker.color)) ? marker.color : "#00ff00"
+                readonly property string markerLabel: typeof marker.label === "string" ? marker.label : ""
+                x: automationOsd.videoRect.x + (isFinite(nx) ? nx : 0) * automationOsd.videoRect.width
+                y: automationOsd.videoRect.y + (isFinite(ny) ? ny : 0) * automationOsd.videoRect.height
+                width: Math.max(0, (isFinite(nw) ? nw : 0) * automationOsd.videoRect.width)
+                height: Math.max(0, (isFinite(nh) ? nh : 0) * automationOsd.videoRect.height)
+                color: Qt.rgba(markerColor.r, markerColor.g, markerColor.b, 0.2)
+                border.color: markerColor
+                border.width: 2
+
+                Label {
+                    anchors {
+                        left: parent.left
+                        bottom: parent.top
+                    }
+                    visible: markerRect.markerLabel.length > 0
+                    text: markerRect.markerLabel
+                    color: markerRect.markerColor
+                    font.pixelSize: 12
+                    style: Text.Outline
+                    styleColor: "black"
+                }
+            }
         }
     }
 

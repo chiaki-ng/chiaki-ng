@@ -519,6 +519,8 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	dpad_touch_id =-1;
 	chiaki_controller_state_set_idle(&dpad_touch_state);
 	chiaki_controller_state_set_idle(&automation_state);
+	video_width = connect_info.video_profile.width;
+	video_height = connect_info.video_profile.height;
 	dpad_touch_value = QPair<uint16_t, uint16_t>(0,0);
 	dpad_touch_increment = connect_info.dpad_touch_increment;
 	dpad_touch_timer = new QTimer(this);
