@@ -341,6 +341,7 @@ class StreamSession : public QObject
 	Q_INVOKABLE bool RequestIDR();
 		void ToggleMute();
 		void SetLoginPIN(const QString &pin);
+		void SetAutomationState(const ChiakiControllerState &state);
 		void GoHome();
 		QString GetHost() { return host; }
 		bool GetConnected() { return connected; }

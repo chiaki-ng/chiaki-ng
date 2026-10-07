@@ -21,6 +21,7 @@ nav:
     - Building the Flatpak Yourself: diy/buildit.md
     - Locally Building Documentation: diy/builddocs.md
     - Developing chiaki-ng on Steam Deck: diy/steamdeckdev.md
+    - Automation Bridge Protocol: diy/automationbridge.md
 
 theme:
   favicon: images/chiaking.svg

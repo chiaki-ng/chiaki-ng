@@ -873,6 +873,11 @@ void StreamSession::SetLoginPIN(const QString &pin)
 	chiaki_session_set_login_pin(&session, (const uint8_t *)data.constData(), data.size());
 }
 
+void StreamSession::SetAutomationState(const ChiakiControllerState &state)
+{
+	Q_UNUSED(state);
+}
+
 void StreamSession::GoHome()
 {
 	chiaki_session_go_home(&session);

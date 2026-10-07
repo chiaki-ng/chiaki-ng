@@ -54,6 +54,10 @@ set(SOURCE_FILES
 	src/qmlsvgprovider.cpp
 	include/systemdinhibit.h
 	src/systemdinhibit.cpp
+	include/automationbridge.h
+	src/automationbridge.cpp
+	include/automationframes.h
+	src/automationframes.cpp
 	)
 set(RESOURCE_FILES "")
 

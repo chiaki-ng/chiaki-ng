@@ -6,6 +6,8 @@
 #include "psnaccountid.h"
 #include "psntoken.h"
 #include "systemdinhibit.h"
+#include "automationbridge.h"
+#include "automationframes.h"
 #include "chiaki/remote/holepunch.h"
 #ifdef Q_OS_MACOS
 #include "macWakeSleep.h"
@@ -293,6 +295,20 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
     qmlRegisterUncreatableType<QmlMainWindow>(uri, 1, 0, "ChiakiWindow", {});
     qmlRegisterUncreatableType<QmlSettings>(uri, 1, 0, "ChiakiSettings", {});
     qmlRegisterUncreatableType<StreamSession>(uri, 1, 0, "ChiakiSession", {});
+
+    automation_frames = new AutomationFrames(this);
+    automation_bridge = new AutomationBridge(automation_frames, this);
+    qmlRegisterSingletonInstance(uri, 1, 0, "ChiakiAutomation", automation_bridge);
+    automation_frames->SetEventCallback([this](uint64_t frame_index, uint32_t slot, uint32_t width, uint32_t height, double pts) {
+        if(automation_bridge)
+            automation_bridge->NotifyFrame(frame_index, slot, width, height, pts);
+    });
+    connect(automation_bridge, &AutomationBridge::controllerStateRequested, this, [this](const ChiakiControllerState &state) {
+        if(session)
+            session->SetAutomationState(state);
+    });
+    if(qEnvironmentVariableIsSet("CHIAKI_AUTOMATION"))
+        automation_bridge->Start();
 
     QObject *frame_obj = new QObject();
     frame_thread = new QThread(frame_obj);
@@ -1114,6 +1130,8 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
         ChiakiFfmpegFrame frame = chiaki_ffmpeg_decoder_pull_frame(decoder, &frames_lost);
         if (!frame.frame)
             return;
+        if (automation_frames)
+            automation_frames->WriteFrame(frame.frame, frame.pts);
         logDecoderDeliveryStats(static_cast<qint64>(chiaki_time_now_monotonic_us()), frames_lost, frame.recovered);
         logDecoderFramePtsStats(static_cast<qint64>(chiaki_time_now_monotonic_us()), frame.pts, frame.duration);
         if (frame.recovered)

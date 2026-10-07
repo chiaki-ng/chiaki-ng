@@ -21,6 +21,8 @@
 #endif
 
 class SystemdInhibit;
+class AutomationBridge;
+class AutomationFrames;
 #ifdef Q_OS_MACOS
     class MacWakeSleep;
 #elif defined(Q_OS_WINDOWS)
@@ -299,6 +301,8 @@ private:
     DisplayServer regist_dialog_server;
     StreamSessionConnectInfo session_info = {};
     SystemdInhibit *sleep_inhibit = {};
+    AutomationFrames *automation_frames = {};
+    AutomationBridge *automation_bridge = {};
 #ifdef Q_OS_MACOS
     MacWakeSleep *mac_wake_sleep = {};
 #elif defined(Q_OS_WINDOWS)
