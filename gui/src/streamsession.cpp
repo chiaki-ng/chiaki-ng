@@ -518,6 +518,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	mouse_touch_id=-1;
 	dpad_touch_id =-1;
 	chiaki_controller_state_set_idle(&dpad_touch_state);
+	chiaki_controller_state_set_idle(&automation_state);
 	dpad_touch_value = QPair<uint16_t, uint16_t>(0,0);
 	dpad_touch_increment = connect_info.dpad_touch_increment;
 	dpad_touch_timer = new QTimer(this);
@@ -534,6 +535,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 			SendFeedbackState();
 		}
 	});
+
 	// If duid isn't empty connect with psn
 	chiaki_connect_info.holepunch_session = NULL;
 	if(!connect_info.duid.isEmpty())
@@ -873,9 +875,11 @@ void StreamSession::SetLoginPIN(const QString &pin)
 	chiaki_session_set_login_pin(&session, (const uint8_t *)data.constData(), data.size());
 }
 
+// Merged via chiaki_controller_state_or: buttons are |'d, triggers take max, sticks take max-abs, so automation driving a stick suppresses weaker physical input on that axis
 void StreamSession::SetAutomationState(const ChiakiControllerState &state)
 {
-	Q_UNUSED(state);
+	automation_state = state;
+	SendFeedbackState();
 }
 
 void StreamSession::GoHome()
@@ -1240,13 +1244,19 @@ void StreamSession::DpadSendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+	chiaki_controller_state_or(&state, &state, &automation_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)
 	{
 		// Only unblock input after all buttons were released
 		if(input_block == 2 && !state.buttons)
+		{
 			input_block = 0;
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+			emit InputBlockedChanged(false);
+#endif
+		}
 		else
 		{
 			chiaki_controller_state_set_idle(&state);
@@ -1296,13 +1306,19 @@ void StreamSession::SendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+	chiaki_controller_state_or(&state, &state, &automation_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)
 	{
 		// Only unblock input after all buttons were released
 		if(input_block == 2 && !state.buttons)
+		{
 			input_block = 0;
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+			emit InputBlockedChanged(false);
+#endif
+		}
 		else
 		{
 			chiaki_controller_state_set_idle(&state);

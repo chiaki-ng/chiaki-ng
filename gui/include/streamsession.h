@@ -224,6 +224,7 @@ class StreamSession : public QObject
 		QMap<int, uint8_t> touch_tracker;
 		int8_t mouse_touch_id;
 		ChiakiControllerState dpad_touch_state;
+		ChiakiControllerState automation_state;
 		uint16_t dpad_touch_increment;
 		float trigger_override;
 		float haptic_override;
@@ -375,7 +376,14 @@ class StreamSession : public QObject
 		void DrainMicRingBuffer();
 		void ReadMic(const QByteArray &micdata);
 
-		void BlockInput(bool block) { input_block = block ? 1 : 2; SendFeedbackState(); }
+		void BlockInput(bool block)
+		{
+			input_block = block ? 1 : 2;
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+			emit InputBlockedChanged(true);
+#endif
+			SendFeedbackState();
+		}
 
 	signals:
 		void FfmpegFrameAvailable();
@@ -396,6 +404,9 @@ class StreamSession : public QObject
 		void MutedChanged();
 		void CantDisplayChanged(bool cant_display);
 		void FecFailure();
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+		void InputBlockedChanged(bool blocked);
+#endif
 
 	private slots:
 		void UpdateGamepads();
