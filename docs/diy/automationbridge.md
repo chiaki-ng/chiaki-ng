@@ -9,11 +9,12 @@ the GUI (any value, including `0`).
 ## Transport
 
 - Newline-delimited JSON (NDJSON, UTF-8,
-  one message per line, max 64 KiB per message).
+  one message per line, max 64 KiB excluding the newline). Oversized messages close the connection.
 - Linux/macOS: Unix domain socket (stream) at `$XDG_RUNTIME_DIR/chiaki-ng/automation.sock`
-  (fallback `/tmp/chiaki-ng-$USER/automation.sock`); directory mode 0700.
+  (fallback `/tmp/chiaki-ng-$USER/automation.sock` when `XDG_RUNTIME_DIR` is unset or empty); directory mode 0700.
 - Windows: named pipe `\\.\pipe\chiaki-ng-automation` (`chiaki-ng-automation` with `QLocalSocket`).
 - Never listen on TCP.
+- At most 16 clients are accepted. Each client has a 1 MiB outgoing queue limit. Clients that exceed it are disconnected, releasing their input and frame subscription.
 - Video frames are NOT sent over the socket; they are published through a
   shared-memory ring (see below). The socket carries control and events only.
 
@@ -38,39 +39,45 @@ Notes on `set_controller`:
   `CHIAKI_CONTROLLER_BUTTON_*` in `lib/include/chiaki/controller.h`).
 - `lx`/`ly`/`rx`/`ry`: int16 (-32767..32767); `l2`/`r2`: 0..255.
   Omitted fields mean neutral.
-- The state stays active until replaced. `{"cmd":"controller_idle"}` or
+- The state stays active until replaced or the session ends. `{"cmd":"controller_idle"}` or
   `set_controller` with all-neutral fields releases it.
 - `set_controller` is rejected with an error while no session is active
   (`session` = `idle`).
-- `hold_ms > 0`: server auto-releases to idle after N milliseconds (clamped to 60000).
+- `hold_ms > 0`: server auto-releases to idle after N milliseconds (clamped to 1..60000 before truncating fractions).
 - When dpad touch gesture conversion is enabled in the GUI settings, virtual
   dpad buttons also trigger the touchpad swipe conversion.
 
 Notes on `subscribe_frames`:
 
 - `max_fps` omitted or <= 0 is treated as 30 (clamped to 1..60).
+- The Pi decoder renders directly without CPU frames. Subscriptions fail for Pi decoder sessions. Select the FFmpeg decoder in settings to capture frames.
+- Ending a session or starting a Pi decoder session cancels an existing subscription and sends `frames_stopped`. Close the old mapping and subscribe again for the next supported session.
 
 Notes on `osd_markers`:
 
 - `x`/`y`/`w`/`h` are normalized video-frame coordinates, clamped to 0..1.
+- Width and height are limited to `1-x` and `1-y` so rectangles stay within the video frame.
 
 ## Events (server → client)
 
 ```json
-{"event":"hello","version":1,"session":"idle|connecting|connected"}
+{"event":"hello","version":1,"session":"idle|connecting|connected","input_blocked":false}
 {"event":"pong"}
 {"event":"ok","cmd":"<cmd>"}
 {"event":"error","cmd":"<cmd>","message":"..."}
 {"event":"frames","shm":"/dev/shm/chiaki-ab-f<pid>","slots":4,"slot_size":3110424,"width":1920,"height":1080,"format":"nv12"}
 {"event":"frame","index":123,"slot":1,"width":1920,"height":1080,"pts":12.34}
+{"event":"frames_stopped","message":"..."}
 {"event":"session","state":"connected"}
 {"event":"input_blocked","blocked":true}
 ```
 
-`frames` is the reply to `subscribe_frames`; `frame` is emitted per published
-frame (advisory; readers should primarily watch the ring itself). In `frames`,
-`width`/`height` are 0 until the first frame is published — take them from
-the ring header or `frame` events instead.
+`hello` reports the current session and `input_blocked` state, including for clients that connect after input becomes blocked. Later changes arrive as `input_blocked` events.
+
+`frames` is the reply to `subscribe_frames`; `frame` events are advisory and may
+be coalesced when the GUI is busy. Readers should primarily watch the ring itself.
+In `frames`, `width`/`height` are 0 until the first frame is published. Read each
+frame’s dimensions from its slot snapshot.
 
 ## Shared-memory frame ring (version 2)
 
@@ -107,7 +114,7 @@ the ring header or `frame` events instead.
   `osd_clear`) takes the control role; control commands from other clients
   get an error until the holder disconnects.
 - Control client disconnect ⇒ automation controller state resets to idle.
-  Otherwise the state persists until replaced; use `hold_ms` for
+  Otherwise the state persists until replaced or the session ends; use `hold_ms` for
   time-limited presses.
 - `input_blocked` resets to false when the session ends.
 - Automation input is OR-merged with physical input (buttons OR, sticks

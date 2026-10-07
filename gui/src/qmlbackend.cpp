@@ -299,9 +299,9 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
     automation_frames = new AutomationFrames(this);
     automation_bridge = new AutomationBridge(automation_frames, this);
     qmlRegisterSingletonInstance(uri, 1, 0, "ChiakiAutomation", automation_bridge);
-    automation_frames->SetEventCallback([this](uint64_t frame_index, uint32_t slot, uint32_t width, uint32_t height, double pts) {
+    automation_frames->SetEventCallback([this](uint64_t frame_index, uint32_t slot, uint32_t width, uint32_t height, double pts, uint64_t token) {
         if(automation_bridge)
-            automation_bridge->NotifyFrame(frame_index, slot, width, height, pts);
+            automation_bridge->NotifyFrame(frame_index, slot, width, height, pts, token);
     });
     connect(automation_bridge, &AutomationBridge::controllerStateRequested, this, [this](const ChiakiControllerState &state) {
         if(session)
@@ -1161,6 +1161,19 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
         });
     });
 
+    if(automation_bridge)
+    {
+        // The pi decoder feeds samples straight to the display and never
+        // produces an ffmpeg frame, so frame capture cannot work with it.
+        automation_bridge->SetSessionFramesSupported(session->GetFfmpegDecoder() != nullptr);
+        connect(session, &StreamSession::InputBlockedChanged, automation_bridge, &AutomationBridge::NotifyInputBlocked);
+        StreamSession *automation_session = session;
+        connect(session, &StreamSession::ConnectedChanged, automation_bridge, [this, automation_session]() {
+            if(session != automation_session || !session->IsConnected())
+                return;
+            automation_bridge->SetSessionState(QStringLiteral("connected"));
+        });
+    }
     StreamSession *session_for_connections = session;
     connect(session, &StreamSession::SessionQuit, this, [this, session_for_connections](ChiakiQuitReason reason, const QString &reason_str) {
         if (session != session_for_connections)
