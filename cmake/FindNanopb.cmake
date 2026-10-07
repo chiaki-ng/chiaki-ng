@@ -13,6 +13,10 @@ find_package_handle_standard_args(Nanopb
 
 if(Nanopb_FOUND)
 	if(NOT TARGET Nanopb::nanopb)
-		add_library(Nanopb::nanopb ALIAS nanopb::protobuf-nanopb-static)
+		if(TARGET nanopb::protobuf-nanopb)
+			add_library(Nanopb::nanopb ALIAS nanopb::protobuf-nanopb)
+		else()
+			add_library(Nanopb::nanopb ALIAS nanopb::protobuf-nanopb-static)
+		endif()
 	endif()
 endif()
