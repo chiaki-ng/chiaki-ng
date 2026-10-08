@@ -29,6 +29,11 @@ typedef struct chiaki_feedback_sender_t
 	size_t history_packet_sizes[CHIAKI_FEEDBACK_HISTORY_PACKET_QUEUE_SIZE];
 	size_t history_packet_begin;
 	size_t history_packet_len;
+	// Last history packet sent, repeated a few times while nothing new happens (see feedbacksender.c)
+	uint8_t history_last_packet[CHIAKI_FEEDBACK_HISTORY_PACKET_BUF_SIZE];
+	size_t history_last_size;
+	uint64_t history_last_sent_ms;
+	unsigned int history_tail_resends;
 
 	bool should_stop;
 	ChiakiControllerState controller_state_prev;
