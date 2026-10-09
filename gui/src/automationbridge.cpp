@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 #include "automationbridge.h"
 #include "automationframes.h"
+#include "automationosd.h"
 
 #include <QAbstractSocket>
 #include <QDir>
@@ -57,6 +58,7 @@ static const AutomationButtonMapping automation_button_mappings[] = {
 AutomationBridge::AutomationBridge(AutomationFrames *frames, QObject *parent)
 	: QObject(parent)
 	, frames(frames)
+	, osd(new AutomationOsd(this))
 {
 	if(frames)
 		connect(frames, &QObject::destroyed, this, [this]() { this->frames = nullptr; });
@@ -151,6 +153,7 @@ bool AutomationBridge::Start(const QString &socket_path)
 
 void AutomationBridge::Stop()
 {
+	osd->Clear();
 	bool had_active_controller = false;
 	for(auto it = clients.begin(); it != clients.end(); ++it)
 	{
@@ -338,7 +341,10 @@ void AutomationBridge::HandleClientDisconnected(QLocalSocket *client)
 		clients.erase(it);
 	}
 	if(control_client == client)
+	{
 		control_client = nullptr;
+		osd->Clear();
+	}
 	if(frame_subscriber == client)
 	{
 		frame_subscriber = nullptr;
@@ -360,6 +366,7 @@ void AutomationBridge::ProcessMessage(QLocalSocket *client, const QJsonObject &m
 	}
 
 	if(cmd == QLatin1String("set_controller") || cmd == QLatin1String("controller_idle")
+		|| cmd == QLatin1String("osd_image") || cmd == QLatin1String("osd_open")
 		|| cmd == QLatin1String("osd_text") || cmd == QLatin1String("osd_markers") || cmd == QLatin1String("osd_clear"))
 	{
 		if(control_client && control_client != client)
@@ -404,8 +411,22 @@ void AutomationBridge::ProcessMessage(QLocalSocket *client, const QJsonObject &m
 		CmdOsdText(client, msg, cmd);
 	else if(cmd == QLatin1String("osd_markers"))
 		CmdOsdMarkers(client, msg, cmd);
+	else if(cmd == QLatin1String("osd_image") || cmd == QLatin1String("osd_open"))
+	{
+		const QPointer<QLocalSocket> recipient(client);
+		osd->Command(msg, listen_path, [this, recipient, cmd](QJsonObject result) {
+			result.insert(QStringLiteral("cmd"), cmd);
+			if(recipient && clients.contains(recipient))
+				SendJson(recipient, result);
+		});
+	}
+	else if(cmd == QLatin1String("osd_stats"))
+		SendJson(client, {{"event", "ok"}, {"cmd", cmd}, {"supported", osd->supported.load()},
+			{"accepted", double(osd->accepted.load())}, {"replaced", double(osd->replaced.load())},
+			{"displayed", double(osd->displayed.load())}});
 	else if(cmd == QLatin1String("osd_clear"))
 	{
+		osd->Clear();
 		SetOsdLines(QStringList());
 		SetOsdMarkers(QVariantList());
 		SendOk(client, cmd);
@@ -647,6 +668,13 @@ void AutomationBridge::CmdOsdMarkers(QLocalSocket *client, const QJsonObject &ms
 		}
 		marker[QStringLiteral("w")] = std::min(marker.value(QStringLiteral("w")).toDouble(), 1.0 - marker.value(QStringLiteral("x")).toDouble());
 		marker[QStringLiteral("h")] = std::min(marker.value(QStringLiteral("h")).toDouble(), 1.0 - marker.value(QStringLiteral("y")).toDouble());
+		const QJsonValue alpha = rect.value(QStringLiteral("alpha"));
+		if(!alpha.isUndefined() && !alpha.isDouble())
+		{
+			SendError(client, cmd, QStringLiteral("rect alpha must be a number"));
+			return;
+		}
+		marker.insert(QStringLiteral("alpha"), std::clamp(alpha.toDouble(0.2), 0.0, 1.0));
 		const QJsonValue color = rect.value(QStringLiteral("color"));
 		if(color.isUndefined())
 			marker.insert(QStringLiteral("color"), QStringLiteral("#00ff00"));
@@ -710,6 +738,7 @@ void AutomationBridge::SetSessionState(const QString &state)
 		}
 		EmitIdleState();
 		StopFrames(QStringLiteral("session ended"));
+		osd->Clear();
 	}
 	const QJsonObject msg = {
 		{ QStringLiteral("event"), QStringLiteral("session") },

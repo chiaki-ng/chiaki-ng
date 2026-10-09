@@ -40,6 +40,7 @@ Q_DECLARE_LOGGING_CATEGORY(chiakiGui);
 class Settings;
 class StreamSession;
 class QmlBackend;
+class AutomationOsdRenderer;
 class QOffscreenSurface;
 class QOpenGLContext;
 class QOpenGLFramebufferObject;
@@ -332,6 +333,9 @@ private:
     pl_vulkan placebo_vulkan = {};
     pl_opengl placebo_opengl = {};
     pl_swapchain placebo_swapchain = {};
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+    AutomationOsdRenderer *automation_osd = nullptr;
+#endif
     pl_renderer placebo_renderer = {};
     pl_queue placebo_queue = {};
     std::array<pl_tex, 8> placebo_tex{};

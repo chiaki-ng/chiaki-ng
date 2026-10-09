@@ -385,7 +385,7 @@ Item {
                 y: automationOsd.videoRect.y + (isFinite(ny) ? ny : 0) * automationOsd.videoRect.height
                 width: Math.max(0, (isFinite(nw) ? nw : 0) * automationOsd.videoRect.width)
                 height: Math.max(0, (isFinite(nh) ? nh : 0) * automationOsd.videoRect.height)
-                color: Qt.rgba(markerColor.r, markerColor.g, markerColor.b, 0.2)
+                color: Qt.rgba(markerColor.r, markerColor.g, markerColor.b, marker.alpha === undefined ? 0.2 : Number(marker.alpha))
                 border.color: markerColor
                 border.width: 2
 

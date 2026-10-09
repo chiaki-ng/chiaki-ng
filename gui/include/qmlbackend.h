@@ -116,6 +116,9 @@ public:
     QmlBackend(Settings *settings, QmlMainWindow *window);
     ~QmlBackend();
 
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+    AutomationBridge *automationBridge() const { return automation_bridge; }
+#endif
     QmlMainWindow *qmlWindow() const;
     QmlSettings *qmlSettings() const;
     StreamSession *qmlSession() const;

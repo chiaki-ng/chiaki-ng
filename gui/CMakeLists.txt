@@ -80,6 +80,8 @@ if(CHIAKI_GUI_ENABLE_AUTOMATION)
 		src/automationbridge.cpp
 		include/automationframes.h
 		src/automationframes.cpp
+		include/automationosd.h
+		src/automationosd.cpp
 	)
 endif()
 

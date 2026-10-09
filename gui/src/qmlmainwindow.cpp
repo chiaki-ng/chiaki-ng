@@ -1,5 +1,9 @@
 #include "qmlmainwindow.h"
 #include "qmlbackend.h"
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+#include "automationbridge.h"
+#include "automationosd.h"
+#endif
 #include "qmlsvgprovider.h"
 #include "chiaki/log.h"
 #include "chiaki/time.h"
@@ -2609,6 +2613,9 @@ QmlMainWindow::~QmlMainWindow()
 #endif
 
     if (pl_gpu gpu = placeboGpu()) {
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+        delete automation_osd;
+#endif
         pl_unmap_avframe(gpu, &direct_frame);
         if (quick_tex)
             pl_tex_destroy(gpu, &quick_tex);
@@ -5100,12 +5107,22 @@ renderer_backend_ready:
     connect(qml_engine, &QQmlEngine::quit, this, &QWindow::close);
 
     backend = new QmlBackend(settings, this);
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+    if (backend->automationBridge()->IsRunning()) {
+        automation_osd = new AutomationOsdRenderer(placeboGpu(), backend->automationBridge()->Osd());
+        connect(backend->automationBridge()->Osd(), &AutomationOsd::cleared, this, &QmlMainWindow::update);
+    }
+#endif
     stats_overlay_widget = new StatsOverlayWidget(this, backend);
     connect(backend, &QmlBackend::sessionChanged, this, [this, exit_app_on_stream_exit](StreamSession *s) {
         const bool preserve_startup_warmup = s && startup_warmup_preserve_next_session_change;
         startup_warmup_preserve_next_session_change = false;
         session = s;
         stream_session_active.storeRelease(s ? 1 : 0);
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+        if (automation_osd)
+            automation_osd->ResetVideoCrop();
+#endif
         startup_video_visible_generation.fetchAndAddRelaxed(1);
         grab_input = 0;
         if (session)
@@ -7323,6 +7340,37 @@ void QmlMainWindow::render()
                                 render_schedule_state.second);
         }
     }
+    const pl_rect2df *video_crop = hint_frame ? &hint_frame->crop : nullptr;
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+    if (automation_osd)
+        video_crop = automation_osd->VideoCrop(video_crop);
+#endif
+    if (video_crop) {
+        pl_rect2df crop = *video_crop;
+        switch (video_mode) {
+        case VideoMode::Normal:
+            pl_rect2df_aspect_copy(&target_frame.crop, &crop, 0.0);
+            break;
+        case VideoMode::Stretch:
+            // Nothing to do, target.crop already covers the full image
+            break;
+        case VideoMode::Zoom:
+            if(zoom_factor == -1)
+                pl_rect2df_aspect_copy(&target_frame.crop, &crop, 1.0);
+            else
+            {
+                const float z = powf(2.0f, zoom_factor);
+                const float sx = z * fabsf(pl_rect_w(crop)) / pl_rect_w(target_frame.crop);
+                const float sy = z * fabsf(pl_rect_h(crop)) / pl_rect_h(target_frame.crop);
+                pl_rect2df_stretch(&target_frame.crop, sx, sy);
+            }
+            break;
+        }
+    }
+#ifdef CHIAKI_GUI_ENABLE_AUTOMATION
+    if (automation_osd)
+        automation_osd->Compose(target_frame, overlay);
+#endif
     if (frame_mix.num_frames == 0) {
         if (kept_frame_enqueued) {
             close_started_frame(false);
@@ -7361,28 +7409,6 @@ void QmlMainWindow::render()
         return;
     }
 
-    if (hint_frame) {
-        pl_rect2df crop = hint_frame->crop;
-        switch (video_mode) {
-        case VideoMode::Normal:
-            pl_rect2df_aspect_copy(&target_frame.crop, &crop, 0.0);
-            break;
-        case VideoMode::Stretch:
-            // Nothing to do, target.crop already covers the full image
-            break;
-        case VideoMode::Zoom:
-            if(zoom_factor == -1)
-                pl_rect2df_aspect_copy(&target_frame.crop, &crop, 1.0);
-            else
-            {
-                const float z = powf(2.0f, zoom_factor);
-                const float sx = z * fabsf(pl_rect_w(crop)) / pl_rect_w(target_frame.crop);
-                const float sy = z * fabsf(pl_rect_h(crop)) / pl_rect_h(target_frame.crop);
-                pl_rect2df_stretch(&target_frame.crop, sx, sy);
-            }
-            break;
-        }
-    }
     // Disable background transparency by default if the swapchain does not
     // appear to support alpha transaprency
     if (sw_frame.color_repr.alpha == PL_ALPHA_NONE)

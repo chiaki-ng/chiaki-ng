@@ -12,6 +12,7 @@
 #include <atomic>
 
 class AutomationFrames;
+class AutomationOsd;
 class QJsonObject;
 class QLocalServer;
 class QLocalSocket;
@@ -41,6 +42,7 @@ public:
 	bool Start(const QString &socket_path = QString());
 	void Stop();
 	bool IsRunning() const;
+	AutomationOsd *Osd() const { return osd; }
 	static QString DefaultSocketPath();
 
 	QStringList OsdLines() const { return osd_lines; }
@@ -82,6 +84,7 @@ private:
 	void StopFrames(const QString &message);
 
 	AutomationFrames *frames;
+	AutomationOsd *osd;
 	QLocalServer *server = nullptr;
 	QString listen_path;
 	QHash<QLocalSocket *, AutomationBridgeClient> clients;

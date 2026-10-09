@@ -57,6 +57,92 @@ Notes on `osd_markers`:
 
 - `x`/`y`/`w`/`h` are normalized video-frame coordinates, clamped to 0..1.
 - Width and height are limited to `1-x` and `1-y` so rectangles stay within the video frame.
+- Optional `alpha` controls fill opacity, clamped to 0..1 (default 0.2).
+
+## Persistent image overlays
+
+`osd_image` updates images by ID. Missing IDs retain their pixels and geometry;
+no update means keep displaying the previous image. `remove` deletes named IDs.
+A batch is validated and uploaded before it replaces the displayed scene, so a
+failed or incomplete batch cannot make the old image disappear. Images compose
+inside libplacebo, below QML and after frame capture. They remain visible when
+the Chiaki menu is open and never enter the decoded-frame ring.
+
+```json
+{"cmd":"osd_image","images":[{"id":"patch","rect":[0.8,0.9,0.12,0.05],"pixel_size":[230,50],"format":"rgba8888","alpha_mode":"straight","data":"<base64>"}]}
+{"cmd":"osd_image","images":[{"id":"patch","rect":[0.7,0.9,0.12,0.05]}]}
+{"cmd":"osd_image","remove":["patch"]}
+{"cmd":"osd_stats"}
+```
+
+- `rect` is `[x,y,width,height]` in normalized video coordinates. It must fit
+  inside the video. The renderer uses the actual video viewport, including
+  fit, stretch and zoom. Images are clipped by the output viewport.
+- Pixels are tightly packed RGBA8888 or BGRA8888 (`format`: `rgba8888` or
+  `bgra8888`). `alpha_mode` is `straight` (default) or `premultiplied`.
+  Transparent pixels leave the video unchanged. Supply `pixel_size` with every
+  pixel replacement; omit both pixels and size to update geometry only.
+- Up to 8 images, IDs of 1..64 characters, each dimension 1..512, at most
+  256 KiB per image, 512 KiB of new pixels per batch and 1 MiB of active pixels.
+  The sum of normalized rectangle areas must not exceed 0.25. Upload traffic
+  is limited to 8 MiB per second. A limit violation rejects the entire batch.
+- Inline base64 uses the existing 64 KiB control-message limit and is intended
+  for occasional updates. Use the image channel below for continuous updates.
+- `osd_clear`, control-owner disconnect and session end invalidate displayed,
+  uploading and pending images and close the image channel. A late upload
+  cannot restore cleared content. Closing only the image channel retains the
+  images while its control owner remains connected.
+- `osd_stats` returns `supported`, `accepted`, `replaced` (superseded pending
+  batches), and `displayed` (completed scene changes). Counts last for the GUI
+  process lifetime. Acceptance does not imply immediate presentation.
+
+### Continuous uploads
+
+Send `{"cmd":"osd_open"}` on the control connection. The reply includes a
+private local endpoint `path`, `max_images`, `max_image_bytes`, and
+`max_batch_bytes`. Opening a new channel closes the previous channel. The
+control connection retains ownership and must remain connected.
+On Linux/macOS, `path` is a Unix socket path. On Windows, it is a pipe name:
+pass it directly to `QLocalSocket`, or prepend `\\.\pipe\` for native pipe APIs.
+
+Each image-channel batch is:
+
+1. Two little-endian `u32` lengths: JSON metadata bytes, then raw pixel bytes.
+2. UTF-8 JSON (at most 4096 bytes), with the same `images`/`remove` fields.
+3. Raw pixel blocks in image order. Images without `pixel_size` consume no bytes.
+   Omit `data` when supplying raw pixels.
+
+Wait for a one-byte reply before sending another batch: `0` means accepted,
+`1` means rejected with the previous scene retained. Do not pipeline batches.
+A broken or timed-out channel must be closed, not reused. After `osd_clear` or
+session end, open a new channel explicitly.
+
+The image receiver runs on a separate worker. The renderer checks for updates
+without waiting, uploads at most 256 KiB per render, and continues displaying
+the previous scene until all new textures are ready. Static pixels reuse their
+textures. GPU storage is bounded and allocated at GUI startup only when the
+bridge is running. Backends without asynchronous transfer support reject image
+commands. Rendering is driven by video; this API does not start an extra render
+loop or guarantee a fixed delay relative to a source frame.
+
+### External frame processors
+
+Keep computation in the client's existing frame worker. Read an immutable
+snapshot from the existing frame subscription, process only the needed ROI,
+then submit the resulting image batch. Share that snapshot between plugins;
+do not create another bridge subscription or mutate it before other processors
+have used it. Apply any screenshot redaction to exported copies instead.
+
+A slow worker should have one latest-frame mailbox. It finishes its current
+computation/upload and then processes the newest frame, dropping intermediate
+frames. Submit all image changes for that computation in one batch. The host
+merges batches into a complete pending scene, preserving unrelated static IDs.
+No client callback executes inside Chiaki's decode or render threads.
+
+For two 230x50 patches at 60 updates/s, raw uploads total 5.52 MB/s. Video
+capture bandwidth and subscription rate remain unchanged. Asynchronous patches
+can lag moving backgrounds; this API cannot guarantee seamless inpainting or
+zero GPU cost. Measure the intended workload on the target backend.
 
 ## Events (server → client)
 
@@ -111,7 +197,7 @@ frame’s dimensions from its slot snapshot.
 
 - One control client at a time: the first client to send a control command
   (`set_controller`, `controller_idle`, `osd_text`, `osd_markers`,
-  `osd_clear`) takes the control role; control commands from other clients
+  `osd_clear`, `osd_image`, `osd_open`) takes the control role; control commands from other clients
   get an error until the holder disconnects.
 - Control client disconnect ⇒ automation controller state resets to idle.
   Otherwise the state persists until replaced or the session ends; use `hold_ms` for
