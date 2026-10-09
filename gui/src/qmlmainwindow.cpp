@@ -2326,12 +2326,15 @@ static AVFrame *make_fallback_snapshot_frame(const AVFrame *frame)
     return copy;
 }
 
-static AVFrame *make_startup_warmup_frame(unsigned width, unsigned height, bool hdr)
+static AVFrame *make_startup_warmup_frame(unsigned width, unsigned height, bool hdr, bool semi_planar)
 {
     if (width == 0 || height == 0)
         return nullptr;
 
-    const enum AVPixelFormat format = hdr ? AV_PIX_FMT_YUV420P10LE : AV_PIX_FMT_YUV420P;
+    // semi_planar matches what hardware decoders hand over after transfer (NV12/P010)
+    const enum AVPixelFormat format = semi_planar
+        ? (hdr ? AV_PIX_FMT_P010LE : AV_PIX_FMT_NV12)
+        : (hdr ? AV_PIX_FMT_YUV420P10LE : AV_PIX_FMT_YUV420P);
     AVFrame *frame = av_frame_alloc();
     if (!frame)
         return nullptr;
@@ -2359,7 +2362,24 @@ static AVFrame *make_startup_warmup_frame(unsigned width, unsigned height, bool 
 
     const int chroma_width = (frame->width + 1) / 2;
     const int chroma_height = (frame->height + 1) / 2;
-    if (format == AV_PIX_FMT_YUV420P) {
+    if (format == AV_PIX_FMT_NV12) {
+        for (int y = 0; y < frame->height; ++y)
+            memset(frame->data[0] + y * frame->linesize[0], 16, frame->width);
+        for (int y = 0; y < chroma_height; ++y)
+            memset(frame->data[1] + y * frame->linesize[1], 128, chroma_width * 2);
+    } else if (format == AV_PIX_FMT_P010LE) {
+        // P010 keeps the 10-bit value in the high bits
+        for (int y = 0; y < frame->height; ++y) {
+            auto *row = reinterpret_cast<uint16_t *>(frame->data[0] + y * frame->linesize[0]);
+            for (int x = 0; x < frame->width; ++x)
+                row[x] = 64 << 6;
+        }
+        for (int y = 0; y < chroma_height; ++y) {
+            auto *row = reinterpret_cast<uint16_t *>(frame->data[1] + y * frame->linesize[1]);
+            for (int x = 0; x < chroma_width * 2; ++x)
+                row[x] = 512 << 6;
+        }
+    } else if (format == AV_PIX_FMT_YUV420P) {
         for (int y = 0; y < frame->height; ++y)
             memset(frame->data[0] + y * frame->linesize[0], 16, frame->width);
         for (int y = 0; y < chroma_height; ++y) {
@@ -2751,7 +2771,7 @@ void QmlMainWindow::presentStartupWarmupFrame(unsigned width, unsigned height, b
     if (has_video || width == 0 || height == 0)
         return;
 
-    AVFrame *frame = make_startup_warmup_frame(width, height, hdr);
+    AVFrame *frame = make_startup_warmup_frame(width, height, hdr, render_backend == RenderBackend::OpenGL);
     if (!frame)
         return;
     startup_warmup_preserve_next_session_change = true;
@@ -6027,6 +6047,10 @@ void QmlMainWindow::resizeSwapchain()
             doneOpenGLContextCurrent();
             return;
         }
+        // A new FBO holds whatever was in that GPU memory; the overlay can be composited
+        // before Qt Quick renders into it again, which shows up as garbage on the loading screen.
+        clearQuickOpenGLTarget(new_quick_fbo);
+        QOpenGLFramebufferObject::bindDefault();
 
         int quick_texture_internal_format = static_cast<int>(new_quick_fbo->format().internalTextureFormat());
         if (!quick_texture_internal_format)
