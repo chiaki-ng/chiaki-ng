@@ -1667,7 +1667,7 @@ void QmlBackend::sessionGoHome()
 
 void QmlBackend::enterPin(const QString &pin)
 {
-    qCInfo(chiakiGui) << "Set login pin " << pin;
+    qCInfo(chiakiGui) << "Set login pin";
     if (session)
         session->SetLoginPIN(pin);
 }
