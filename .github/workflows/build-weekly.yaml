@@ -6,11 +6,69 @@ on:
     - cron: "30 1 * * 1"
 
 jobs:
+  check-changes:
+    name: Check which packages need building
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Find packages missing from this commit's weekly release
+      id: check
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        TAG: weekly-canary-release-${{ github.sha }}
+        SHA: ${{ github.sha }}
+      run: |
+        # Rebuilding a package whose files are already on the release fails to re-upload them,
+        # so only build packages that are missing. A package with only some of its files
+        # (a half-finished upload) has those deleted and is rebuilt.
+        assets="$(gh release view "$TAG" -R "$REPO" --json assets --jq '.assets[].name' 2>/dev/null || true)"
+        any=false
+        check() {
+          local job="$1"; shift
+          local present=() missing=0
+          for pattern in "$@"; do
+            match="$(printf '%s\n' "$assets" | grep -x -- "$pattern" || true)"
+            if [ -n "$match" ]; then present+=($match); else missing=1; fi
+          done
+          if [ "$missing" = 0 ]; then
+            echo "$job: already on $TAG, skipping"
+            echo "$job=false" >> "$GITHUB_OUTPUT"
+            return
+          fi
+          for name in "${present[@]}"; do
+            echo "$job: deleting partial upload $name"
+            gh release delete-asset "$TAG" "$name" -R "$REPO" -y
+          done
+          echo "$job=true" >> "$GITHUB_OUTPUT"
+          any=true
+        }
+        check win_x64 "chiaki-ng-win_x64-MSYS2-portable-.*-test-build-$SHA\.zip" 'chiaki-ng-win_x64-MSYS2-installer\.exe'
+        check win_arm64 "chiaki-ng-win_arm64-MSYS2-portable-.*-test-build-$SHA\.zip" 'chiaki-ng-win_arm64-MSYS2-installer\.exe'
+        check mac_arm64 'chiaki-ng-macos_arm64-Release\.dmg'
+        check appimage_x64 'chiaki-ng\.AppImage_x86_64'
+        check appimage_arm64 'chiaki-ng\.AppImage_arm64'
+        check flatpak_x64 'chiaki-ng-x64\.flatpak' 'chiaki-ng-x64-debug\.flatpak'
+        check flatpak_arm64 'chiaki-ng-arm64\.flatpak' 'chiaki-ng-arm64-debug\.flatpak'
+        echo "any=$any" >> "$GITHUB_OUTPUT"
+    outputs:
+      any: ${{ steps.check.outputs.any }}
+      win_x64: ${{ steps.check.outputs.win_x64 }}
+      win_arm64: ${{ steps.check.outputs.win_arm64 }}
+      mac_arm64: ${{ steps.check.outputs.mac_arm64 }}
+      appimage_x64: ${{ steps.check.outputs.appimage_x64 }}
+      appimage_arm64: ${{ steps.check.outputs.appimage_arm64 }}
+      flatpak_x64: ${{ steps.check.outputs.flatpak_x64 }}
+      flatpak_arm64: ${{ steps.check.outputs.flatpak_arm64 }}
+
   create-release:
     name: Upload weekly release
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    needs: check-changes
+    if: needs.check-changes.outputs.any == 'true'
     steps:
     - uses: actions/checkout@v4
       with:
@@ -46,7 +104,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
-    needs: create-release
+    needs: [check-changes, create-release]
+    if: needs.check-changes.outputs.win_x64 == 'true'
     env:
       sdl2_compat_tag: 2.32.64
     defaults:
@@ -65,13 +124,12 @@ jobs:
         with:
           msystem: mingw64
           update: true
-          install: git
+          install: git diffutils
           pacboy: >-
             ca-certificates:p
             cc:p
             cmake:p
             curl:p
-            diffutils:p
             fast_float:p
             fftw:p
             hidapi:p
@@ -177,7 +235,8 @@ jobs:
     runs-on: windows-11-arm
     permissions:
       contents: write
-    needs: create-release
+    needs: [check-changes, create-release]
+    if: needs.check-changes.outputs.win_arm64 == 'true'
     defaults:
       run:
         shell: msys2 {0}
@@ -194,13 +253,12 @@ jobs:
         with:
           msystem: clangarm64
           update: true
-          install: git
+          install: git diffutils
           pacboy: >-
             ca-certificates:p
             cc:p
             cmake:p
             curl:p
-            diffutils:p
             fast_float:p
             fftw:p
             hidapi:p
@@ -305,7 +363,8 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
-    needs: create-release
+    needs: [check-changes, create-release]
+    if: needs.check-changes.outputs.mac_arm64 == 'true'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -318,7 +377,7 @@ jobs:
         run: |
           brew update
           brew uninstall pkgconfig || true
-          brew install qt@6 ffmpeg pkgconfig opus openssl cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
+          brew install qt@6 ffmpeg pkgconfig opus openssl@3 cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
 
       - name: Install sdl2-compat
         run: |
@@ -327,7 +386,7 @@ jobs:
 
       - name: Configure chiaki-ng
         run: |
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/@openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
 
       - name: Build chiaki-ng
         run: |
@@ -376,7 +435,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs: create-release
+    needs: [check-changes, create-release]
+    if: needs.check-changes.outputs.appimage_x64 == 'true'
     
     steps:
       - name: Setup Podman
@@ -422,7 +482,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: write
-    needs: create-release
+    needs: [check-changes, create-release]
+    if: needs.check-changes.outputs.appimage_arm64 == 'true'
     steps:
       - name: Setup Podman
         run: |
@@ -467,7 +528,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs: create-release
+    needs: [check-changes, create-release]
+    if: needs.check-changes.outputs.flatpak_x64 == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -525,7 +587,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     permissions:
       contents: write
-    needs: create-release
+    needs: [check-changes, create-release]
+    if: needs.check-changes.outputs.flatpak_arm64 == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

@@ -28,13 +28,12 @@ jobs:
         with:
           msystem: mingw64
           update: true
-          install: git
+          install: git diffutils
           pacboy: >-
             ca-certificates:p
             cc:p
             cmake:p
             curl:p
-            diffutils:p
             fast_float:p
             fftw:p
             hidapi:p
