@@ -16,6 +16,7 @@ set(CHIAKI_UNIT_SOURCES
 				takion.c
 				seqnum.c
 				keystate.c
+				feedback.c
 				reorderqueue.c
 				fec.c
 				test_log.c

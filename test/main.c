@@ -5,6 +5,7 @@
 
 extern MunitTest tests_seq_num[];
 extern MunitTest tests_key_state[];
+extern MunitTest tests_feedback[];
 extern MunitTest tests_reorder_queue[];
 extern MunitTest tests_http[];
 extern MunitTest tests_rpcrypt[];
@@ -31,6 +32,13 @@ static MunitSuite suites[] = {
 	{
 		"/key_state",
 		tests_key_state,
+		NULL,
+		1,
+		MUNIT_SUITE_OPTION_NONE
+	},
+	{
+		"/feedback",
+		tests_feedback,
 		NULL,
 		1,
 		MUNIT_SUITE_OPTION_NONE
