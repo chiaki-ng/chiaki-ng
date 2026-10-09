@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QStyleHints>
 #include <QGuiApplication>
+#include <QQuickWindow>
 
 static QVector<QPair<uint32_t, Qt::Key>> key_map = {
     { CHIAKI_CONTROLLER_BUTTON_DPAD_UP, Qt::Key_Up },
@@ -129,8 +130,17 @@ void QmlController::sendKey(Qt::Key key, Qt::KeyboardModifiers modifiers)
 
     last_key_time_by_device.insert(dedup_key, now);
 
+    // With the OpenGL renderer the stream menu and session dialogs are separate top-level
+    // QML windows, so navigation keys go to whichever of those has focus. Shortcuts
+    // (Ctrl+O toggles the stream menu) are handled by the main window.
+    QObject *receiver = target;
+    if (modifiers == Qt::NoModifier) {
+        if (auto *focus_window = qobject_cast<QQuickWindow *>(QGuiApplication::focusWindow()))
+            receiver = focus_window;
+    }
+
     QKeyEvent press(QEvent::KeyPress, key, modifiers);
     QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
-    QGuiApplication::sendEvent(target, &press);
-    QGuiApplication::sendEvent(target, &release);
+    QGuiApplication::sendEvent(receiver, &press);
+    QGuiApplication::sendEvent(receiver, &release);
 }
