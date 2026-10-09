@@ -6027,6 +6027,10 @@ void QmlMainWindow::resizeSwapchain()
             doneOpenGLContextCurrent();
             return;
         }
+        // A new FBO holds whatever was in that GPU memory; the overlay can be composited
+        // before Qt Quick renders into it again, which shows up as garbage on the loading screen.
+        clearQuickOpenGLTarget(new_quick_fbo);
+        QOpenGLFramebufferObject::bindDefault();
 
         int quick_texture_internal_format = static_cast<int>(new_quick_fbo->format().internalTextureFormat());
         if (!quick_texture_internal_format)
