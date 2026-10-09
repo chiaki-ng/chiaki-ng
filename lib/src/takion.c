@@ -43,9 +43,9 @@
 #define TAKION_INBOUND_STREAMS 0x64
 
 #define TAKION_REORDER_QUEUE_SIZE_EXP 4 // => 16 entries
-#define TAKION_AV_VIDEO_REORDER_QUEUE_SIZE_EXP 6 // => 64 entries
-#define TAKION_AV_REORDER_TIMEOUT_US 16000 // ~1 frame at 60fps
-#define TAKION_SEND_BUFFER_SIZE 16
+#define TAKION_AV_VIDEO_REORDER_QUEUE_SIZE_EXP 7 // => 128 entries (prevents queue overflow on burst)
+#define TAKION_AV_REORDER_TIMEOUT_US 33000 // ~2 frames at 60fps (absorbs Wi-Fi jitter spikes)
+#define TAKION_SEND_BUFFER_SIZE 32 // doubled to prevent upstream feedback re-send drop
 
 #define TAKION_POSTPONE_PACKETS_SIZE 32
 
@@ -190,6 +190,35 @@ static ChiakiErrorCode takion_recv_message_cookie_ack(ChiakiTakion *takion);
 static void takion_handle_packet_av(ChiakiTakion *takion, uint8_t base_type, uint8_t *buf, size_t buf_size);
 static ChiakiErrorCode takion_read_extra_sock_messages(ChiakiTakion *takion);
 
+static void takion_set_socket_rcvbuf(ChiakiTakion *takion)
+{
+	int rcvbuf_val = 4 * 1024 * 1024; // 4 MB kernel buffer for zero packet drops at 50+ Mbps
+	bool set_success = false;
+	while(rcvbuf_val >= 256 * 1024)
+	{
+		if(setsockopt(takion->sock, SOL_SOCKET, SO_RCVBUF, (const CHIAKI_SOCKET_BUF_TYPE)&rcvbuf_val, sizeof(rcvbuf_val)) == 0)
+		{
+			CHIAKI_LOGI(takion->log, "Takion set SO_RCVBUF to %d bytes", rcvbuf_val);
+			set_success = true;
+			break;
+		}
+		rcvbuf_val /= 2;
+	}
+	if(!set_success)
+	{
+		rcvbuf_val = takion->a_rwnd;
+		setsockopt(takion->sock, SOL_SOCKET, SO_RCVBUF, (const CHIAKI_SOCKET_BUF_TYPE)&rcvbuf_val, sizeof(rcvbuf_val));
+	}
+
+#if defined(__APPLE__) && defined(SO_NET_SERVICE_TYPE) && defined(NET_SERVICE_TYPE_RV)
+	int service_type = NET_SERVICE_TYPE_RV;
+	if(setsockopt(takion->sock, SOL_SOCKET, SO_NET_SERVICE_TYPE, &service_type, sizeof(service_type)) == 0)
+	{
+		CHIAKI_LOGI(takion->log, "Takion set SO_NET_SERVICE_TYPE to NET_SERVICE_TYPE_RV (Apple Silicon Wi-Fi QoS)");
+	}
+#endif
+}
+
 CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, ChiakiTakionConnectInfo *info, chiaki_socket_t *sock)
 {
 	ChiakiErrorCode ret = CHIAKI_ERR_SUCCESS;
@@ -257,14 +286,8 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, Chiaki
 			CHIAKI_LOGE(takion->log, "Takion had problem reading extra messages from socket using PSN Connection with error: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
 			goto error_sock;
 		}
-		const int rcvbuf_val = takion->a_rwnd;
-		int r = setsockopt(takion->sock, SOL_SOCKET, SO_RCVBUF, (const CHIAKI_SOCKET_BUF_TYPE)&rcvbuf_val, sizeof(rcvbuf_val));
-		if(r < 0)
-		{
-			CHIAKI_LOGE(takion->log, "Takion failed to setsockopt SO_RCVBUF: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-			ret = CHIAKI_ERR_NETWORK;
-			goto error_sock;
-		}
+		int r;
+		takion_set_socket_rcvbuf(takion);
 
 #if defined(__APPLE__) && TARGET_OS_OSX
 		SInt32 majorVersion;
@@ -345,14 +368,8 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, Chiaki
 			ret = CHIAKI_ERR_NETWORK;
 			goto error_pipe;
 		}
-		const int rcvbuf_val = takion->a_rwnd;
-		int r = setsockopt(takion->sock, SOL_SOCKET, SO_RCVBUF, (const CHIAKI_SOCKET_BUF_TYPE)&rcvbuf_val, sizeof(rcvbuf_val));
-		if(r < 0)
-		{
-			CHIAKI_LOGE(takion->log, "Takion failed to setsockopt SO_RCVBUF: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-			ret = CHIAKI_ERR_NETWORK;
-			goto error_sock;
-		}
+		int r;
+		takion_set_socket_rcvbuf(takion);
 		if(info->ip_dontfrag)
 		{
 #if defined(__APPLE__) && TARGET_OS_OSX
@@ -1419,9 +1436,9 @@ static void takion_handle_packet_message_data(ChiakiTakion *takion, uint8_t *pac
 
 static void takion_handle_packet_message_data_ack(ChiakiTakion *takion, uint8_t flags, uint8_t *buf, size_t buf_size)
 {
-	if(buf_size != 0xc)
+	if(buf_size < 0xc)
 	{
-		CHIAKI_LOGE(takion->log, "Takion received data ack with size %zx != %#x", buf_size, 0xc);
+		CHIAKI_LOGE(takion->log, "Takion received data ack with size %zx < %#x", buf_size, 0xc);
 		return;
 	}
 

@@ -297,7 +297,7 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
     QObject *frame_obj = new QObject();
     frame_thread = new QThread(frame_obj);
     frame_thread->setObjectName("frame");
-    frame_thread->start();
+    frame_thread->start(QThread::TimeCriticalPriority);
     frame_obj->moveToThread(frame_thread);
 
     PsnConnectionWorker *worker = new PsnConnectionWorker;

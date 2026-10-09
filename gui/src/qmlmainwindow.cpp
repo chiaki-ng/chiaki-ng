@@ -5216,7 +5216,7 @@ renderer_backend_ready:
     } else {
         render_thread = new QThread;
         render_thread->setObjectName("render");
-        render_thread->start();
+        render_thread->start(QThread::TimeCriticalPriority);
         owns_render_thread = true;
 
         quick_render->prepareThread(render_thread);
@@ -5941,12 +5941,17 @@ void QmlMainWindow::createSwapchain()
     const int swapchain_depth = 1;
     struct pl_vulkan_swapchain_params swapchain_params = {
         .surface = surface,
-        // Prefer MAILBOX for vsync (lower) latency when supported).
-        .present_mode = settings->GetVSyncEnabled() ? VK_PRESENT_MODE_FIFO_KHR
+        // Prefer MAILBOX for lowest vsync latency when supported, falling back to FIFO
+        .present_mode = settings->GetVSyncEnabled() ? VK_PRESENT_MODE_MAILBOX_KHR
                                                     : VK_PRESENT_MODE_IMMEDIATE_KHR,
         .swapchain_depth = swapchain_depth,
     };
     placebo_swapchain = pl_vulkan_create_swapchain(placebo_vulkan, &swapchain_params);
+    if (!placebo_swapchain && settings->GetVSyncEnabled()) {
+        qCInfo(chiakiGui) << "Mailbox present mode unsupported, falling back to FIFO VSync";
+        swapchain_params.present_mode = VK_PRESENT_MODE_FIFO_KHR;
+        placebo_swapchain = pl_vulkan_create_swapchain(placebo_vulkan, &swapchain_params);
+    }
     present_vsync_enabled = swapchain_params.present_mode != VK_PRESENT_MODE_IMMEDIATE_KHR;
     if (!placebo_swapchain && !settings->GetVSyncEnabled()) {
         qCWarning(chiakiGui) << "Immediate present mode unsupported, falling back to FIFO VSync";
@@ -5957,7 +5962,7 @@ void QmlMainWindow::createSwapchain()
     }
     qCInfo(chiakiGui).nospace()
         << "[present] swapchain_create vsync_setting=" << (settings->GetVSyncEnabled() ? 1 : 0)
-        << " requested_mode=" << (settings->GetVSyncEnabled() ? "FIFO" : "IMMEDIATE")
+        << " requested_mode=" << (settings->GetVSyncEnabled() ? "MAILBOX/FIFO" : "IMMEDIATE")
         << " selected_mode="
         << (swapchain_params.present_mode == VK_PRESENT_MODE_FIFO_KHR ? "FIFO"
             : swapchain_params.present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR ? "IMMEDIATE"

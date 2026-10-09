@@ -2059,7 +2059,7 @@ void StreamSession::StartAudioOutDrainThread()
 	audio_out_drain_thread_running = true;
 	audio_out_drain_requested = false;
 	audio_out_drain_thread = QThread::create([this]() { AudioOutDrainThreadMain(); });
-	audio_out_drain_thread->start();
+	audio_out_drain_thread->start(QThread::HighPriority);
 }
 
 void StreamSession::StopAudioOutDrainThread()
