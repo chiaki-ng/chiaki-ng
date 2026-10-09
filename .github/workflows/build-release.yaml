@@ -53,13 +53,12 @@ jobs:
         with:
           msystem: mingw64
           update: true
-          install: git
+          install: git diffutils
           pacboy: >-
             ca-certificates:p
             cc:p
             cmake:p
             curl:p
-            diffutils:p
             fast_float:p
             fftw:p
             hidapi:p
@@ -182,13 +181,12 @@ jobs:
         with:
           msystem: clangarm64
           update: true
-          install: git
+          install: git diffutils
           pacboy: >-
             ca-certificates:p
             cc:p
             cmake:p
             curl:p
-            diffutils:p
             fast_float:p
             fftw:p
             hidapi:p
@@ -312,7 +310,7 @@ jobs:
         run: |
           brew update
           brew uninstall pkgconfig || true
-          brew install qt@6 ffmpeg pkgconfig opus openssl cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
+          brew install qt@6 ffmpeg pkgconfig opus openssl@3 cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
 
       - name: Install sdl2-compat
         run: |
@@ -321,7 +319,7 @@ jobs:
 
       - name: Configure chiaki-ng
         run: |
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/@openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
 
       - name: Build chiaki-ng
         run: |
