@@ -35,6 +35,8 @@ set(SOURCE_FILES
 	res/resources.qrc
 	include/controllermanager.h
 	src/controllermanager.cpp
+	include/gyrosteer.h
+	src/gyrosteer.cpp
 	include/psnaccountid.h
 	src/psnaccountid.cpp
 	include/psntoken.h
