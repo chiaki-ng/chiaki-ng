@@ -134,7 +134,7 @@ fun exportAndShareAllSettings(activity: Activity, scope: CoroutineScope)
 		withContext(Dispatchers.IO) {
 			file.writeText(json, Charsets.UTF_8)
 		}
-		val uri = FileProvider.getUriForFile(activity, fileProviderAuthority, file)
+		val uri = FileProvider.getUriForFile(activity, activity.fileProviderAuthority, file)
 		Intent(Intent.ACTION_SEND).also {
 			it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 			it.type = "application/json"

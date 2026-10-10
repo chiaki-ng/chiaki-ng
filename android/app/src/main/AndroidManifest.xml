@@ -26,7 +26,7 @@
         tools:ignore="GoogleAppIndexingWarning">
 
         <provider
-            android:authorities="com.metallic.chiaki.fileprovider"
+            android:authorities="${applicationId}.fileprovider"
             android:name="androidx.core.content.FileProvider"
             android:grantUriPermissions="true"
             android:exported="false">

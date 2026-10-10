@@ -57,7 +57,7 @@
         android:background="#44000000"
         android:visibility="gone"
         android:clickable="true"
-        app:layout_behavior=".main.FloatingActionButtonBackgroundBehavior"/>
+        app:layout_behavior="com.metallic.chiaki.main.FloatingActionButtonBackgroundBehavior"/>
 
     <LinearLayout
         android:id="@+id/floatingActionButtonDial"
@@ -69,7 +69,7 @@
         android:layout_marginRight="20dp"
         android:layout_height="wrap_content"
         android:layout_width="wrap_content"
-        app:layout_behavior=".main.FloatingActionButtonSpeedDialBehavior"
+        app:layout_behavior="com.metallic.chiaki.main.FloatingActionButtonSpeedDialBehavior"
         android:gravity="right"
         android:clipChildren="false">
 
