@@ -307,6 +307,11 @@ data class ControllerState constructor(
 
 class QuitReason(val value: Int)
 {
+	companion object
+	{
+		const val SESSION_REQUEST_RP_IN_USE = 4 // CHIAKI_QUIT_REASON_SESSION_REQUEST_RP_IN_USE
+	}
+
 	override fun toString() = ChiakiNative.quitReasonToString(value)
 
 	val isError = ChiakiNative.quitReasonIsError(value)
