@@ -1,0 +1,44 @@
+name: Build chiaki-ng deb arm64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-deb_arm64:
+    name: Build chiaki-ng deb_arm64
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Setup Podman
+        run: |
+          sudo apt update
+          sudo apt-get -y install podman
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          path: 'chiaki-ng'
+
+      - name: Add QmlWebEngine Import
+        working-directory: chiaki-ng
+        run: |
+          cp scripts/qtwebengine_import.qml gui/src/qml/
+
+      - name: Run build script
+        working-directory: chiaki-ng
+        run: |
+          set -xe
+          podman run --rm \
+            -v "`pwd`:/build/chiaki" \
+            -w "/build/chiaki" \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.7 \
+            /bin/bash -c "sudo -E scripts/build-deb.sh"
+
+      - name: Upload chiaki-ng Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chiaki-ng_arm64.deb
+          path: chiaki-ng/deb/chiaki-ng-*.deb
+          if-no-files-found: error
+          retention-days: 7

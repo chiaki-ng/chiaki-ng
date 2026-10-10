@@ -1,0 +1,48 @@
+name: Bump patch version on Dependabot merge
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  bump-patch:
+    runs-on: ubuntu-latest
+    # Only run when the merge commit was authored by dependabot
+    if: github.event.head_commit.author.name == 'dependabot[bot]' || contains(github.event.head_commit.message, 'Bump ')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Bump CHIAKI_VERSION_PATCH in CMakeLists.txt
+        id: bump
+        run: |
+          set -e
+          current=$(grep -oP 'set\(CHIAKI_VERSION_PATCH \K[0-9]+' CMakeLists.txt)
+          next=$((current + 1))
+          sed -i "s/set(CHIAKI_VERSION_PATCH ${current})/set(CHIAKI_VERSION_PATCH ${next})/" CMakeLists.txt
+          echo "old=${current}" >> "$GITHUB_OUTPUT"
+          echo "new=${next}" >> "$GITHUB_OUTPUT"
+
+      - name: Read full version
+        id: version
+        run: |
+          major=$(grep -oP 'set\(CHIAKI_VERSION_MAJOR \K[0-9]+' CMakeLists.txt)
+          minor=$(grep -oP 'set\(CHIAKI_VERSION_MINOR \K[0-9]+' CMakeLists.txt)
+          patch=$(grep -oP 'set\(CHIAKI_VERSION_PATCH \K[0-9]+' CMakeLists.txt)
+          echo "version=${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CMakeLists.txt
+          git commit -m "chore: bump patch version to ${{ steps.version.outputs.version }} [skip ci]"
+          git push
