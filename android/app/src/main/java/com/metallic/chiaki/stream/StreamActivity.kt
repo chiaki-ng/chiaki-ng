@@ -22,7 +22,6 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.*
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.metallic.chiaki.R
-import com.metallic.chiaki.common.Preferences
 import com.metallic.chiaki.common.ext.viewModelFactory
 import com.metallic.chiaki.databinding.ActivityStreamBinding
 import com.metallic.chiaki.lib.ConnectInfo
@@ -34,7 +33,6 @@ import com.metallic.chiaki.touchcontrols.TouchpadOnlyFragment
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlin.math.min
 
 private sealed class DialogContents
 private object StreamQuitDialog: DialogContents()
@@ -119,21 +117,6 @@ class StreamActivity : AppCompatActivity()
 		viewModel.session.attachToSurfaceView(binding.surfaceView)
 		viewModel.session.state.observe(this, Observer { this.stateChanged(it) })
 		adjustStreamViewAspect()
-
-		if(Preferences(this).rumbleEnabled)
-		{
-			val vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
-			viewModel.session.rumbleState.observe(this, Observer {
-				val amplitude = min(255, (it.left.toInt() + it.right.toInt()) / 2)
-				vibrator.cancel()
-				if(amplitude == 0)
-					return@Observer
-				if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-					vibrator.vibrate(VibrationEffect.createOneShot(1000, amplitude))
-				else
-					vibrator.vibrate(1000)
-			})
-		}
 	}
 
 	private var controlsJob: Job? = null
