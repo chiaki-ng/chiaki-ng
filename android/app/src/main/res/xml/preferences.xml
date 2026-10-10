@@ -38,6 +38,22 @@
             app:icon="@drawable/ic_button_haptic" />
 
         <SwitchPreference
+            app:key="@string/preferences_menu_button_enabled_key"
+            app:title="@string/preferences_menu_button_enabled_title"
+            app:summary="@string/preferences_menu_button_enabled_summary"
+            app:icon="@drawable/ic_overflow" />
+
+        <SeekBarPreference
+            app:key="@string/preferences_menu_button_opacity_key"
+            app:title="@string/preferences_menu_button_opacity_title"
+            app:dependency="@string/preferences_menu_button_enabled_key"
+            android:max="100"
+            app:min="10"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:icon="@drawable/ic_display_normal"/>
+
+        <SwitchPreference
             app:key="@string/preferences_log_verbose_key"
             app:title="@string/preferences_log_verbose_title"
             app:summary="@string/preferences_log_verbose_summary"
@@ -49,6 +65,37 @@
             app:title="@string/preferences_logs_title"
             app:fragment="com.metallic.chiaki.settings.SettingsLogsFragment"
             app:icon="@drawable/ic_log"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="category_second_screen"
+        app:title="@string/preferences_category_title_second_screen">
+        <SwitchPreference
+            app:key="@string/preferences_second_screen_controls_enabled_key"
+            app:title="@string/preferences_second_screen_controls_enabled_title"
+            app:summary="@string/preferences_second_screen_controls_enabled_summary"
+            app:icon="@drawable/ic_gamepad" />
+
+        <SwitchPreference
+            app:key="@string/preferences_second_screen_menu_button_enabled_key"
+            app:title="@string/preferences_second_screen_menu_button_enabled_title"
+            app:summary="@string/preferences_second_screen_menu_button_enabled_summary"
+            app:icon="@drawable/ic_overflow" />
+
+        <ListPreference
+            app:key="@string/preferences_second_screen_layout_key"
+            app:title="@string/preferences_second_screen_layout_title"
+            app:summary="%s"
+            app:icon="@drawable/ic_gamepad"/>
+
+        <SeekBarPreference
+            app:key="@string/preferences_second_screen_opacity_key"
+            app:title="@string/preferences_second_screen_opacity_title"
+            android:max="100"
+            app:min="10"
+            app:seekBarIncrement="5"
+            app:showSeekBarValue="true"
+            app:icon="@drawable/ic_display_normal"/>
     </PreferenceCategory>
 
     <PreferenceCategory

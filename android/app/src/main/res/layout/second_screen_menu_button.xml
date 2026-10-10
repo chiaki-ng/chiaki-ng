@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menu button for the full layout on the second screen. fragment_controls.xml is shared
+     with the primary screen, so this is layered on top of it and kept to 32dp to fit above
+     its touchpad, which starts 32dp from the top. -->
+<com.metallic.chiaki.touchcontrols.ButtonView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/menuButtonView"
+    android:layout_width="32dp"
+    android:layout_height="32dp"
+    android:layout_gravity="top|center_horizontal"
+    android:padding="4dp"
+    android:contentDescription="@string/stream_menu_button"
+    app:drawableIdle="@drawable/control_button_menu"
+    app:drawablePressed="@drawable/control_button_menu_pressed"/>

@@ -62,6 +62,7 @@
     <string name="add_manual_regist_on_connect">Register on first Connection</string>
     <string name="preferences_category_title_general">General</string>
     <string name="preferences_category_title_stream">Stream</string>
+    <string name="preferences_category_title_second_screen">Second Screen</string>
     <string name="preferences_category_title_export">Export</string>
     <string name="preferences_registered_hosts_title">Registered Consoles</string>
     <string name="preferences_logs_title">Session Logs</string>
@@ -94,6 +95,18 @@
     <string name="preferences_motion_enabled_summary">Use device\'s motion sensors for controller motion</string>
     <string name="preferences_button_haptic_enabled_title">Touch Haptics</string>
     <string name="preferences_button_haptic_enabled_summary">Use phone vibration motor for short haptic feedback on button touches</string>
+    <string name="preferences_menu_button_enabled_title">Menu Button on Screen</string>
+    <string name="preferences_menu_button_enabled_summary">Show a button at the top of the stream to open the stream menu</string>
+    <string name="preferences_menu_button_opacity_title">Menu Button Opacity</string>
+    <string name="preferences_second_screen_controls_enabled_title">Controls on Second Screen</string>
+    <string name="preferences_second_screen_controls_enabled_summary">Show touch controls on the second display and stream video full-screen on the main display</string>
+    <string name="preferences_second_screen_menu_button_enabled_title">Menu Button</string>
+    <string name="preferences_second_screen_menu_button_enabled_summary">Show a button on the second screen to open the stream menu</string>
+    <string name="preferences_second_screen_layout_title">Layout</string>
+    <string name="preferences_second_screen_layout_title_auto">Auto (Simplified w/ controller)</string>
+    <string name="preferences_second_screen_layout_title_full">Full</string>
+    <string name="preferences_second_screen_layout_title_simplified">Simplified</string>
+    <string name="preferences_second_screen_opacity_title">Opacity</string>
     <string name="alert_message_delete_registered_host">Are you sure you want to delete the registered console %s with ID %s?</string>
     <string name="alert_message_delete_manual_host">Are you sure you want to delete the console entry for %s?</string>
     <string name="action_keep">Keep</string>
@@ -105,6 +118,8 @@
     <string name="display_hosts_empty_discovery_on_info">No consoles added or discovered.</string>
     <string name="stream_on_screen_controls">On-Screen Controls</string>
     <string name="stream_touchpad_only">Touchpad only</string>
+    <string name="stream_toggle_second_screen">Move controls between screens</string>
+    <string name="stream_menu_button">Stream menu</string>
 
     <!-- Don't localize these -->
     <string name="preferences_discovery_enabled_key">discovery_enabled</string>
@@ -113,6 +128,12 @@
     <string name="preferences_rumble_enabled_key">rumble_enabled</string>
     <string name="preferences_motion_enabled_key">motion_enabled</string>
     <string name="preferences_button_haptic_enabled_key">button_haptic_enabled</string>
+    <string name="preferences_menu_button_enabled_key">menu_button_enabled</string>
+    <string name="preferences_menu_button_opacity_key">menu_button_opacity</string>
+    <string name="preferences_second_screen_controls_enabled_key">second_screen_controls_enabled</string>
+    <string name="preferences_second_screen_menu_button_enabled_key">second_screen_menu_button_enabled</string>
+    <string name="preferences_second_screen_layout_key">second_screen_layout</string>
+    <string name="preferences_second_screen_opacity_key">second_screen_opacity</string>
     <string name="preferences_log_verbose_key">log_verbose</string>
     <string name="preferences_import_settings_key">import_settings</string>
     <string name="preferences_export_settings_key">export_settings</string>
