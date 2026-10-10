@@ -10,6 +10,7 @@ import com.metallic.chiaki.session.StreamSession
 import com.metallic.chiaki.common.Preferences
 import com.metallic.chiaki.lib.*
 import com.metallic.chiaki.session.StreamInput
+import com.metallic.chiaki.session.output.OutputBackends
 
 class StreamViewModel(val application: Application, val connectInfo: ConnectInfo): ViewModel()
 {
@@ -17,8 +18,10 @@ class StreamViewModel(val application: Application, val connectInfo: ConnectInfo
 	val logManager = LogManager(application)
 
 	private var _session: StreamSession? = null
+	private val backends = OutputBackends(application)
 	val input = StreamInput(application, preferences)
-	val session = StreamSession(connectInfo, logManager, preferences.logVerbose, input)
+	val session = StreamSession(connectInfo, logManager, preferences.logVerbose, input,
+		preferences.rumbleEnabled, preferences.hapticsRumbleLevel, backends)
 
 	private var _onScreenControlsEnabled = MutableLiveData<Boolean>(preferences.onScreenControlsEnabled)
 	val onScreenControlsEnabled: LiveData<Boolean> get() = _onScreenControlsEnabled
@@ -30,6 +33,8 @@ class StreamViewModel(val application: Application, val connectInfo: ConnectInfo
 	{
 		super.onCleared()
 		_session?.shutdown()
+		session.shutdown()
+		backends.close()
 	}
 
 	fun setOnScreenControlsEnabled(enabled: Boolean)

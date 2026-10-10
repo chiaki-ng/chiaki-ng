@@ -25,11 +25,23 @@
             app:summary="@string/preferences_rumble_enabled_summary"
             app:icon="@drawable/ic_rumble" />
 
-        <SwitchPreference
-            app:key="@string/preferences_motion_enabled_key"
-            app:title="@string/preferences_motion_enabled_title"
-            app:summary="@string/preferences_motion_enabled_summary"
+        <ListPreference
+            app:key="@string/preferences_haptics_rumble_key"
+            app:title="@string/preferences_haptics_rumble_title"
+            app:summary="%s"
+            app:icon="@drawable/ic_rumble" />
+
+        <ListPreference
+            app:key="@string/preferences_motion_source_key"
+            app:title="@string/preferences_motion_source_title"
+            app:summary="%s"
             app:icon="@drawable/ic_motion" />
+
+        <ListPreference
+            app:key="@string/preferences_dualsense_mode_key"
+            app:title="@string/preferences_dualsense_mode_title"
+            app:summary="%s"
+            app:icon="@drawable/ic_gamepad" />
 
         <SwitchPreference
             app:key="@string/preferences_button_haptic_enabled_key"
