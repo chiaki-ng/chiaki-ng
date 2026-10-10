@@ -47,4 +47,34 @@ class ControllerStateTest
 		assertEquals(0.toUByte(), state.r2State)
 		assertEquals(0, state.leftX.toInt())
 	}
+
+	@Test
+	fun copy_doesNotShareTouches()
+	{
+		val state = ControllerState()
+		val before = state.copy()
+		state.startTouch(100U, 200U)
+		assertEquals(-1, before.touches[0].id.toInt())
+	}
+
+	@Test
+	fun copy_afterTouchMove_differs()
+	{
+		// TouchpadView publishes state.copy() to a StateFlow, which drops values equal to the current one
+		val state = ControllerState()
+		val id = state.startTouch(100U, 200U)!!
+		val before = state.copy()
+		state.setTouchPos(id, 300U, 400U)
+		assertNotEquals(before, state.copy())
+	}
+
+	@Test
+	fun copy_afterTouchStop_differs()
+	{
+		val state = ControllerState()
+		val id = state.startTouch(100U, 200U)!!
+		val before = state.copy()
+		state.stopTouch(id)
+		assertNotEquals(before, state.copy())
+	}
 }

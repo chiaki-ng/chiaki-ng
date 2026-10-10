@@ -27,11 +27,14 @@ import com.metallic.chiaki.common.ext.viewModelFactory
 import com.metallic.chiaki.databinding.ActivityStreamBinding
 import com.metallic.chiaki.lib.ConnectInfo
 import com.metallic.chiaki.lib.ConnectVideoProfile
+import com.metallic.chiaki.lib.ControllerState
 import com.metallic.chiaki.session.*
 import com.metallic.chiaki.touchcontrols.DefaultTouchControlsFragment
 import com.metallic.chiaki.touchcontrols.TouchControlsFragment
 import com.metallic.chiaki.touchcontrols.TouchpadOnlyFragment
+import com.metallic.chiaki.touchcontrols.mergeControllerStates
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlin.math.min
@@ -136,6 +139,7 @@ class StreamActivity : AppCompatActivity()
 		}
 	}
 
+	private val controlsSources = mutableListOf<Flow<ControllerState>>()
 	private var controlsJob: Job? = null
 
 	override fun onAttachFragment(fragment: Fragment)
@@ -143,8 +147,10 @@ class StreamActivity : AppCompatActivity()
 		super.onAttachFragment(fragment)
 		if(fragment is TouchControlsFragment)
 		{
+			// the layout hosts several controls fragments, all of them must reach the input
+			controlsSources.add(fragment.controllerState)
 			controlsJob?.cancel()
-			controlsJob = fragment.controllerState
+			controlsJob = mergeControllerStates(controlsSources)
 				.onEach { viewModel.input.touchControllerState = it }
 				.launchIn(lifecycleScope)
 			fragment.onScreenControlsEnabled = viewModel.onScreenControlsEnabled
