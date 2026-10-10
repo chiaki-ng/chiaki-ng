@@ -1188,7 +1188,12 @@ void StreamSession::UpdateGamepads()
 			{
 				haptics_handheld--;
 			}
-			QTimer::singleShot(1000, this, [this, controller] {
+			QTimer::singleShot(1000, this, [this, controller_id] {
+				// The controller may have been removed (and released) before this fires
+				// (e.g. a quick disconnect), so re-look it up instead of capturing a raw pointer.
+				auto controller = controllers.value(controller_id);
+				if(!controller)
+					return;
 				controller->ChangePlayerIndex(player_index);
 				controller->ChangeLEDColor(led_color);
 			});

@@ -2669,6 +2669,11 @@ QmlMainWindow::~QmlMainWindow()
     pl_cache_destroy(&placebo_cache);
     pl_queue_destroy(&placebo_queue);
     pl_renderer_destroy(&placebo_renderer);
+    // User shader hooks hold a reference to the GPU (their descriptors destroy
+    // buffers/textures via p->gpu), so they must be released before the GPU is.
+    pl_mpv_user_shader_destroy(&fsr_hook);
+    pl_mpv_user_shader_destroy(&fsrcnnx_hook_8);
+    pl_mpv_user_shader_destroy(&fsrcnnx_hook_16);
     if (render_backend == RenderBackend::Vulkan) {
         pl_vulkan_destroy(&placebo_vulkan);
         pl_vk_inst_destroy(&placebo_vk_inst);
@@ -2679,9 +2684,6 @@ QmlMainWindow::~QmlMainWindow()
     delete qt_gl_offscreen_surface;
     delete qt_gl_context;
     pl_options_free(&renderparams_opts);
-    pl_mpv_user_shader_destroy(&fsr_hook);
-    pl_mpv_user_shader_destroy(&fsrcnnx_hook_8);
-    pl_mpv_user_shader_destroy(&fsrcnnx_hook_16);
     pl_log_destroy(&placebo_log);
 }
 
