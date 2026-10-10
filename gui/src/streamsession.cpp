@@ -307,6 +307,8 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
 	this->enable_dualsense = true;
 	this->enable_idr_on_fec_failure = settings->GetIDROnFECFailureEnabled();
 	this->rumble_haptics_intensity = settings->GetRumbleHapticsIntensity();
+	this->haptics_anti_latency = settings->GetHapticsAntiLatencyEnabled();
+	this->haptics_anti_latency_ms = settings->GetHapticsAntiLatencyMs();
 	this->buttons_by_pos = settings->GetButtonsByPosition();
 	this->start_mic_unmuted = settings->GetStartMicUnmuted();
 	this->port_guessing_enabled = settings->GetPortGuessingEnabled();
@@ -384,7 +386,8 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	ps5_rumble_intensity(0x00),
 	ps5_trigger_intensity(0x00),
 	rumble_haptics_connected(false),
-	rumble_haptics_on(false)
+	rumble_haptics_on(false),
+	rumble_haptics_baseline(0.0f)
 {
 	mic_buf.buf = nullptr;
 	connected = false;
@@ -483,6 +486,8 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	dpad_touch_shortcut3 = connect_info.dpad_touch_shortcut3;
 	dpad_touch_shortcut4 = connect_info.dpad_touch_shortcut4;
 	haptic_override = connect_info.haptic_override;
+	haptics_anti_latency = connect_info.haptics_anti_latency;
+	haptics_anti_latency_ms = connect_info.haptics_anti_latency_ms;
 #if CHIAKI_LIB_ENABLE_PI_DECODER
 	if(connect_info.decoder == Decoder::Pi && chiaki_connect_info.video_profile.codec != CHIAKI_CODEC_H264)
 	{
@@ -594,6 +599,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	connect(this, &StreamSession::DualSenseIntensityChanged, ControllerManager::GetInstance(), &ControllerManager::SetDualSenseIntensity);
 	if(connect_info.buttons_by_pos)
 		ControllerManager::GetInstance()->SetButtonsByPos();
+	ControllerManager::GetInstance()->SetDS5GyroFixEnabled(connect_info.settings->GetDS5GyroFixEnabled());
 #endif
 #if CHIAKI_GUI_ENABLE_SETSU
 	setsu_motion_device = nullptr;
@@ -1764,6 +1770,7 @@ void StreamSession::ConnectRumbleHaptics()
 		return;
 	rumble_haptics = {};
 	rumble_haptics.reserve(20);
+	rumble_haptics_baseline = 0.0f;
 	connect(this, &StreamSession::RumbleHapticPushed, this, &StreamSession::QueueRumbleHaptics);
 	auto rumble_haptics_interval = RUMBLE_HAPTICS_PACKETS_PER_RUMBLE * 10;
 	auto rumble_haptics_timer = new QTimer(this);
@@ -2197,8 +2204,48 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 		return;
 	}
 #endif
+	// If a wired DualSense is connected but the dedicated haptic audio device
+	// failed to open (session started over Bluetooth, audio device not yet
+	// enumerated after a USB/BT hot-swap, transient open failure, ...), retry
+	// opening it so the stream uses the real HD haptics instead of the rumble
+	// fallback. Rate-limited to avoid spamming SDL on every frame; Bluetooth
+	// controllers report a battery level (not WIRED) and are skipped, so they
+	// keep using the rumble fallback below.
+	if(haptics_output == 0)
+	{
+		bool wired_dualsense = false;
+		for(auto controller : controllers)
+		{
+			if((controller->IsDualSense() || controller->IsDualSenseEdge()) && controller->IsWired())
+			{
+				wired_dualsense = true;
+				break;
+			}
+		}
+		if(wired_dualsense && (chiaki_time_now_monotonic_ms() - haptics_retry_timestamp_ms >= 2000))
+		{
+			haptics_retry_timestamp_ms = chiaki_time_now_monotonic_ms();
+			QMetaObject::invokeMethod(this, [this]() { ConnectHaptics(); }, Qt::QueuedConnection);
+		}
+	}
 	if((rumble_haptics_intensity != RumbleHapticsIntensity::Off) && haptics_output == 0)
 	{
+		// When the DualSense haptic audio device is unavailable (typical over
+		// Bluetooth on Windows, see "could not find the DualSense audio device"),
+		// the streaming haptic audio cannot be played via the dedicated HD
+		// haptics and is instead routed here and converted into rumble-motor
+		// strength. The raw engine/road low-frequency content then feels like
+		// excessive, continuous rumble (e.g. GT7 vibrating on a flat road).
+		// Detect this case and attenuate so it doesn't feel overwhelming.
+		bool dualsense_haptic_fallback = false;
+		for(auto controller : controllers)
+		{
+			if(controller->IsDualSense() || controller->IsDualSenseEdge())
+			{
+				dualsense_haptic_fallback = true;
+				break;
+			}
+		}
 		int16_t amplitudel = 0, amplituder = 0;
 		uint32_t suml = 0, sumr = 0;
 		const size_t sample_size = 2 * sizeof(int16_t); // stereo samples
@@ -2221,6 +2268,45 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 		temp_right = (temp_right > HAPTIC_RUMBLE_MIN_STRENGTH) ? temp_right : 0;
 		if(temp_left == 0 && temp_right == 0)
 			return;
+		if(dualsense_haptic_fallback)
+		{
+			// DualSense haptic audio fallback: the streaming audio is being
+			// dumped into the rumble motors. Games like GT7 constantly send a
+			// low-frequency engine/road texture stream even on a flat road,
+			// which would otherwise feel like continuous, overwhelming rumble
+			// (the exact complaint when connecting over Bluetooth, where the
+			// dedicated haptic audio device is unavailable). Apply an adaptive
+			// noise gate: track the recent steady-state strength and only
+			// convert the *excess* above that baseline to rumble, so constant
+			// surfaces stay quiet while impacts/curbs/transients still rumble.
+			uint32_t raw = (temp_left > temp_right) ? temp_left : temp_right;
+			float delta = static_cast<float>(raw) - rumble_haptics_baseline;
+			if(delta > rumble_haptics_baseline * 0.5f + HAPTIC_RUMBLE_MIN_STRENGTH)
+			{
+				// Significant rise over the steady-state level: emit only the
+				// excess, and let the baseline slowly chase so sustained loud
+				// content eventually fades instead of burning the motors.
+				if(temp_left > rumble_haptics_baseline)
+					temp_left -= static_cast<uint32_t>(rumble_haptics_baseline);
+				else
+					temp_left = 0;
+				if(temp_right > rumble_haptics_baseline)
+					temp_right -= static_cast<uint32_t>(rumble_haptics_baseline);
+				else
+					temp_right = 0;
+				rumble_haptics_baseline = rumble_haptics_baseline + delta * 0.1f;
+			}
+			else
+			{
+				// Steady-state content (flat road, engine hum): suppress it
+				// and let the baseline track the current level.
+				temp_left = 0;
+				temp_right = 0;
+				rumble_haptics_baseline = rumble_haptics_baseline * 0.9f + raw * 0.1f;
+			}
+			if(temp_left == 0 && temp_right == 0)
+				return;
+		}
 		switch(rumble_haptics_intensity)
 		{
 			case RumbleHapticsIntensity::VeryWeak:
@@ -2251,6 +2337,16 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 				left = temp_left;
 				right = temp_right;
 				break;
+		}
+		// DualSense haptic audio fallback: the adaptive noise gate above has
+		// already stripped the constant road/engine content, so the remaining
+		// signal is made of real events only. A mild attenuation (0.8) is kept
+		// since actuator-level audio still feels stronger once mapped to the
+		// rumble motors, but the gate no longer needs heavy damping.
+		if(dualsense_haptic_fallback)
+		{
+			left = static_cast<uint16_t>(left * 0.8f);
+			right = static_cast<uint16_t>(right * 0.8f);
 		}
 		// Set minimum rumble value if above rumble min for controllers that shift up to 9 bits when rumbling
 		left = ((left > 0 && left < (1 << 9)) ? (1 << 9) : left);
@@ -2315,6 +2411,22 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 	{
 		CHIAKI_LOGE(log.GetChiakiLog(), "Failed to resample haptics audio: %s", SDL_GetError());
 		return;
+	}
+
+	// Prevent haptics latency buildup: if queued audio exceeds threshold,
+	// drain stale frames so current vibration plays immediately instead of
+	// waiting behind a backlog caused by network jitter.
+	if(haptics_anti_latency)
+	{
+		// 4 channels * 2 bytes (S16) per sample; haptics_buffer_size is samples (10ms)
+		const size_t bytes_per_buffer = haptics_buffer_size * 4 * 2;
+		const size_t threshold = bytes_per_buffer * haptics_anti_latency_ms / 10;
+		if(SDL_GetQueuedAudioSize(haptics_output) > threshold)
+		{
+			CHIAKI_LOGV(log.GetChiakiLog(), "Haptics queue exceeded %zu bytes (%zu ms), clearing stale frames",
+					threshold, threshold / bytes_per_buffer * 10);
+			SDL_ClearQueuedAudio(haptics_output);
+		}
 	}
 
 	if (SDL_QueueAudio(haptics_output, cvt.buf, cvt.len_cvt) < 0)

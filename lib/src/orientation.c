@@ -29,7 +29,7 @@ static float inv_sqrt(float x);
 static void fuzz(const float cur, float *prev, const float fuzz, const float wprev, const float wprev2x);
 
 CHIAKI_EXPORT void chiaki_orientation_update(ChiakiOrientation *orient,
-		float gx, float gy, float gz, float ax, float ay, float az, float beta, float time_step_sec)
+		float gx, float gy, float gz, float ax, float ay, float az, float beta, float time_step_sec, bool fuzz_enabled)
 {
 	float q0 = orient->w, q1 = orient->x, q2 = orient->y, q3 = orient->z;
 	// Madgwick's IMU algorithm.
@@ -105,10 +105,20 @@ CHIAKI_EXPORT void chiaki_orientation_update(ChiakiOrientation *orient,
 	q2 *= recip_norm;
 	q3 *= recip_norm;
 
-	fuzz(q0, &orient->w, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
-	fuzz(q1, &orient->x, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
-	fuzz(q2, &orient->y, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
-	fuzz(q3, &orient->z, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
+	if(fuzz_enabled)
+	{
+		fuzz(q0, &orient->w, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
+		fuzz(q1, &orient->x, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
+		fuzz(q2, &orient->y, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
+		fuzz(q3, &orient->z, ORIENT_FUZZ, FUZZ_FILTER_PREV_WEIGHT, FUZZ_FILTER_PREV_WEIGHT2x);
+	}
+	else
+	{
+		orient->w = q0;
+		orient->x = q1;
+		orient->y = q2;
+		orient->z = q3;
+	}
 }
 
 // input fuzz filter like the one used in kernel input system
@@ -157,6 +167,7 @@ CHIAKI_EXPORT void chiaki_orientation_tracker_init(ChiakiOrientationTracker *tra
 	chiaki_orientation_init(&tracker->orient);
 	tracker->timestamp = 0;
 	tracker->sample_index = 0;
+	tracker->fuzz_enabled = true;
 }
 
 CHIAKI_EXPORT void chiaki_orientation_tracker_update(ChiakiOrientationTracker *tracker,
@@ -188,7 +199,7 @@ CHIAKI_EXPORT void chiaki_orientation_tracker_update(ChiakiOrientationTracker *t
 	tracker->timestamp = timestamp_us;
 	chiaki_orientation_update(&tracker->orient, gx, gy, gz, ax, ay, az,
 			tracker->sample_index < WARMUP_SAMPLES_COUNT ? BETA_WARMUP : BETA_DEFAULT,
-			(float)delta_us / 1000000.0f);
+			(float)delta_us / 1000000.0f, tracker->fuzz_enabled);
 }
 
 CHIAKI_EXPORT void chiaki_orientation_tracker_apply_to_controller_state(ChiakiOrientationTracker *tracker,

@@ -10,6 +10,14 @@
 #include <SDL.h>
 #endif
 
+// SDL renamed the joystick power-level getter in 2.24.0; map to the correct
+// symbol based on the compiled SDL version.
+#if SDL_VERSION_ATLEAST(2, 24, 0)
+#define CHIAKI_SDL_JOYSTICK_GET_POWERLEVEL(js) SDL_JoystickCurrentPowerLevel(js)
+#else
+#define CHIAKI_SDL_JOYSTICK_GET_POWERLEVEL(js) SDL_JoystickGetPowerLevel(js)
+#endif
+
 /* PS5 trigger effect documentation:
    https://controllers.fandom.com/wiki/Sony_DualSense#FFB_Trigger_Modes
 
@@ -140,7 +148,7 @@ ControllerManager *ControllerManager::GetInstance()
 
 ControllerManager::ControllerManager(QObject *parent)
 	: QObject(parent), creating_controller_mapping(false),
-	joystick_allow_background_events(true), dualsense_intensity(0x00), is_app_active(true)
+	joystick_allow_background_events(true), dualsense_intensity(0x00), ds5_gyro_fix_enabled(false), is_app_active(true)
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	SDL_SetMainReady();
@@ -608,6 +616,9 @@ inline bool Controller::HandleAxisEvent(SDL_ControllerAxisEvent event) {
 #if SDL_VERSION_ATLEAST(2, 0, 14)
 inline bool Controller::HandleSensorEvent(SDL_ControllerSensorEvent event)
 {
+	bool ds5_fix = manager->GetDS5GyroFixEnabled() && IsDualSense();
+	if(ds5_fix)
+		orientation_tracker.fuzz_enabled = false;
 	float accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z;
 	switch(event.sensor)
 	{
@@ -615,19 +626,45 @@ inline bool Controller::HandleSensorEvent(SDL_ControllerSensorEvent event)
 			accel_x = event.data[0] / SDL_STANDARD_GRAVITY;
 			accel_y = event.data[1] / SDL_STANDARD_GRAVITY;
 			accel_z = event.data[2] / SDL_STANDARD_GRAVITY;
-			chiaki_accel_new_zero_set_active(&this->real_accel,
-			accel_x, accel_y, accel_z, true);
-			chiaki_orientation_tracker_update(
-				&orientation_tracker, state.gyro_x, state.gyro_y, state.gyro_z,
-				accel_x, accel_y, accel_z, &accel_zero, false, event.timestamp * 1000);
+			if(ds5_fix)
+			{
+				// v1.8.0: write raw accel to state, feed Madgwick with paired latest values, no accel_zero/fuzz
+				state.accel_x = accel_x;
+				state.accel_y = accel_y;
+				state.accel_z = accel_z;
+				chiaki_orientation_tracker_update(
+					&orientation_tracker, state.gyro_x, state.gyro_y, state.gyro_z,
+					state.accel_x, state.accel_y, state.accel_z, &accel_zero, true, event.timestamp * 1000);
+			}
+			else
+			{
+				chiaki_accel_new_zero_set_active(&this->real_accel,
+				accel_x, accel_y, accel_z, true);
+				chiaki_orientation_tracker_update(
+					&orientation_tracker, state.gyro_x, state.gyro_y, state.gyro_z,
+					accel_x, accel_y, accel_z, &accel_zero, false, event.timestamp * 1000);
+			}
 			break;
 		case SDL_SENSOR_GYRO:
 			gyro_x = event.data[0];
 			gyro_y = event.data[1];
 			gyro_z = event.data[2];
-			chiaki_orientation_tracker_update(
-				&orientation_tracker, gyro_x, gyro_y, gyro_z,
-				state.accel_x, state.accel_y, state.accel_z, &accel_zero, true, event.timestamp * 1000);
+			if(ds5_fix)
+			{
+				// v1.8.0: write raw gyro to state, feed Madgwick with paired latest values, no accel_zero/fuzz
+				state.gyro_x = gyro_x;
+				state.gyro_y = gyro_y;
+				state.gyro_z = gyro_z;
+				chiaki_orientation_tracker_update(
+					&orientation_tracker, state.gyro_x, state.gyro_y, state.gyro_z,
+					state.accel_x, state.accel_y, state.accel_z, &accel_zero, true, event.timestamp * 1000);
+			}
+			else
+			{
+				chiaki_orientation_tracker_update(
+					&orientation_tracker, gyro_x, gyro_y, gyro_z,
+					state.accel_x, state.accel_y, state.accel_z, &accel_zero, true, event.timestamp * 1000);
+			}
 			break;
 		default:
 			return false;
@@ -775,6 +812,19 @@ ChiakiControllerState Controller::GetState()
 	return state;
 }
 
+bool Controller::IsWired()
+{
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(!controller)
+		return false;
+	SDL_Joystick *joystick = SDL_GameControllerGetJoystick(controller);
+	if(!joystick)
+		return false;
+	return CHIAKI_SDL_JOYSTICK_GET_POWERLEVEL(joystick) == SDL_JOYSTICK_POWER_WIRED;
+#else
+	return false;
+#endif
+}
 void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
@@ -784,7 +834,12 @@ void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 		return;
 	DS5EffectsState_t state;
 	SDL_zero(state);
-	if(firmware_version < 0x0224)
+	// SDL_GameControllerGetFirmwareVersion() can return 0 on hotplug or with
+	// some USB/BT driver combinations. 0 is not a valid firmware version, so
+	// treat it as "new firmware" (>= 2.24). Otherwise we would send the legacy
+	// 0x01 enable bit, which current DualSense firmware ignores, causing rumble
+	// to silently disappear (e.g. when switching from Bluetooth to USB).
+	if(firmware_version != 0 && firmware_version < 0x0224)
 	{
 		state.ucEnableBits1 |= 0x01;
 		state.ucRumbleLeft = left >> 1;
@@ -940,6 +995,8 @@ void Controller::resetMotionControls()
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	if(!controller)
 		return;
+	if(manager->GetDS5GyroFixEnabled() && IsDualSense())
+		return; // v1.8.0 did not handle motion reset for SDL controllers
 	chiaki_accel_new_zero_set_active(&accel_zero, real_accel.accel_x, real_accel.accel_y, real_accel.accel_z, false);
 	chiaki_orientation_tracker_init(&orientation_tracker);
 	chiaki_orientation_tracker_update(
