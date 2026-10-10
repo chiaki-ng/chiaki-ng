@@ -107,6 +107,8 @@ class TouchpadView @JvmOverloads constructor(
 		when(event.actionMasked)
 		{
 			MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+				if(downInSystemGestureArea(event))
+					return true
 				state.startTouch(touchX(event, event.actionIndex), touchY(event, event.actionIndex))?.let {
 					haptics.trigger()
 					val touch = Touch(it, event.getX(event.actionIndex), event.getY(event.actionIndex))
@@ -132,6 +134,17 @@ class TouchpadView @JvmOverloads constructor(
 					}
 					triggerStateChanged()
 				}
+			}
+			MotionEvent.ACTION_CANCEL -> {
+				// the touches were taken over, e.g. by a system gesture
+				pointerTouches.values.forEach {
+					removeCallbacks(it.startButtonHoldRunnable)
+					state.stopTouch(it.stateId)
+				}
+				pointerTouches.clear()
+				buttonHeld = false
+				state.buttons = state.buttons and ControllerState.BUTTON_TOUCHPAD.inv()
+				triggerStateChanged()
 			}
 			MotionEvent.ACTION_MOVE -> {
 				val changed = pointerTouches.entries.fold(false) { acc, it ->

@@ -79,11 +79,12 @@ class ButtonView @JvmOverloads constructor(
 		when(event.actionMasked)
 		{
 			MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
-				if(bestFittingTouchView(event.getX(event.actionIndex), event.getY(event.actionIndex)) != this)
+				if(downInSystemGestureArea(event)
+						|| bestFittingTouchView(event.getX(event.actionIndex), event.getY(event.actionIndex)) != this)
 					return false
 				buttonPressed = true
 			}
-			MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+			MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
 				buttonPressed = false
 			}
 		}
