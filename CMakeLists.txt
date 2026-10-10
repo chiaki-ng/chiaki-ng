@@ -14,6 +14,7 @@ option(CHIAKI_ENABLE_CLI "Enable CLI for Chiaki" ON)
 option(CHIAKI_ENABLE_GUI "Enable Qt GUI" ON)
 option(CHIAKI_ENABLE_ANDROID "Enable Android (Use only as part of the Gradle Project)" OFF)
 option(CHIAKI_ENABLE_BOREALIS "Enable Borealis GUI (For Nintendo Switch or PC)" OFF)
+option(CHIAKI_ENABLE_WEBBRIDGE "Enable web bridge (browser client over WebRTC)" OFF)
 tri_option(CHIAKI_ENABLE_SETSU "Enable libsetsu for touchpad input from controller" AUTO)
 tri_option(CHIAKI_ENABLE_STEAMDECK_NATIVE "Enable sdeck for native gyro and haptic feedback from Steam Deck" ON)
 option(CHIAKI_LIB_ENABLE_OPUS "Use Opus as part of Chiaki Lib" ON)
@@ -276,6 +277,10 @@ endif()
 
 if(CHIAKI_ENABLE_GUI)
 	add_subdirectory(gui)
+endif()
+
+if(CHIAKI_ENABLE_WEBBRIDGE)
+	add_subdirectory(webbridge)
 endif()
 
 if(CHIAKI_ENABLE_TESTS)

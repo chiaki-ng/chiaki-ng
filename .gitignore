@@ -39,3 +39,4 @@ chiaki.conf
 .cache/
 *.vscode
 site/
+.env
