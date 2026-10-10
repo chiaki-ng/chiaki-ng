@@ -2,6 +2,7 @@ package com.metallic.chiaki.session
 
 import android.content.Context
 import android.hardware.*
+import android.hardware.input.InputManager
 import android.view.*
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleObserver
@@ -16,22 +17,13 @@ class StreamInput(val context: Context, val preferences: Preferences)
 
 	val controllerState: ControllerState get()
 	{
-		val controllerState = sensorControllerState or keyControllerState or motionControllerState
-
-		val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-		@Suppress("DEPRECATION")
-		when(windowManager.defaultDisplay.rotation)
+		val motionState = when(resolveMotionInput(motionSource, controllerMotion.isAvailable))
 		{
-			Surface.ROTATION_90 -> {
-				controllerState.accelX *= -1.0f
-				controllerState.accelZ *= -1.0f
-				controllerState.gyroX *= -1.0f
-				controllerState.gyroZ *= -1.0f
-				controllerState.orientX *= -1.0f
-				controllerState.orientZ *= -1.0f
-			}
-			else -> {}
+			MotionInput.CONTROLLER -> controllerMotion.state.motionOnly()
+			MotionInput.PHONE -> phoneMotionState()
+			MotionInput.NONE -> ControllerState()
 		}
+		val controllerState = motionState or keyControllerState or motionControllerState
 
 		// prioritize motion controller's l2 and r2 over key
 		// (some controllers send only key, others both but key earlier than full press)
@@ -42,6 +34,31 @@ class StreamInput(val context: Context, val preferences: Preferences)
 
 		return controllerState or touchControllerState
 	}
+
+	private fun phoneMotionState(): ControllerState
+	{
+		val state = sensorControllerState.motionOnly()
+		val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+		@Suppress("DEPRECATION")
+		when(windowManager.defaultDisplay.rotation)
+		{
+			Surface.ROTATION_90 -> {
+				state.accelX *= -1.0f
+				state.accelZ *= -1.0f
+				state.gyroX *= -1.0f
+				state.gyroZ *= -1.0f
+				state.orientX *= -1.0f
+				state.orientZ *= -1.0f
+			}
+			else -> {}
+		}
+		return state
+	}
+
+	private fun ControllerState.motionOnly() = ControllerState(
+		gyroX = gyroX, gyroY = gyroY, gyroZ = gyroZ,
+		accelX = accelX, accelY = accelY, accelZ = accelZ,
+		orientX = orientX, orientY = orientY, orientZ = orientZ, orientW = orientW)
 
 	private val sensorControllerState = ControllerState() // from Motion Sensors
 	private val keyControllerState = ControllerState() // from KeyEvents
@@ -54,6 +71,24 @@ class StreamInput(val context: Context, val preferences: Preferences)
 		}
 
 	private val swapCrossMoon = preferences.swapCrossMoon
+	private val motionSource = preferences.motionSource
+	private val controllerMotion = ControllerMotion { controllerStateUpdated() }
+	private var lastInputDeviceId: Int? = null
+
+	val activeControllerId: Int? get() =
+		MotionDeviceMatcher.activeController(lastInputDeviceId, InputDeviceInfo.snapshot())?.id
+
+	private val inputManager = context.getSystemService(Context.INPUT_SERVICE) as InputManager
+	private val inputDeviceListener = object: InputManager.InputDeviceListener {
+		override fun onInputDeviceAdded(deviceId: Int) = activeControllerMaybeChanged()
+		override fun onInputDeviceRemoved(deviceId: Int)
+		{
+			if(deviceId == lastInputDeviceId)
+				lastInputDeviceId = null
+			activeControllerMaybeChanged()
+		}
+		override fun onInputDeviceChanged(deviceId: Int) = activeControllerMaybeChanged()
+	}
 
 	private val sensorEventListener = object: SensorEventListener {
 		override fun onSensorChanged(event: SensorEvent)
@@ -86,33 +121,66 @@ class StreamInput(val context: Context, val preferences: Preferences)
 		override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
 	}
 
-	private val motionLifecycleObserver = object: LifecycleObserver {
+	private val usePhoneMotion = motionSource == Preferences.MotionSource.AUTO || motionSource == Preferences.MotionSource.PHONE
+	private val useControllerMotion = motionSource == Preferences.MotionSource.AUTO || motionSource == Preferences.MotionSource.CONTROLLER
+
+	private val lifecycleObserver = object: LifecycleObserver {
 		@OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
 		fun onResume()
 		{
-			val samplingPeriodUs = 4000
-			val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-			listOfNotNull(
-				sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-				sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
-				sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-			).forEach {
-				sensorManager.registerListener(sensorEventListener, it, samplingPeriodUs)
+			inputManager.registerInputDeviceListener(inputDeviceListener, null)
+			if(usePhoneMotion)
+			{
+				val samplingPeriodUs = 4000
+				val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+				listOfNotNull(
+					sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
+					sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
+					sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+				).forEach {
+					sensorManager.registerListener(sensorEventListener, it, samplingPeriodUs)
+				}
+			}
+			if(useControllerMotion)
+			{
+				controllerMotion.start()
+				controllerMotion.activeControllerId = lastInputDeviceId
 			}
 		}
 
 		@OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
 		fun onPause()
 		{
+			inputManager.unregisterInputDeviceListener(inputDeviceListener)
 			val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 			sensorManager.unregisterListener(sensorEventListener)
+			controllerMotion.stop()
 		}
 	}
 
 	fun observe(lifecycleOwner: LifecycleOwner)
 	{
-		if(preferences.motionEnabled)
-			lifecycleOwner.lifecycle.addObserver(motionLifecycleObserver)
+		lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+	}
+
+	fun onMotionReset()
+	{
+		controllerMotion.reset()
+	}
+
+	private fun noteInputDevice(event: InputEvent)
+	{
+		if(!event.isFromSource(InputDevice.SOURCE_GAMEPAD) && !event.isFromSource(InputDevice.SOURCE_JOYSTICK))
+			return
+		if(event.deviceId == lastInputDeviceId)
+			return
+		lastInputDeviceId = event.deviceId
+		activeControllerMaybeChanged()
+	}
+
+	private fun activeControllerMaybeChanged()
+	{
+		controllerMotion.activeControllerId = lastInputDeviceId
 	}
 
 	private fun controllerStateUpdated()
@@ -125,6 +193,7 @@ class StreamInput(val context: Context, val preferences: Preferences)
 		//Log.i("StreamSession", "key event $event")
 		if(event.action != KeyEvent.ACTION_DOWN && event.action != KeyEvent.ACTION_UP)
 			return false
+		noteInputDevice(event)
 
 		when(event.keyCode)
 		{
@@ -177,6 +246,7 @@ class StreamInput(val context: Context, val preferences: Preferences)
 	{
 		if(event.source and InputDevice.SOURCE_CLASS_JOYSTICK != InputDevice.SOURCE_CLASS_JOYSTICK)
 			return false
+		noteInputDevice(event)
 		fun Float.signedAxis() = (this * Short.MAX_VALUE).toInt().toShort()
 		fun Float.unsignedAxis() = (this * UByte.MAX_VALUE.toFloat()).toUInt().toUByte()
 		motionControllerState.leftX = event.getAxisValue(MotionEvent.AXIS_X).signedAxis()

@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 14)
 
 add_library(chiaki-jni SHARED
         src/main/cpp/chiaki-jni.c
+        src/main/cpp/motion-tracker.c
         src/main/cpp/log.h
         src/main/cpp/log.c
         src/main/cpp/video-decoder.h
