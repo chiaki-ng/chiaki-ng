@@ -22,6 +22,7 @@ extern "C" {
 
 #include <QByteArray>
 #include <QPointer>
+#include <QWheelEvent>
 #include <QColor>
 #include <QDebug>
 #include <QThread>
@@ -7582,6 +7583,16 @@ bool QmlMainWindow::event(QEvent *event)
             return true;
         }
         QGuiApplication::sendEvent(quick_window, event);
+        break;
+    case QEvent::Wheel:
+        // wheel directions mapped to a controller button are consumed during a stream,
+        // everything else goes to the QML interface
+        if (session && !grab_input) {
+            if (session->HandleMouseWheelEvent(static_cast<QWheelEvent*>(event)))
+                return true;
+        } else {
+            QGuiApplication::sendEvent(quick_window, event);
+        }
         break;
     case QEvent::MouseButtonDblClick:
         if(!settings->GetFullscreenDoubleClickEnabled())

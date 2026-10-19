@@ -12,6 +12,7 @@
 #include "../../lib/src/utils.h"
 
 #include <QKeyEvent>
+#include <QWheelEvent>
 #include <QMutexLocker>
 #include <QtMath>
 #include <atomic>
@@ -878,8 +879,62 @@ void StreamSession::GoHome()
 	chiaki_session_go_home(&session);
 }
 
+namespace {
+constexpr int MouseWheelPulseMs = 60; // a wheel notch has no release event: the mapped button is released after this delay
+
+bool MouseKeyForButton(Qt::MouseButton button, MouseKey *key)
+{
+	switch(button)
+	{
+		case Qt::LeftButton:   *key = MouseKey::Left;   return true;
+		case Qt::RightButton:  *key = MouseKey::Right;  return true;
+		case Qt::MiddleButton: *key = MouseKey::Middle; return true;
+		default: return false;
+	}
+}
+}
+
+bool StreamSession::IsMouseInputMapped(MouseKey mouse_key) const
+{
+	return keyboard_controller_enabled && key_map.contains(static_cast<Qt::Key>(static_cast<int>(mouse_key)));
+}
+
+// If the mouse input is mapped to a controller button, presses/releases that button and returns true
+bool StreamSession::HandleMappedMouseInput(MouseKey mouse_key, bool pressed)
+{
+	if(!IsMouseInputMapped(mouse_key))
+		return false;
+	ApplyMappedButton(key_map[static_cast<Qt::Key>(static_cast<int>(mouse_key))], pressed);
+	return true;
+}
+
+bool StreamSession::HandleMouseWheelEvent(QWheelEvent *event)
+{
+	int delta = event->angleDelta().y();
+	if(delta == 0)
+		return false;
+	// physical direction of the wheel, whatever the "natural scrolling" system setting is
+	if(event->inverted())
+		delta = -delta;
+	const MouseKey mouse_key = delta > 0 ? MouseKey::WheelUp : MouseKey::WheelDown;
+	if(!IsMouseInputMapped(mouse_key))
+		return false;
+	// trackpad inertia would keep pressing the button after the fingers left
+	if(event->phase() == Qt::ScrollMomentum)
+		return true;
+	HandleMappedMouseInput(mouse_key, true);
+	QTimer::singleShot(MouseWheelPulseMs, this, [this, mouse_key]() {
+		HandleMappedMouseInput(mouse_key, false);
+	});
+	return true;
+}
+
 void StreamSession::HandleMousePressEvent(QMouseEvent *event)
 {
+	// a mouse button mapped to a controller button takes priority over the touchpad behavior
+	MouseKey mouse_key = MouseKey::Left;
+	if(MouseKeyForButton(event->button(), &mouse_key) && HandleMappedMouseInput(mouse_key, true))
+		return;
 	if(!mouse_touch_enabled)
 		return;
 	// left button for touchpad gestures, others => touchpad click
@@ -890,6 +945,9 @@ void StreamSession::HandleMousePressEvent(QMouseEvent *event)
 
 void StreamSession::HandleMouseReleaseEvent(QMouseEvent *event)
 {
+	MouseKey mouse_key = MouseKey::Left;
+	if(MouseKeyForButton(event->button(), &mouse_key) && HandleMappedMouseInput(mouse_key, false))
+		return;
 	if(!mouse_touch_enabled)
 		return;
 	// left button => end of touchpad gesture
@@ -909,8 +967,8 @@ void StreamSession::HandleMouseMoveEvent(QMouseEvent *event, qreal width, qreal 
 {
 	if(!mouse_touch_enabled)
 		return;
-	// left button with move => touchpad gesture, otherwise ignore
-	if (event->buttons() == Qt::LeftButton)
+	// left button with move => touchpad gesture (unless the left button is mapped), otherwise ignore
+	if (event->buttons() == Qt::LeftButton && !IsMouseInputMapped(MouseKey::Left))
 	{
 		float x = std::clamp(0.0, event->scenePosition().x(), width);
 		float y = std::clamp(0.0, event->scenePosition().y(), height);
@@ -937,7 +995,13 @@ void StreamSession::HandleKeyboardEvent(QKeyEvent *event)
 
 	int button = key_map[Qt::Key(event->key())];
 	bool press_event = event->type() == QEvent::Type::KeyPress;
+	ApplyMappedButton(button, press_event);
+}
 
+// Presses or releases a controller button (or axis) in the keyboard state.
+// Shared by keyboard keys and mapped mouse inputs.
+void StreamSession::ApplyMappedButton(int button, bool press_event)
+{
 	switch(button)
 	{
 		case CHIAKI_CONTROLLER_ANALOG_BUTTON_L2:
