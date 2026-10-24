@@ -271,6 +271,7 @@ private:
     void updatePendingFrameAge(double age);
     void snapshotLastFrame(AVFrame *frame, double pts, float duration, bool take_ownership = false);
     void clearSnapshotFrame();
+    AVFrame *cloneKeptFrameForReplay(double &pts, float &duration);
     bool hasBufferedWork();
     bool enqueueKeptFrame(double queue_pts_origin_hint, bool deinterlace_enabled, double &used_origin);
     double queuePtsOriginCached() const;
@@ -389,6 +390,7 @@ private:
     AVFrame *kept_frame = nullptr;
     double kept_frame_pts = 0.0;
     float kept_frame_duration = 0.0f;
+    // Software copy of kept_frame, downloaded lazily on first replay
     AVFrame *fallback_frame = nullptr;
     QAtomicInteger<int> swapchain_recreate_pending = 0;
     QAtomicInteger<int> vulkan_device_lost = 0;
