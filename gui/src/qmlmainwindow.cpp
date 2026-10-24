@@ -3162,6 +3162,7 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
     // minimum libplacebo needs to advance past a displayed frame.
     const int submission_depth_limit = depth_limit;
     bool queued = false;
+    AVFrame *snapshot_ref = nullptr;
     bool depth_exceeded = false;
     bool promote_pending = false;
     const bool render_busy = render_active.loadAcquire() != 0;
@@ -3231,6 +3232,10 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         }
         if (!depth_exceeded && !promote_pending && !pending_exists)
         {
+            // Once pushed, the render thread owns frame.frame and may free it via discard_frame,
+            // so take our own reference first for the snapshot/reset seed below.
+            if (!synthetic_warmup_frame)
+                snapshot_ref = av_frame_clone(frame.frame);
             const qint64 push_begin_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             pl_queue_push(placebo_queue, &src_frame);
             const qint64 push_end_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
@@ -3414,10 +3419,10 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         {
             const quint64 reset_seed_generation = reset_seed_capture_generation.loadAcquire();
             if (reset_seed_capture_active.loadAcquire() != 0 && reset_seed_generation != 0)
-                storeResetSeedFrame(frame.frame, frame.pts, frame.duration, reset_seed_generation);
+                storeResetSeedFrame(snapshot_ref, frame.pts, frame.duration, reset_seed_generation);
         }
 
-        snapshotLastFrame(frame.frame, frame.pts, frame.duration);
+        snapshotLastFrame(snapshot_ref, frame.pts, frame.duration, true);
 
         if (!playback_started) {
             uint64_t now_us = chiaki_time_now_monotonic_us();
