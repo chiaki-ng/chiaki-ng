@@ -3811,6 +3811,34 @@ static ChiakiErrorCode get_client_addr_local(Session *session, Candidate *local_
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
+#ifdef __ANDROID__
+    // A phone has several interfaces up at once (Wi-Fi, mobile data, VPN), and getifaddrs()
+    // returns them in no useful order. Use the address of the interface Android routes
+    // internet traffic over: connecting a UDP socket sends nothing, it only picks the source.
+    chiaki_socket_t probe_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if(!CHIAKI_SOCKET_IS_INVALID(probe_sock))
+    {
+        struct sockaddr_in probe_dst;
+        memset(&probe_dst, 0, sizeof(probe_dst));
+        probe_dst.sin_family = AF_INET;
+        probe_dst.sin_port = htons(53);
+        inet_pton(AF_INET, "1.1.1.1", &probe_dst.sin_addr);
+        struct sockaddr_in probe_src;
+        memset(&probe_src, 0, sizeof(probe_src));
+        socklen_t probe_src_len = sizeof(probe_src);
+        bool probe_ok = connect(probe_sock, (struct sockaddr *)&probe_dst, sizeof(probe_dst)) == 0
+            && getsockname(probe_sock, (struct sockaddr *)&probe_src, &probe_src_len) == 0
+            && probe_src.sin_addr.s_addr != htonl(INADDR_ANY)
+            && inet_ntop(AF_INET, &probe_src.sin_addr, local_console_candidate->addr, sizeof(local_console_candidate->addr));
+        CHIAKI_SOCKET_CLOSE(probe_sock);
+        if(probe_ok)
+        {
+            CHIAKI_LOGI(session->log, "get_client_addr_local: Using local address %s of the default route", local_console_candidate->addr);
+            return CHIAKI_ERR_SUCCESS;
+        }
+        CHIAKI_LOGW(session->log, "get_client_addr_local: Could not get the default route's address, falling back to the first interface");
+    }
+#endif
     if(getifaddrs(&local_addrs) != 0)
     {
         CHIAKI_LOGE(session->log, "Couldn't get local address");
@@ -3839,12 +3867,12 @@ static ChiakiErrorCode get_client_addr_local(Session *session, Candidate *local_
         status = true;
         break;
     }
+    freeifaddrs(local_addrs);
     if(!status)
     {
         CHIAKI_LOGE(session->log, "Couldn't find a valid external address!");
         return CHIAKI_ERR_NETWORK;
     }
-    freeifaddrs(local_addrs);
     return err;
 #endif
 }
