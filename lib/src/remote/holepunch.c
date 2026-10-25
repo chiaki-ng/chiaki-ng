@@ -80,6 +80,7 @@ CHIAKI_EXPORT void chiaki_holepunch_set_ca_info(const char *path)
 {
     free(holepunch_ca_info);
     holepunch_ca_info = path ? strdup(path) : NULL;
+    chiaki_aia_set_ca_info(path);
 }
 
 /**

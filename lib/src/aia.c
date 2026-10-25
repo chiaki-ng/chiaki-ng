@@ -15,6 +15,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+static char *aia_ca_info = NULL;
+
+void chiaki_aia_set_ca_info(const char *path)
+{
+	free(aia_ca_info);
+	aia_ca_info = path ? strdup(path) : NULL;
+}
+
+const char *chiaki_aia_ca_info(void)
+{
+	return aia_ca_info;
+}
+
 #define AIA_PEM_BEGIN "-----BEGIN CERTIFICATE-----"
 #define AIA_MAX_HOPS 4
 
@@ -383,6 +396,8 @@ static bool aia_fetch_curl(const char *url, uint8_t **der_out, size_t *der_len_o
 		return false;
 
 	AiaDownload dl = { NULL, 0, false };
+	if(aia_ca_info)
+		curl_easy_setopt(curl, CURLOPT_CAINFO, aia_ca_info);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, aia_download_write);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &dl);
