@@ -48,6 +48,9 @@
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+#ifdef __ANDROID__
+#include <poll.h>
+#endif
 #endif
 
 #include <curl/curl.h>
@@ -94,6 +97,10 @@ static CURL *holepunch_curl_easy_init(void)
         curl_easy_setopt(curl, CURLOPT_CAINFO, holepunch_ca_info);
     return curl;
 }
+
+#if defined(__SWITCH__) || defined(__ANDROID__)
+#define HOLEPUNCH_USE_POLL
+#endif
 
 #define UUIDV4_STR_LEN 37
 #define SECOND_US 1000000L
@@ -4144,12 +4151,10 @@ static ChiakiErrorCode check_candidates(
     Candidate candidates[num_candidates + EXTRA_CANDIDATE_ADDRESSES];
     memcpy(candidates, candidates_received, num_candidates * sizeof(Candidate));
     int responses_received[num_candidates + EXTRA_CANDIDATE_ADDRESSES];
-#ifdef __SWITCH__
-    // Use poll() on Switch — select() fails when FD numbers >= FD_SETSIZE (256)
+#ifdef HOLEPUNCH_USE_POLL
+    // Use poll() — select() fails when FD numbers >= FD_SETSIZE (256 on Switch, 1024 on Android,
+    // where port guessing opens up to RANDOM_ALLOCATION_SOCKS_NUMBER sockets in an app with many FDs)
     struct pollfd *pollfds = NULL;
-#endif
-#ifdef __ANDROID__
-    fd_set fds;
 #endif
     bool failed = true;
     char service_remote[6];
@@ -4382,7 +4387,7 @@ static ChiakiErrorCode check_candidates(
         }
     }
 #endif
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
     int poll_capacity = 0;
     if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
         poll_capacity++;
@@ -4407,10 +4412,10 @@ static ChiakiErrorCode check_candidates(
     {
         bool timed_out = false;
         chiaki_socket_t ready_sock = CHIAKI_INVALID_SOCKET;
-#if !defined(__SWITCH__)
+#ifndef HOLEPUNCH_USE_POLL
         struct timeval timeout;
 #endif
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
         nfds_t npollfds = 0;
         if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
         {
@@ -4461,88 +4466,6 @@ static ChiakiErrorCode check_candidates(
                     continue;
                 ready_sock = pollfds[pi].fd;
                 break;
-            }
-        }
-#elif defined(__ANDROID__)
-        chiaki_socket_t maxfd = -1;
-        FD_ZERO(&fds);
-        if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
-        {
-            FD_SET(session->ipv4_sock, &fds);
-            maxfd = session->ipv4_sock;
-        }
-        if(!CHIAKI_SOCKET_IS_INVALID(session->ipv6_sock))
-        {
-            FD_SET(session->ipv6_sock, &fds);
-            if(session->ipv6_sock > maxfd)
-                maxfd = session->ipv6_sock;
-        }
-        if(session->stun_random_allocation)
-        {
-            for(int i=0; i<socks_count; i++)
-            {
-                if(CHIAKI_SOCKET_IS_INVALID(socks[i]))
-                    continue;
-                if(socks[i] > maxfd)
-                    maxfd = socks[i];
-                FD_SET(socks[i], &fds);
-            }
-        }
-        maxfd = maxfd + 1;
-        if(connecting)
-        {
-            timeout.tv_sec = SELECT_CANDIDATE_CONNECTION_SEC;
-            timeout.tv_usec = 0;
-        }
-        else
-        {
-            timeout.tv_usec = (int)(SELECT_CANDIDATE_TIMEOUT_SEC * SECOND_US);
-            timeout.tv_sec = 0;
-        }
-        int ret = select(maxfd, &fds, NULL, NULL, &timeout);
-        if (ret < 0 && errno != EINTR)
-        {
-            CHIAKI_LOGE(session->log, "check_candidates: Select failed with error: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-            err = CHIAKI_ERR_NETWORK;
-            goto cleanup_sockets;
-        }
-        else if (ret == 0)
-        {
-            timed_out = true;
-        }
-        else
-        {
-            if (!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock) && FD_ISSET(session->ipv4_sock, &fds))
-            {
-                ready_sock = session->ipv4_sock;
-            }
-            else if (!CHIAKI_SOCKET_IS_INVALID(session->ipv6_sock) && FD_ISSET(session->ipv6_sock, &fds))
-            {
-                ready_sock = session->ipv6_sock;
-            }
-            else
-            {
-                for(int i=0; i<socks_count; i++)
-                {
-                    if(CHIAKI_SOCKET_IS_INVALID(socks[i]))
-                        continue;
-                    if(!FD_ISSET(socks[i], &fds))
-                        continue;
-                    ready_sock = socks[i];
-                    int ttl = 64;
-                    if (setsockopt(ready_sock, IPPROTO_IP, IP_TTL, (const CHIAKI_SOCKET_BUF_TYPE)&ttl, sizeof(ttl)) < 0)
-                    {
-                        CHIAKI_LOGE(session->log, "setsockopt(IP_TTL) failed with error" CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-                        if (!CHIAKI_SOCKET_IS_INVALID(socks[i]))
-                        {
-                            CHIAKI_SOCKET_CLOSE(socks[i]);
-                            socks[i] = CHIAKI_INVALID_SOCKET;
-                        }
-                        err = CHIAKI_ERR_UNKNOWN;
-                        goto cleanup_sockets;
-                    }
-                    break;
-                }
             }
         }
 #else
@@ -4927,7 +4850,7 @@ static ChiakiErrorCode check_candidates(
     memcpy(out_candidate, selected_candidate, sizeof(Candidate));
     session->ipv4_sock = CHIAKI_INVALID_SOCKET;
     session->ipv6_sock = CHIAKI_INVALID_SOCKET;
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
     free(pollfds);
 #endif
     free(socks);
@@ -4945,7 +4868,7 @@ cleanup_sockets:
         poll_ctx.base = NULL;
     }
 #endif
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
     free(pollfds);
     pollfds = NULL;
 #endif
