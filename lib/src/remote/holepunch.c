@@ -670,6 +670,20 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_list_devices(
             }
         }
 
+        device.network_wakeup_enabled = true;
+        json_object *wakeup_modes;
+        if (json_object_object_get_ex(device_json, "wakeupEnabledPowerModes", &wakeup_modes)
+            && json_object_is_type(wakeup_modes, json_type_array))
+        {
+            device.network_wakeup_enabled = false;
+            for (size_t j = 0; j < json_object_array_length(wakeup_modes); j++)
+            {
+                json_object *mode = json_object_array_get_idx(wakeup_modes, j);
+                if (json_object_is_type(mode, json_type_string) && strcmp(json_object_get_string(mode), "networkStandby") == 0)
+                    device.network_wakeup_enabled = true;
+            }
+        }
+
         json_object *device_name;
         if (!json_object_object_get_ex(device_json, "name", &device_name))
         {

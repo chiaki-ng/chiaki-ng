@@ -72,6 +72,9 @@ typedef struct chiaki_holepunch_device_info_t
     char device_name[32];
     uint8_t device_uid[32];
     bool remoteplay_enabled;
+    /** "networkStandby" is in wakeupEnabledPowerModes, i.e. PSN can wake it from rest mode.
+     * true when the account data does not say. */
+    bool network_wakeup_enabled;
 } ChiakiHolepunchDeviceInfo;
 
 /** Port types used for remote play. */
