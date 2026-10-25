@@ -172,6 +172,12 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_generate_client_device_uid(
     char *out, size_t *out_size);
 
 /**
+ * Set a CA bundle file (PEM) used for all PSN HTTPS and websocket requests.
+ * Only needed where libcurl has no default trust store (e.g. Android). NULL resets.
+ */
+CHIAKI_EXPORT void chiaki_holepunch_set_ca_info(const char *path);
+
+/**
  * Initialize a holepunching session.
  *
  * **IMPORTANT**: The OAuth2 token must fulfill the following requirements:
