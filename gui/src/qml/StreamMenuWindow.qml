@@ -1,10 +1,5 @@
 import QtQuick
-import QtQuick.Layouts
-import QtQuick.Controls
-import QtQuick.Controls.Material
 import QtQuick.Window
-
-import org.streetpea.chiaking
 
 Window {
     id: streamMenuWindow

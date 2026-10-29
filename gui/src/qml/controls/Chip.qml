@@ -12,9 +12,10 @@ Rectangle {
     implicitWidth: row.implicitWidth + 22
     implicitHeight: 28
     radius: height / 2
-    color: tinted ? Qt.rgba(tone.r, tone.g, tone.b, 0.14) : Theme.surfaceRaised
+    // Opaque, so chips stay readable over bright video in the stream menu
+    color: tinted ? Qt.tint(Theme.surfaceRaised, Qt.rgba(tone.r, tone.g, tone.b, 0.14)) : Theme.surfaceRaised
     border.width: 1
-    border.color: tinted ? Qt.rgba(tone.r, tone.g, tone.b, 0.28) : Theme.stroke
+    border.color: tinted ? Qt.tint(Theme.surfaceRaised, Qt.rgba(tone.r, tone.g, tone.b, 0.28)) : Theme.stroke
 
     Row {
         id: row

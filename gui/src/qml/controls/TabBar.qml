@@ -8,6 +8,15 @@ TabBar {
     spacing: 4
     padding: 6
 
+    // TabButton widths depend on the bar's width, so only the tabs' natural widths may feed back
+    // into the bar's implicit width (the default sums the actual tab widths: binding loop)
+    implicitWidth: {
+        let w = leftPadding + rightPadding + Math.max(0, count - 1) * spacing;
+        for (let i = 0; i < count; ++i)
+            w += itemAt(i).implicitWidth;
+        return Math.max(implicitBackgroundWidth + leftInset + rightInset, w);
+    }
+
     background: Rectangle {
         radius: Theme.radiusL
         color: Theme.surface

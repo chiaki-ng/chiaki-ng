@@ -45,6 +45,7 @@ T.Button {
     contentItem: Item {
         implicitWidth: row.implicitWidth
         implicitHeight: row.implicitHeight
+        opacity: control.enabled ? 1.0 : 0.5
 
         Row {
             id: row

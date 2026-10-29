@@ -442,6 +442,17 @@ Item {
             sourceComponent: placeboColorMappingDialogComponent
         }
     }
+
+    // Below the error toast, so an error raised while a dialog is open isn't dimmed
+    Rectangle {
+        id: modalScrim
+        anchors.fill: parent
+        color: C.Theme.scrim
+        opacity: infoDialog.visible || confirmDialog.visible || remindDialog.visible ? 1.0 : 0.0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: C.Theme.durMed } }
+    }
+
     Item {
         id: errorToast
         readonly property bool shown: errorHideTimer.running
@@ -530,15 +541,6 @@ Item {
             id: errorHideTimer
             interval: 3000
         }
-    }
-
-    Rectangle {
-        id: modalScrim
-        anchors.fill: parent
-        color: C.Theme.scrim
-        opacity: infoDialog.visible || confirmDialog.visible || remindDialog.visible ? 1.0 : 0.0
-        visible: opacity > 0
-        Behavior on opacity { NumberAnimation { duration: C.Theme.durMed } }
     }
 
     C.ModalDialog {

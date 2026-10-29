@@ -20,6 +20,8 @@ T.Button {
     hoverEnabled: true
 
     contentItem: Item {
+        opacity: control.enabled ? 1.0 : 0.5
+
         Column {
             anchors.centerIn: parent
             spacing: 8

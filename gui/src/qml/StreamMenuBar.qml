@@ -104,10 +104,12 @@ Item {
             leftMargin: 24
             bottomMargin: 20
         }
-        width: Math.min(dockRow.implicitWidth + 24, parent.width - 48)
+        width: dockRow.implicitWidth + 24
         height: 112
+        // Shrink rather than cut tiles off when they don't all fit (e.g. Zoom + Custom on a 1280px Steam Deck)
+        scale: parent.width > 48 ? Math.min(1, (parent.width - 48) / width) : 1
+        transformOrigin: Item.BottomLeft
         radius: 28
-        clip: true
         color: menu.opaque ? C.Theme.surface : "#EB12151F"
         border.width: 1
         border.color: C.Theme.strokeStrong
