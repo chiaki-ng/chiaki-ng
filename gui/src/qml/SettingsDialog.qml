@@ -165,15 +165,17 @@ DialogView {
     }
 
     Item {
-        TabBar {
+        C.TabBar {
             id: bar
             anchors {
                 top: parent.top
                 left: parent.left
                 right: parent.right
-                topMargin: 5
+                topMargin: 16
+                leftMargin: 24
+                rightMargin: 24
             }
-            TabButton {
+            C.TabButton {
                 id: general
                 text: qsTr("General")
                 focusPolicy: Qt.NoFocus
@@ -191,7 +193,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 id: video
                 text: qsTr("Video")
                 focusPolicy: Qt.NoFocus
@@ -221,7 +223,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 id: stream
                 text: qsTr("Stream")
                 focusPolicy: Qt.NoFocus
@@ -251,7 +253,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Audio/Wifi")
                 id: audio
                 focusPolicy: Qt.NoFocus
@@ -281,7 +283,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Consoles")
                 id: consoles
                 focusPolicy: Qt.NoFocus
@@ -311,7 +313,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Keys")
                 id: keys
                 focusPolicy: Qt.NoFocus
@@ -341,7 +343,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Controllers")
                 id: controllers
                 focusPolicy: Qt.NoFocus
@@ -371,7 +373,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Remote")
                 id: remote
                 focusPolicy: Qt.NoFocus
@@ -401,7 +403,7 @@ DialogView {
                 }
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Config")
                 id: config
                 focusPolicy: Qt.NoFocus

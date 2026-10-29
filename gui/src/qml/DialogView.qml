@@ -3,6 +3,8 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Material
 
+import "controls" as C
+
 Item {
     id: dialog
     property alias header: headerLabel.text
@@ -49,73 +51,85 @@ Item {
         }
     }
 
-    ToolBar {
+    Item {
         id: toolBar
         anchors {
             top: parent.top
             left: parent.left
             right: parent.right
         }
-        height: 80
+        height: 84
 
         RowLayout {
             anchors {
                 fill: parent
-                leftMargin: 10
-                rightMargin: 10
+                leftMargin: 24
+                rightMargin: 24
             }
+            spacing: 18
 
-            Button {
-                Layout.fillHeight: true
-                Layout.preferredWidth: 100
-                flat: true
-                text: "❮"
+            C.IconButton {
+                Layout.alignment: Qt.AlignVCenter
+                iconSource: C.Theme.icon("back")
+                size: 48
                 focusPolicy: Qt.NoFocus
-                Material.roundedScale: Material.SmallScale
                 onClicked: {
                     dialog.rejected();
                     dialog.close();
                 }
             }
 
-            Item { Layout.fillWidth: true }
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 2
 
-            Button {
+                Text {
+                    id: titleLabel
+                    Layout.fillWidth: true
+                    font.family: C.Theme.fontFamily
+                    font.pixelSize: C.Theme.fontTitle
+                    font.weight: Font.Bold
+                    font.letterSpacing: -0.3
+                    color: C.Theme.text
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    id: headerLabel
+                    Layout.fillWidth: true
+                    visible: text
+                    font.family: C.Theme.fontFamily
+                    font.pixelSize: C.Theme.fontCaption
+                    color: C.Theme.textTertiary
+                    elide: Text.ElideRight
+                }
+            }
+
+            C.PillButton {
                 id: okButton
-                Layout.fillHeight: true
-                flat: true
-                padding: 30
-                font.pixelSize: 25
+                Layout.alignment: Qt.AlignVCenter
+                kind: "primary"
                 focusPolicy: Qt.NoFocus
-                Material.roundedScale: Material.SmallScale
+                iconSource: "qrc:/icons/options.svg"
                 onClicked: dialog.accepted()
-                icon.source: "qrc:/icons/options.svg";
-                icon.width: 50
-                icon.height: 50
             }
         }
 
-        Label {
-            id: titleLabel
-            anchors.centerIn: parent
-            horizontalAlignment: Qt.AlignHCenter
-            verticalAlignment: Qt.AlignVCenter
-            font.bold: true
-            font.pixelSize: 26
-        }
-
-        Label {
-            id: headerLabel
+        Rectangle {
             anchors {
-                top: parent.top
-                left: titleLabel.right
+                left: parent.left
                 right: parent.right
-                verticalCenter: parent.verticalCenter
+                bottom: parent.bottom
             }
-            horizontalAlignment: Qt.AlignHCenter
-            verticalAlignment: Qt.AlignVCenter
-            font.bold: true
-            font.pixelSize: 14
+            height: 1
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: "transparent" }
+                GradientStop { position: 0.2; color: C.Theme.strokeStrong }
+                GradientStop { position: 0.8; color: C.Theme.strokeStrong }
+                GradientStop { position: 1.0; color: "transparent" }
+            }
         }
     }
 

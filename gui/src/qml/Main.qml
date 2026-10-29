@@ -5,6 +5,8 @@ import QtQuick.Controls.Material
 
 import org.streetpea.chiaking
 
+import "controls" as C
+
 Item {
     id: root
     property list<Item> restoreFocusItems
@@ -12,7 +14,8 @@ Item {
     readonly property bool preferSeparateStreamSettingsWindows: Chiaki.window.runtimeRendererBackend === 1 && Chiaki.session
     property bool useSeparateStreamSettingsWindows: false
     Material.theme: Material.Dark
-    Material.accent: "#00a7ff"
+    Material.accent: C.Theme.accent
+    Material.background: C.Theme.bg
 
     function controllerButton(name) {
         let type = "deck";
@@ -249,7 +252,7 @@ Item {
             stack.replace(stack.get(0), autoConnectViewComponent, {}, StackView.Immediate);
     }
 
-    Pane {
+    C.AppBackground {
         anchors.fill: parent
         visible: !Chiaki.window.hasVideo && !Chiaki.window.keepVideo
     }
@@ -259,24 +262,36 @@ Item {
         anchors.fill: parent
         hoverEnabled: false
         initialItem: mainViewComponent
-        font.pixelSize: 20
+        font.family: C.Theme.fontFamily
+        font.pixelSize: 19
+
+        pushEnter: Transition {
+            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: C.Theme.durMed; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "x"; from: 48; to: 0; duration: C.Theme.durSlow; easing.type: Easing.OutCubic }
+        }
+
+        pushExit: Transition {
+            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: C.Theme.durMed; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "x"; from: 0; to: -24; duration: C.Theme.durSlow; easing.type: Easing.OutCubic }
+        }
+
+        popEnter: Transition {
+            NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: C.Theme.durMed; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "x"; from: -24; to: 0; duration: C.Theme.durSlow; easing.type: Easing.OutCubic }
+        }
+
+        popExit: Transition {
+            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: C.Theme.durFast; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "x"; from: 0; to: 48; duration: C.Theme.durMed; easing.type: Easing.OutCubic }
+        }
 
         replaceEnter: Transition {
-            PropertyAnimation {
-                property: "opacity"
-                from: 0.01
-                to: 1.0
-                duration: 200
-            }
+            NumberAnimation { property: "opacity"; from: 0.01; to: 1.0; duration: C.Theme.durMed; easing.type: Easing.OutCubic }
+            NumberAnimation { property: "scale"; from: 0.985; to: 1.0; duration: C.Theme.durSlow; easing.type: Easing.OutCubic }
         }
 
         replaceExit: Transition {
-            PropertyAnimation {
-                property: "opacity"
-                from: 1.0
-                to: 0.0
-                duration: 200
-            }
+            NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: C.Theme.durMed; easing.type: Easing.OutCubic }
         }
     }
 
@@ -287,8 +302,12 @@ Item {
         height: 650
         width: 1200
         anchors.top: parent.top
+        anchors.topMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
-        color: Material.background
+        color: C.Theme.surface
+        radius: C.Theme.radiusL
+        border.width: 1
+        border.color: C.Theme.strokeStrong
         Loader {
             anchors.fill: parent
             id: placeboSettingsLoader
@@ -299,11 +318,15 @@ Item {
         id: displaySettingsRect
         opacity: 0.0
         anchors.top: parent.top
+        anchors.topMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
         height: 500
         width: 1200
         visible: opacity && !useSeparateStreamSettingsWindows
-        color: Material.background
+        color: C.Theme.surface
+        radius: C.Theme.radiusL
+        border.width: 1
+        border.color: C.Theme.strokeStrong
         Loader {
             anchors.fill: parent
             id: displaySettingsLoader
@@ -313,12 +336,16 @@ Item {
     Rectangle {
         id: colorMappingSettingsRect
         anchors.top: parent.top
+        anchors.topMargin: 16
         anchors.horizontalCenter: parent.horizontalCenter
         opacity: 0.0
         height: 600
         width: 1200
         visible: opacity && !useSeparateStreamSettingsWindows
-        color: Material.background
+        color: C.Theme.surface
+        radius: C.Theme.radiusL
+        border.width: 1
+        border.color: C.Theme.strokeStrong
         Loader {
             anchors.fill: parent
             id: colorMappingSettingsLoader
@@ -331,7 +358,7 @@ Item {
         visible: useSeparateStreamSettingsWindows && displaySettingsRect.opacity > 0.0
         transientParent: Chiaki.window
         flags: Qt.Dialog | Qt.FramelessWindowHint
-        color: Material.background
+        color: C.Theme.surface
         modality: Qt.NonModal
         x: Math.round(root.mapToGlobal(0, 0).x)
         y: Math.round(root.mapToGlobal(0, 0).y)
@@ -361,7 +388,7 @@ Item {
         visible: useSeparateStreamSettingsWindows && placeboSettingsRect.opacity > 0.0
         transientParent: Chiaki.window
         flags: Qt.Dialog | Qt.FramelessWindowHint
-        color: Material.background
+        color: C.Theme.surface
         modality: Qt.NonModal
         x: Math.round(root.mapToGlobal(0, 0).x)
         y: Math.round(root.mapToGlobal(0, 0).y)
@@ -391,7 +418,7 @@ Item {
         visible: useSeparateStreamSettingsWindows && colorMappingSettingsRect.opacity > 0.0
         transientParent: Chiaki.window
         flags: Qt.Dialog | Qt.FramelessWindowHint
-        color: Material.background
+        color: C.Theme.surface
         modality: Qt.NonModal
         x: Math.round(root.mapToGlobal(0, 0).x)
         y: Math.round(root.mapToGlobal(0, 0).y)
@@ -415,54 +442,110 @@ Item {
             sourceComponent: placeboColorMappingDialogComponent
         }
     }
-    Rectangle {
+    Item {
+        id: errorToast
+        readonly property bool shown: errorHideTimer.running
         anchors {
             bottom: parent.bottom
             horizontalCenter: parent.horizontalCenter
-            bottomMargin: 30
+            bottomMargin: shown ? 40 : 16
         }
-        color: Material.accent
-        width: errorLayout.width + 40
-        height: errorLayout.height + 20
-        radius: 8
-        opacity: errorHideTimer.running ? 0.8 : 0.0
+        width: Math.min(errorLayout.implicitWidth + 104, root.width - 48)
+        height: errorLayout.implicitHeight + 36
+        opacity: shown ? 1.0 : 0.0
+        visible: opacity > 0
 
-        Behavior on opacity { NumberAnimation { duration: 500 } }
+        Behavior on opacity { NumberAnimation { duration: C.Theme.durSlow; easing.type: Easing.OutCubic } }
+        Behavior on anchors.bottomMargin { NumberAnimation { duration: C.Theme.durSlow; easing.type: Easing.OutCubic } }
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -8
+            anchors.topMargin: -2
+            radius: C.Theme.radiusL + 8
+            color: "#40000000"
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: C.Theme.radiusL
+            color: C.Theme.surfaceRaised
+            border.width: 1
+            border.color: C.Theme.strokeStrong
+        }
+
+        Rectangle {
+            id: errorBadge
+            anchors {
+                left: parent.left
+                verticalCenter: parent.verticalCenter
+                leftMargin: 18
+            }
+            width: 40
+            height: 40
+            radius: 13
+            color: C.Theme.accentSoft
+            border.width: 1
+            border.color: "#594D8DFF"
+
+            Image {
+                anchors.centerIn: parent
+                source: C.Theme.icon("alert")
+                sourceSize: Qt.size(20, 20)
+            }
+        }
 
         ColumnLayout {
             id: errorLayout
-            anchors.centerIn: parent
+            anchors {
+                left: errorBadge.right
+                right: parent.right
+                verticalCenter: parent.verticalCenter
+                leftMargin: 16
+                rightMargin: 26
+            }
+            spacing: 2
 
             Label {
                 id: errorTitleLabel
-                Layout.alignment: Qt.AlignCenter
-                font.bold: true
-                font.pixelSize: 24
+                Layout.fillWidth: true
+                font.pixelSize: C.Theme.fontBody
+                font.weight: Font.Bold
+                color: C.Theme.text
+                elide: Text.ElideRight
             }
 
             Label {
                 id: errorTextLabel
-                Layout.alignment: Qt.AlignCenter
-                horizontalAlignment: Text.AlignHCenter
-                font.pixelSize: 20
+                Layout.fillWidth: true
+                Layout.maximumWidth: 720
+                font.pixelSize: C.Theme.fontLabel
+                color: C.Theme.textSecondary
+                wrapMode: Text.WordWrap
+                visible: text
             }
         }
 
         Timer {
             id: errorHideTimer
-            interval: 2000
+            interval: 3000
         }
     }
 
-    Dialog {
+    Rectangle {
+        id: modalScrim
+        anchors.fill: parent
+        color: C.Theme.scrim
+        opacity: infoDialog.visible || confirmDialog.visible || remindDialog.visible ? 1.0 : 0.0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: C.Theme.durMed } }
+    }
+
+    C.ModalDialog {
         id: infoDialog
         property alias text: infoDialogLabel.text
         property Item restoreFocusItem
-        parent: Overlay.overlay
-        x: Math.round((root.width - width) / 2)
-        y: Math.round((root.height - height) / 2)
-        modal: true
-        Material.roundedScale: Material.MediumScale
+        iconSource: C.Theme.icon("alert")
         onOpened: infoDialogLabel.forceActiveFocus(Qt.TabFocusReason)
         onClosed: {
             if (restoreFocusItem)
@@ -470,42 +553,29 @@ Item {
             infoDialogLabel.focus = false;
         }
 
-        Component.onCompleted: {
-            header.horizontalAlignment = Text.AlignHCenter;
-            header.background = null;
-        }
-
         ColumnLayout {
-            spacing: 20
+            spacing: 28
 
             Label {
                 id: infoDialogLabel
+                Layout.maximumWidth: Math.min(680, root.width - 160)
+                wrapMode: Text.WordWrap
+                color: C.Theme.textSecondary
+                font.pixelSize: C.Theme.fontBody
+                lineHeight: 1.15
                 Keys.onEscapePressed: infoDialog.close()
                 Keys.onReturnPressed: infoDialog.close()
             }
 
             RowLayout {
-                Layout.alignment: Qt.AlignCenter
+                Layout.alignment: Qt.AlignRight
 
-                Button {
+                C.PillButton {
                     text: qsTr("OK")
-                    Material.background: Material.accent
-                    flat: true
-                    leftPadding: 50
+                    kind: "primary"
+                    hint: root.controllerButton("cross")
+                    focusPolicy: Qt.NoFocus
                     onClicked: infoDialog.close()
-                    Material.roundedScale: Material.SmallScale
-
-                    Image {
-                        anchors {
-                            left: parent.left
-                            verticalCenter: parent.verticalCenter
-                            leftMargin: 12
-                        }
-                        width: 28
-                        height: 28
-                        sourceSize: Qt.size(width, height)
-                        source: root.controllerButton("cross")
-                    }
                 }
             }
         }

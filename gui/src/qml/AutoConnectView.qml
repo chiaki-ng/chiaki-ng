@@ -4,11 +4,17 @@ import QtQuick.Controls.Material
 
 import org.streetpea.chiaking
 
+import "controls" as C
+
 Rectangle {
     id: view
     property bool allowClose: false
     property bool textVisible: false
     color: "black"
+
+    C.AppBackground {
+        anchors.fill: parent
+    }
 
     function stop() {
         if (!allowClose)
@@ -42,6 +48,9 @@ Rectangle {
     Label {
         id: infoLabel
         anchors.centerIn: parent
+        font.pixelSize: C.Theme.fontHeadline
+        font.weight: Font.Bold
+        color: C.Theme.text
         opacity: view.allowClose ? 1.0 : 0.0
         visible: opacity
         text: qsTr("Waiting for console...")
@@ -66,6 +75,8 @@ Rectangle {
         }
         Label {
             id: closeMessageLabel
+            color: C.Theme.textSecondary
+            font.pixelSize: C.Theme.fontLabel
             anchors {
                 topMargin: 30
                 top: spinner.bottom
