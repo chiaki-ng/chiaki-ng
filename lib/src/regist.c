@@ -568,23 +568,25 @@ static chiaki_socket_t regist_search_connect(ChiakiRegist *regist, struct addrin
 #endif
 					goto connect_fail;
 				}
-				in_addr_t ip = ((struct sockaddr_in *)send_addr)->sin_addr.s_addr;
-				((struct sockaddr_in *)send_addr)->sin_addr.s_addr = htonl(INADDR_ANY);
-				((struct sockaddr_in *)send_addr)->sin_port = 0;
-				((struct sockaddr_in *)send_addr)->sin_family = AF_INET;
-				r = bind(sock, send_addr, *send_addr_len);
-				((struct sockaddr_in *)send_addr)->sin_addr.s_addr = ip;
+			}
+			// Bind to a separate wildcard address on an ephemeral port so send_addr keeps the
+			// destination port. Zeroing the port inside send_addr sent the search request to
+			// port 0, so the console never received it.
+			struct sockaddr_storage bind_addr;
+			memset(&bind_addr, 0, sizeof(bind_addr));
+			if(send_addr->sa_family == AF_INET)
+			{
+				struct sockaddr_in *bind_in = (struct sockaddr_in *)&bind_addr;
+				bind_in->sin_family = AF_INET;
+				bind_in->sin_addr.s_addr = htonl(INADDR_ANY);
 			}
 			else
 			{
-				struct in6_addr ip;
-				memcpy(&ip, &(((struct sockaddr_in6 *)send_addr)->sin6_addr), sizeof(struct in6_addr));
-				((struct sockaddr_in6 *)send_addr)->sin6_addr = in6addr_any;
-				((struct sockaddr_in6 *)send_addr)->sin6_port = 0;
-				((struct sockaddr_in6 *)send_addr)->sin6_family = AF_INET6;
-				r = bind(sock, send_addr, *send_addr_len);
-				memcpy(&(((struct sockaddr_in6 *)send_addr)->sin6_addr), &ip, sizeof(struct in6_addr));
+				struct sockaddr_in6 *bind_in6 = (struct sockaddr_in6 *)&bind_addr;
+				bind_in6->sin6_family = AF_INET6;
+				bind_in6->sin6_addr = in6addr_any;
 			}
+			r = bind(sock, (struct sockaddr *)&bind_addr, *send_addr_len);
 			if(r < 0)
 			{
 				CHIAKI_LOGE(regist->log, "Regist failed to bind socket, trying next address...");
