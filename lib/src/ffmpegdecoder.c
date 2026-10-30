@@ -105,6 +105,10 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_ffmpeg_decoder_init(ChiakiFfmpegDecoder *de
 	decoder->codec_context->framerate = decoder->synthetic_framerate;
 	decoder->codec_context->pkt_timebase = decoder->synthetic_time_base;
 	decoder->codec_context->time_base = decoder->synthetic_time_base;
+	decoder->codec_context->flags |= AV_CODEC_FLAG_LOW_DELAY;
+#ifdef AV_CODEC_FLAG2_FAST
+	decoder->codec_context->flags2 |= AV_CODEC_FLAG2_FAST;
+#endif
 
 	if(avcodec_open2(decoder->codec_context, decoder->av_codec, NULL) < 0)
 	{
