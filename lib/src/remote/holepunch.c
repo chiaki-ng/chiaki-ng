@@ -1385,6 +1385,12 @@ static ChiakiErrorCode http_ps4_session_wakeup(Session *session)
 
     char host_url_starter[128];
     char host_url[128];
+    if (strlen(user_profile_url) >= sizeof(host_url))
+    {
+        CHIAKI_LOGE(session->log, "http_ps4_session_wakeup: user profile url too long (%zu bytes), rejecting", strlen(user_profile_url));
+        err = CHIAKI_ERR_UNKNOWN;
+        goto cleanup_json;
+    }
     memcpy(host_url, user_profile_url, strlen(user_profile_url) + 1);
     // Get just the base url
     remove_substring(host_url, "https://");
@@ -6029,6 +6035,12 @@ static ChiakiErrorCode get_stun_servers(Session *session)
     char *ptr = strtok(response_data.data, "\n");
     while(ptr != NULL && session->num_stun_servers <= 9)
     {
+        if (strlen(ptr) >= sizeof(server_strings[0]))
+        {
+            CHIAKI_LOGW(session->log, "get_stun_servers: STUN host line too long (%zu bytes), skipping", strlen(ptr));
+            ptr = strtok(NULL, "\n");
+            continue;
+        }
         strcpy(server_strings[session->num_stun_servers], ptr);
         session->num_stun_servers++;
 		ptr = strtok(NULL, "\n");
@@ -6112,6 +6124,13 @@ static ChiakiErrorCode get_stun_servers(Session *session)
     ptr = strtok(response_data.data, "\n");
     while(ptr != NULL && session->num_stun_servers_ipv6 <= 9)
     {
+        // require the leading [ and bound the copy against the row size
+        if (ptr[0] != '[' || strlen(ptr + 1) >= sizeof(server_strings_ipv6[0]))
+        {
+            CHIAKI_LOGW(session->log, "get_stun_servers: IPv6 STUN line malformed or too long, skipping");
+            ptr = strtok(NULL, "\n");
+            continue;
+        }
         // omit leading [
         strcpy(server_strings_ipv6[session->num_stun_servers_ipv6], ptr + 1);
         session->num_stun_servers_ipv6++;
