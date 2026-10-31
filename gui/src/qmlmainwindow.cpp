@@ -6564,8 +6564,12 @@ void QmlMainWindow::render()
     const bool swapchain_recreated = swapchain_recreate_pending.fetchAndStoreRelaxed(0) != 0;
     if (swapchain_recreated) {
         destroySwapchain();
-        createSwapchain();
-        resizeSwapchain();
+        // A hidden window (a locked session, for one) can't present, so a new swapchain would
+        // fail again and be recreated on every frame. The next expose event creates it again.
+        if (isExposed() && width() > 0 && height() > 0) {
+            createSwapchain();
+            resizeSwapchain();
+        }
     }
 
     auto schedulePostSwapchainRecreateRefresh = [this, swapchain_recreated]() {
