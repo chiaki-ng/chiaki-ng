@@ -8,6 +8,16 @@ An open source PlayStation remote play project serving as the next-generation of
 ## Discord
 [chiaki-ng community Discord](https://discord.gg/tAMbRuwXDH)
 
+## Official downloads
+Only download chiaki-ng from these sources:
+
+- [GitHub Releases](https://github.com/chiaki-ng/chiaki-ng/releases)
+- [Flathub](https://flathub.org/apps/io.github.streetpea.Chiaki4deck)
+- winget: `winget install --id=StreetPea.chiaki-ng -e`
+- Homebrew: `brew install --cask streetpea/streetpea/chiaki-ng`
+
+Other websites offering chiaki-ng downloads, such as chiaki-ng.com, are not run by this project, and we can't vouch for the files they serve.
+
 ## Disclaimer
 This project is not endorsed or certified by Sony Interactive Entertainment LLC.
 

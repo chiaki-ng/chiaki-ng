@@ -1,5 +1,9 @@
 # Installing `chiaki-ng`
 
+!!! Warning "Only download `chiaki-ng` from official sources"
+
+    The official sources are the [GitHub releases page](https://github.com/chiaki-ng/chiaki-ng/releases){target="_blank" rel="noopener"}, [Flathub](https://flathub.org/apps/io.github.streetpea.Chiaki4deck){target="_blank" rel="noopener"}, winget (`winget install --id=StreetPea.chiaki-ng -e`) and the Homebrew cask below. Other websites offering `chiaki-ng` downloads, such as chiaki-ng.com, are not run by this project, and we can't vouch for the files they serve.
+
 === "Linux Flatpak"
 
     !!! Tip "Copying from and Pasting into Konsole Windows"
