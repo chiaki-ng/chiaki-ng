@@ -398,7 +398,7 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.9 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           cp appimage/chiaki-ng.AppImage appimage/chiaki-ng.AppImage_x86_64
 
@@ -443,7 +443,7 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.7 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           cp appimage/chiaki-ng.AppImage appimage/chiaki-ng.AppImage_arm64
 
