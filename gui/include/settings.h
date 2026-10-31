@@ -59,6 +59,17 @@ enum class Decoder
 	Pi
 };
 
+// Mouse inputs that can be mapped to controller buttons. They are stored in the key map like
+// keyboard keys, using values outside the range Qt uses for real keys.
+enum class MouseKey : int
+{
+	Left = 0x00f00001,
+	Right,
+	Middle,
+	WheelUp,
+	WheelDown
+};
+
 enum class PlaceboPreset {
 	Fast,
 	Default,
@@ -728,6 +739,10 @@ class Settings : public QObject
 		void RemoveControllerMapping(const QString &vidpid);
 
 		static QString GetChiakiControllerButtonName(int);
+		static bool IsMouseKey(Qt::Key key);
+		static QString KeyToString(Qt::Key key);
+		static Qt::Key KeyFromString(const QString &str);
+		static QString GetKeyDisplayName(Qt::Key key);
 		void SetControllerButtonMapping(int, Qt::Key);
 		QMap<int, Qt::Key> GetControllerMapping();
 		QMap<Qt::Key, int> GetControllerMappingForDecoding();

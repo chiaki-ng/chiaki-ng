@@ -2412,10 +2412,65 @@ QString Settings::GetChiakiControllerButtonName(int button)
 	}
 }
 
+namespace {
+// Stored names of the mappable mouse inputs (not translated, they are saved in the settings)
+struct MouseKeyName
+{
+	MouseKey key;
+	const char *name;
+};
+const MouseKeyName mouse_key_names[] = {
+	{MouseKey::Left, "MouseLeft"},
+	{MouseKey::Right, "MouseRight"},
+	{MouseKey::Middle, "MouseMiddle"},
+	{MouseKey::WheelUp, "MouseWheelUp"},
+	{MouseKey::WheelDown, "MouseWheelDown"}
+};
+}
+
+bool Settings::IsMouseKey(Qt::Key key)
+{
+	return static_cast<int>(key) >= static_cast<int>(MouseKey::Left)
+		&& static_cast<int>(key) <= static_cast<int>(MouseKey::WheelDown);
+}
+
+QString Settings::KeyToString(Qt::Key key)
+{
+	for(const auto &entry : mouse_key_names)
+	{
+		if(static_cast<int>(entry.key) == static_cast<int>(key))
+			return QString::fromLatin1(entry.name);
+	}
+	return QKeySequence(key).toString();
+}
+
+Qt::Key Settings::KeyFromString(const QString &str)
+{
+	for(const auto &entry : mouse_key_names)
+	{
+		if(str == QLatin1String(entry.name))
+			return static_cast<Qt::Key>(static_cast<int>(entry.key));
+	}
+	return QKeySequence(str)[0].key();
+}
+
+QString Settings::GetKeyDisplayName(Qt::Key key)
+{
+	switch(static_cast<int>(key))
+	{
+		case static_cast<int>(MouseKey::Left)      : return tr("Left Click");
+		case static_cast<int>(MouseKey::Right)     : return tr("Right Click");
+		case static_cast<int>(MouseKey::Middle)    : return tr("Middle Click");
+		case static_cast<int>(MouseKey::WheelUp)   : return tr("Wheel Up");
+		case static_cast<int>(MouseKey::WheelDown) : return tr("Wheel Down");
+		default: return QKeySequence(key).toString();
+	}
+}
+
 void Settings::SetControllerButtonMapping(int chiaki_button, Qt::Key key)
 {
 	auto button_name = GetChiakiControllerButtonName(chiaki_button).replace(' ', '_').toLower();
-	settings.setValue("keymap/" + button_name, QKeySequence(key).toString());
+	settings.setValue("keymap/" + button_name, KeyToString(key));
 }
 
 QMap<int, Qt::Key> Settings::GetControllerMapping()
@@ -2457,7 +2512,7 @@ QMap<int, Qt::Key> Settings::GetControllerMapping()
 	{
 		auto button_name = GetChiakiControllerButtonName(chiaki_button).replace(' ', '_').toLower();
 		if(settings.contains("keymap/" + button_name))
-			result[static_cast<int>(chiaki_button)] = QKeySequence(settings.value("keymap/" + button_name).toString())[0].key();
+			result[static_cast<int>(chiaki_button)] = KeyFromString(settings.value("keymap/" + button_name).toString());
 	}
 
 	return result;

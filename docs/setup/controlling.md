@@ -398,3 +398,20 @@ Use the dpad touch switch button combo (default is `L1+R1+Dpad Up` but it's user
     - For a swipe from down to up:
 
         First touch dpad down and then hold dpad up for a second or so. This will start you at the bottom of the touchpad and move you across the touchpad in the up direction.
+
+## Mapping Mouse Buttons and Wheel
+
+The left, right and middle mouse buttons and the mouse wheel (up and down) can be mapped to any controller button, including `L2` and `R2`.
+
+1. Go to Settings->Keys and click on the key field of the controller button you want to change
+
+2. In the `Key Capture` window, click with the mouse button you want to use, or scroll the wheel, inside the box. You can also press a keyboard key as before.
+
+3. To leave the window without changing anything, hold ++shift++ and ++escape++ together (in either order) or click `Close`
+
+!!! Note "Good to know"
+
+    - Each controller button has a single key or mouse input. Mapping a mouse button to `R2`, for example, replaces the keyboard key that was used for `R2`.
+    - A mapped mouse button takes priority over `Enable Mouse Touchpad`. If you map the left button, it no longer draws touchpad gestures.
+    - Like the keyboard keys, mouse mappings only work when `Keyboard as controller` is enabled.
+    - A wheel notch presses the mapped button for a very short time.

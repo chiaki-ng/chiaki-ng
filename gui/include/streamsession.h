@@ -49,6 +49,7 @@
 #endif
 
 class QKeyEvent;
+class QWheelEvent;
 class Settings;
 
 class ChiakiException: public Exception
@@ -367,6 +368,7 @@ class StreamSession : public QObject
 		void HandleMouseReleaseEvent(QMouseEvent *event);
 		void HandleMousePressEvent(QMouseEvent *event);
 		void HandleMouseMoveEvent(QMouseEvent *event, qreal width, qreal height);
+		bool HandleMouseWheelEvent(QWheelEvent *event);
 #if CHIAKI_GUI_ENABLE_SPEEX
 		bool ProcessMicFrame(int16_t *echo_buf);
 #endif
@@ -400,6 +402,9 @@ class StreamSession : public QObject
 		void UpdateGamepads();
 		void DpadSendFeedbackState();
 		void SendFeedbackState();
+		bool IsMouseInputMapped(MouseKey mouse_key) const;
+		bool HandleMappedMouseInput(MouseKey mouse_key, bool pressed);
+		void ApplyMappedButton(int button, bool press_event);
 };
 
 Q_DECLARE_METATYPE(ChiakiQuitReason)

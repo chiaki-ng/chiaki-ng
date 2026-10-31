@@ -2,7 +2,6 @@
 #include "sessionlog.h"
 
 #include <QSet>
-#include <QKeySequence>
 #include <QFutureWatcher>
 #include <QtConcurrentRun>
 #include <QLoggingCategory>
@@ -1755,7 +1754,7 @@ QVariantList QmlSettings::controllerMapping() const
         QVariantMap m;
         m["buttonName"] = Settings::GetChiakiControllerButtonName(it.key());
         m["buttonValue"] = it.key();
-        m["keyName"] = QKeySequence(it.value()).toString();
+        m["keyName"] = Settings::GetKeyDisplayName(it.value());
         out.append(m);
     }
     return out;
@@ -1865,7 +1864,17 @@ QString QmlSettings::changeControllerKey(int button, int key)
 {
     Qt::Key qt_key = Qt::Key(key);
     settings->SetControllerButtonMapping(button, qt_key);
-    return QKeySequence(qt_key).toString();
+    return Settings::GetKeyDisplayName(qt_key);
+}
+
+// mouse_input is one of the stored names ("MouseLeft", "MouseWheelUp", ...), see Settings::KeyFromString
+QString QmlSettings::changeControllerMouseInput(int button, const QString &mouse_input)
+{
+    Qt::Key qt_key = Settings::KeyFromString(mouse_input);
+    if (!Settings::IsMouseKey(qt_key))
+        return QString();
+    settings->SetControllerButtonMapping(button, qt_key);
+    return Settings::GetKeyDisplayName(qt_key);
 }
 
 void QmlSettings::setSettings(Settings *new_settings)
