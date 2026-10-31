@@ -57,7 +57,7 @@ This release provides the following improvements:
 - fix the AppImage crashing at PSN login on distros with a different NSS version and make it use its own SDL3
 - resend the wakeup while the console wakes, fix UPnP discovery, connecting by ports and renaming consoles, and recover incomplete certificate chains for PSN
 - stop writing the login PIN to the session log
-- update FFmpeg to 9.0.2, libplacebo, SDL, curl and other libraries, move the Flatpak to KDE runtime 6.11 and the Windows packages to Qt 6.12
+- update libplacebo, SDL, curl and other libraries, build FFmpeg 9.0.2 into the Flatpak and AppImages, and move the Flatpak to KDE runtime 6.11 and the AppImages to Qt 6.9.3
 
 ### v1.10.0
 
