@@ -81,10 +81,25 @@ export EXTRA_QT_MODULES="waylandclient;waylandcompositor"
 export EXTRA_PLATFORM_PLUGINS="libqwayland-egl.so;libqwayland-generic.so;libqeglfs.so;libqminimal.so;libqminimalegl.so;libqvkkhrdisplay.so;libqvnc.so;libqoffscreen.so;libqlinuxfb.so"
 curl -L -O https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-${ARCH}.AppImage
 chmod +x linuxdeploy-plugin-qt-${ARCH}.AppImage
+
+# Qt WebEngine's bundled NSS loads its crypto modules at runtime. Without them the
+# host's modules are loaded instead, NSS fails to initialize and the PSN login crashes.
+NSS_LIB_DIR="/usr/lib/$(gcc -print-multiarch)"
+NSS_MODULE_ARGS=()
+for nss_module in libsoftokn3.so libfreebl3.so libfreeblpriv3.so libnssckbi.so; do
+    # Ubuntu 20.04 keeps the modules in an nss subdirectory
+    if [ -f "${NSS_LIB_DIR}/nss/${nss_module}" ]; then
+        NSS_MODULE_ARGS+=(--library="${NSS_LIB_DIR}/nss/${nss_module}")
+    else
+        NSS_MODULE_ARGS+=(--library="${NSS_LIB_DIR}/${nss_module}")
+    fi
+done
+
 ./linuxdeploy-${ARCH}.AppImage \
     --appdir="${appdir}" \
     -e "${appdir}/usr/bin/chiaki" \
     -d "${appdir}/usr/share/applications/chiaking.desktop" \
+    "${NSS_MODULE_ARGS[@]}" \
     --plugin qt \
     --exclude-library='libva*' \
     --exclude-library='libvulkan*' \
@@ -95,6 +110,14 @@ for sdl2_lib in "${appdir}"/usr/lib/libSDL2-2.0.so.0*; do
     sdl2_rpath="$(readelf -d "${sdl2_lib}" | grep -E 'R(UN)?PATH' || true)"
     if [[ "${sdl2_rpath}" != *'$ORIGIN'* || "${sdl2_rpath}" == *'/usr/'* ]]; then
         echo "${sdl2_lib} doesn't search its own directory first for SDL3: ${sdl2_rpath}" >&2
+        exit 1
+    fi
+done
+
+# NSS must load its modules from the AppImage, not from the host
+for nss_module in libsoftokn3.so libfreebl3.so libfreeblpriv3.so libnssckbi.so; do
+    if [ ! -f "${appdir}/usr/lib/${nss_module}" ]; then
+        echo "${nss_module} isn't bundled next to libnss3.so" >&2
         exit 1
     fi
 done
