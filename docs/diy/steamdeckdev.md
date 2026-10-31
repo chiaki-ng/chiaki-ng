@@ -42,13 +42,13 @@ This is for contributors that want to make/test updates to the codebase without 
 3. Install the SDK
 
     ``` bash
-    flatpak install --user org.kde.Sdk//6.9
+    flatpak install --user org.kde.Sdk//6.11
     ```
 
 4. Install the `Debug` extensions for the SDK
 
     ``` bash
-    flatpak install --user org.kde.Sdk.Debug//6.9
+    flatpak install --user org.kde.Sdk.Debug//6.11
     ```
 
 5. Clone the project onto your Steam Deck with:

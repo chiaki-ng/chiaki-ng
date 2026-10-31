@@ -26,9 +26,9 @@ jobs:
       - name: Setup Flatpak Builder Environment
         run: |
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak install org.kde.Sdk//6.9 -y
-          flatpak install org.kde.Platform//6.9 -y
-          flatpak install io.qt.qtwebengine.BaseApp//6.9 -y
+          flatpak install org.kde.Sdk//6.11 -y
+          flatpak install org.kde.Platform//6.11 -y
+          flatpak install io.qt.qtwebengine.BaseApp//6.11 -y
           flatpak update --appstream --assumeyes
 
       - name: Build Flatpak package
