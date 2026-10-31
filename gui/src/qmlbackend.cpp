@@ -9,6 +9,7 @@
 #include "chiaki/remote/holepunch.h"
 #ifdef Q_OS_MACOS
 #include "macWakeSleep.h"
+#include "videotoolboxmap.h"
 #elif defined(Q_OS_WINDOWS)
 #include "windowsWakeSleep.h"
 #endif
@@ -445,6 +446,18 @@ bool QmlBackend::prepareFrameForPresentation(ChiakiFfmpegFrame &frame, bool use_
         return frame_has_planes(frame.frame);
 
     const int format = frame.frame->format;
+#ifdef Q_OS_MACOS
+    if (!disable_zero_copy && format == AV_PIX_FMT_VIDEOTOOLBOX) {
+        AVFrame *mapped = chiaki_videotoolbox_map(frame.frame);
+        if (mapped && frame_has_planes(mapped)) {
+            av_frame_free(&frame.frame);
+            frame.frame = mapped;
+            return true;
+        }
+        av_frame_free(&mapped);
+        // Unsupported surfaces retain the existing transfer/copy fallback.
+    }
+#endif
     {
         QMutexLocker locker(&hw_transfer_state_mutex);
         if (!logged_hw_transfer_formats.contains(format)) {
