@@ -591,6 +591,18 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 
 #if CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	connect(ControllerManager::GetInstance(), &ControllerManager::AvailableControllersUpdated, this, &StreamSession::UpdateGamepads);
+	connect(ControllerManager::GetInstance(), &ControllerManager::AudioOutputDeviceAdded, this, [this](const QString &name) {
+		if(haptics_output > 0 || !name.contains(DUALSENSE_AUDIO_DEVICE_NEEDLE))
+			return;
+		for(auto controller : controllers)
+		{
+			if(controller->IsDualSense() || controller->IsDualSenseEdge())
+			{
+				ConnectHaptics();
+				return;
+			}
+		}
+	});
 	connect(this, &StreamSession::DualSenseIntensityChanged, ControllerManager::GetInstance(), &ControllerManager::SetDualSenseIntensity);
 	if(connect_info.buttons_by_pos)
 		ControllerManager::GetInstance()->SetButtonsByPos();
@@ -1226,19 +1238,20 @@ void StreamSession::RetryHaptics(quint64 generation)
 	ConnectHaptics();
 	if(this->haptics_output > 0)
 		return;
-	// A wired DualSense's audio device can appear a few seconds after the controller,
-	// so keep trying with a growing delay; a wireless one has no audio device to wait for
-	bool wired_dualsense = false;
+	// The audio device can take a moment to open after it appears, so keep trying with a growing
+	// delay; one that appears later still is picked up when SDL reports it. A DualSense on battery
+	// has no audio device to wait for
+	bool possibly_wired_dualsense = false;
 	for(auto controller : controllers)
 	{
-		if((controller->IsDualSense() || controller->IsDualSenseEdge()) && controller->IsWired())
+		if((controller->IsDualSense() || controller->IsDualSenseEdge()) && !controller->IsWireless())
 		{
-			wired_dualsense = true;
+			possibly_wired_dualsense = true;
 			break;
 		}
 	}
 	static const int retry_delays_ms[] = { 500, 1000, 1000, 2000, 2000, 4000, 4000 };
-	if(!wired_dualsense || haptics_retry_attempt >= std::size(retry_delays_ms))
+	if(!possibly_wired_dualsense || haptics_retry_attempt >= std::size(retry_delays_ms))
 		return;
 	QTimer::singleShot(retry_delays_ms[haptics_retry_attempt++], this, [this, generation] { RetryHaptics(generation); });
 }
