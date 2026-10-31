@@ -31,7 +31,6 @@ jobs:
             curl:p
             fast_float:p
             fftw:p
-            hidapi:p
             json-c:p
             libevent:p
             lcms2:p
@@ -79,6 +78,7 @@ jobs:
       - name: Build SDL2
         run: |
           INSTALL_PREFIX=/mingw64 scripts/build-sdl2.sh .
+          INSTALL_PREFIX=/mingw64 scripts/build-hidapi.sh .
 
       - name: Configure chiaki-ng
         run: |
