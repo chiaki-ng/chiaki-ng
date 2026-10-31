@@ -5987,10 +5987,12 @@ void QmlMainWindow::createSwapchain()
 
 void QmlMainWindow::destroySwapchain()
 {
-    Q_ASSERT(QThread::currentThread() == render_thread);
-
+    // macOS can send an expose event while the window is still being set up, before the
+    // render thread is chosen; with no swapchain yet there is nothing to do on any thread
     if (!placebo_swapchain)
         return;
+
+    Q_ASSERT(QThread::currentThread() == render_thread);
 
     if (deferred_swap_thread && deferred_swap_thread->hasPendingWork())
         drainDeferredSwaps();
