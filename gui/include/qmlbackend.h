@@ -336,9 +336,6 @@ private:
     QString wakeup_nickname = "";
     bool wakeup_start = false;
     // console the last wakeup was sent to, resent while a session waits for it to wake
-    QString wakeup_host = "";
-    QByteArray wakeup_regist_key = {};
-    bool wakeup_ps5 = false;
     QMap<QString, PsnHost> psn_hosts = {};
     QMap<QString, PsnHost> psn_nickname_hosts = {};
 #ifdef CHIAKI_HAVE_WEBENGINE

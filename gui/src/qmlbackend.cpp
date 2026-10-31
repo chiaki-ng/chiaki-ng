@@ -424,10 +424,11 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
             wakeup_resend_timer->stop();
             return;
         }
-        if(wakeup_host.isEmpty())
+        // the console this session is waiting for, not whichever was woken last
+        if(session_info.host.isEmpty())
             return;
         try {
-            discovery_manager.SendWakeup(wakeup_host, wakeup_regist_key, wakeup_ps5);
+            discovery_manager.SendWakeup(session_info.host, session_info.regist_key, chiaki_target_is_ps5(session_info.target));
         } catch (const Exception &e) {
             qCWarning(chiakiGui) << "Failed to resend Wakeup packet:" << e.what();
         }
@@ -1836,9 +1837,6 @@ bool QmlBackend::sendWakeup(const QString &host, const QByteArray &regist_key, b
 {
     try {
         discovery_manager.SendWakeup(host, regist_key, ps5);
-        wakeup_host = host;
-        wakeup_regist_key = regist_key;
-        wakeup_ps5 = ps5;
         return true;
     } catch (const Exception &e) {
         emit error(tr("Wakeup failed"), tr("Failed to send Wakeup packet:\n%1").arg(e.what()));
