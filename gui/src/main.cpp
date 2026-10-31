@@ -97,6 +97,12 @@ int real_main(int argc, char *argv[])
 	mbstowcs (wc, argv[0], cSize);
 	QString import_path = QFileInfo(QString::fromWCharArray(wc)).dir().absolutePath() + "/qml";
 	qputenv("QML_IMPORT_PATH", import_path.toUtf8());
+	// Microsoft's OpenCL, OpenGL and Vulkan Compatibility Pack adds the Dozen driver (Vulkan on
+	// D3D12) beside the GPU's own, and loading it can crash the app even when it isn't used. Where
+	// Dozen is the only Vulkan driver, Vulkan then finds no device and chiaki-ng uses OpenGL,
+	// which the pack also provides. Setting either variable yourself keeps your choice.
+	if(!qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_DISABLE") && !qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_SELECT"))
+		qputenv("VK_LOADER_DRIVERS_DISABLE", "*dzn*");
 #endif
 #if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
 	qputenv("ANV_VIDEO_DECODE", "1");
