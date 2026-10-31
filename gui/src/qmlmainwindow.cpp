@@ -58,6 +58,7 @@ extern "C" {
 #include <cstring>
 #include <mutex>
 #include <type_traits>
+#include <limits>
 #include <utility>
 #include <atomic>
 #if defined(Q_OS_MACOS)
@@ -3106,6 +3107,12 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
             // applies this frame before it updates the queue and resets it then
             defer_queue_reset = true;
             queue_rollback_pending = true;
+            {
+                // frames still pending are from the timeline before the rollback; drop them so the
+                // rolled-back frame isn't rejected as older than them
+                QMutexLocker pending_locker(&pending_frame_mutex);
+                prunePendingFramesBeforeLocked(std::numeric_limits<double>::infinity());
+            }
         } else if (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin) {
             logPtsRollback("presentFrame/rollback", frame.pts, queue_pts_origin, false, frame.duration * 1000.0);
             pl_queue_reset(placebo_queue);
@@ -3472,6 +3479,8 @@ void QmlMainWindow::resetPlaceboQueue()
         << "playback_started=" << playback_started;
     pl_queue_reset(placebo_queue);
     placebo_queue_resets++;
+    // the next stored frame is compared with the new origin as usual
+    queue_rollback_pending = false;
     renderer_cache_flush_pending.storeRelaxed(1);
     newest_queued_frame_pts = -1.0;
     resetQueueDepthTracking();
@@ -5184,6 +5193,7 @@ renderer_backend_ready:
                     qCWarning(chiakiGui) << "Resetting the frame queue while a render still uses it after waiting 1 s";
                 pl_queue_reset(placebo_queue);
                 placebo_queue_resets++;
+                queue_rollback_pending = false;
                 newest_queued_frame_pts = -1.0;
             }
             resetQueueDepthTracking();
