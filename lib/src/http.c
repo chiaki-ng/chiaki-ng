@@ -140,9 +140,13 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_recv_http_header(int sock, char *buf, size_
 	static const int transitions_n[] = { 0, 2, 0, 4 };
 	uint64_t deadline_ms = timeout_ms == UINT64_MAX ? UINT64_MAX : chiaki_time_now_monotonic_ms() + timeout_ms;
 
+	char *start = buf;
 	*received_size = 0;
 	while(true)
 	{
+		if(*received_size >= buf_size)
+			return CHIAKI_ERR_BUF_TOO_SMALL;
+
 		if(stop_pipe)
 		{
 			uint64_t wait_timeout_ms = UINT64_MAX;
@@ -161,7 +165,7 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_recv_http_header(int sock, char *buf, size_
 		CHIAKI_SSIZET_TYPE received;
 		do
 		{
-			received = recv(sock, buf, (int)buf_size, 0);
+			received = recv(sock, start + *received_size, (int)(buf_size - *received_size), 0);
 #if _WIN32
 		} while(false);
 #else
@@ -182,6 +186,7 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_recv_http_header(int sock, char *buf, size_
 			return received == 0 ? CHIAKI_ERR_DISCONNECTED : CHIAKI_ERR_NETWORK;
 
 		*received_size += received;
+		buf = start + (*received_size - received);
 		for(; received > 0; buf++, received--)
 		{
 			switch(*buf)
