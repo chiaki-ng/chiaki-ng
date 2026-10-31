@@ -48,6 +48,9 @@
 #include <netdb.h>
 #include <ifaddrs.h>
 #include <net/if.h>
+#ifdef __ANDROID__
+#include <poll.h>
+#endif
 #endif
 
 #include <curl/curl.h>
@@ -73,6 +76,31 @@
 
 #include "../utils.h"
 #include "stun.h"
+
+static char *holepunch_ca_info = NULL;
+
+CHIAKI_EXPORT void chiaki_holepunch_set_ca_info(const char *path)
+{
+    free(holepunch_ca_info);
+    holepunch_ca_info = path ? strdup(path) : NULL;
+    chiaki_aia_set_ca_info(path);
+}
+
+/**
+ * curl_easy_init() plus the CA bundle set with chiaki_holepunch_set_ca_info().
+ * Needed where libcurl has no usable default trust store, e.g. on Android.
+ */
+static CURL *holepunch_curl_easy_init(void)
+{
+    CURL *curl = curl_easy_init();
+    if(curl && holepunch_ca_info)
+        curl_easy_setopt(curl, CURLOPT_CAINFO, holepunch_ca_info);
+    return curl;
+}
+
+#if defined(__SWITCH__) || defined(__ANDROID__)
+#define HOLEPUNCH_USE_POLL
+#endif
 
 #define UUIDV4_STR_LEN 37
 #define SECOND_US 1000000L
@@ -464,7 +492,7 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_list_devices(
     ChiakiHolepunchDeviceInfo **devices, size_t *device_count,
     ChiakiLog *log)
 {
-    CURL *curl = curl_easy_init();
+    CURL *curl = holepunch_curl_easy_init();
     if(!curl)
     {
         CHIAKI_LOGE(log, "Curl could not init");
@@ -639,6 +667,20 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_list_devices(
             {
                 device.remoteplay_enabled = true;
                 break;
+            }
+        }
+
+        device.network_wakeup_enabled = true;
+        json_object *wakeup_modes;
+        if (json_object_object_get_ex(device_json, "wakeupEnabledPowerModes", &wakeup_modes)
+            && json_object_is_type(wakeup_modes, json_type_array))
+        {
+            device.network_wakeup_enabled = false;
+            for (size_t j = 0; j < json_object_array_length(wakeup_modes); j++)
+            {
+                json_object *mode = json_object_array_get_idx(wakeup_modes, j);
+                if (json_object_is_type(mode, json_type_string) && strcmp(json_object_get_string(mode), "networkStandby") == 0)
+                    device.network_wakeup_enabled = true;
             }
         }
 
@@ -1291,7 +1333,7 @@ static ChiakiErrorCode http_ps4_session_wakeup(Session *session)
         .size = 0,
     };
 
-    CURL *curl = curl_easy_init();
+    CURL *curl = holepunch_curl_easy_init();
     if(!curl)
     {
         CHIAKI_LOGE(session->log, "Curl could not init");
@@ -1434,7 +1476,7 @@ static ChiakiErrorCode http_ps4_session_wakeup(Session *session)
         data2_base64,
         session->session_id);
 
-    curl = curl_easy_init();
+    curl = holepunch_curl_easy_init();
     if(!curl)
     {
         CHIAKI_LOGE(session->log, "Curl could not init");
@@ -1968,7 +2010,7 @@ static ChiakiErrorCode get_websocket_fqdn(Session *session, char **fqdn)
         .size = 0,
     };
 
-    CURL *curl = curl_easy_init();
+    CURL *curl = holepunch_curl_easy_init();
     if(!curl)
     {
         CHIAKI_LOGE(session->log, "Curl could not init");
@@ -2163,7 +2205,7 @@ static void* websocket_thread_func(void *user) {
     char ws_url[128] = {0};
     snprintf(ws_url, sizeof(ws_url), "wss://%s/np/pushNotification", session->ws_fqdn);
 
-    CURL* curl = curl_easy_init();
+    CURL* curl = holepunch_curl_easy_init();
     if(!curl)
     {
         CHIAKI_LOGE(session->log, "Curl could not init");
@@ -2242,7 +2284,11 @@ ws_connect_attempt:
                 aia_blob = chiaki_aia_blob_take(&aia_blob_len);
             else {
                 const char *ca_path = NULL;
-                CURLcode ca_info_res = curl_easy_getinfo(curl, CURLINFO_CAINFO, &ca_path);
+                CURLcode ca_info_res = CURLE_OK;
+                if(holepunch_ca_info)
+                    ca_path = holepunch_ca_info;
+                else
+                    ca_info_res = curl_easy_getinfo(curl, CURLINFO_CAINFO, &ca_path);
                 FILE *ca_file = ca_path ? fopen(ca_path, "rb") : NULL;
                 if(ca_info_res == CURLE_OK && (!ca_path || ca_file))
                     aia_blob = chiaki_aia_blob_with_ca(ca_file, &aia_blob_len);
@@ -3179,7 +3225,7 @@ static ChiakiErrorCode http_create_session(Session *session)
         .size = 0,
     };
 
-    CURL* curl = curl_easy_init();
+    CURL* curl = holepunch_curl_easy_init();
     if(!curl)
     {
         free(response_data.data);
@@ -3305,7 +3351,7 @@ static ChiakiErrorCode http_check_session(Session *session, bool viewurl)
         .size = 0,
     };
 
-    CURL* curl = curl_easy_init();
+    CURL* curl = holepunch_curl_easy_init();
     if(!curl)
     {
         free(response_data.data);
@@ -3424,7 +3470,7 @@ static ChiakiErrorCode http_start_session(Session *session)
         .size = 0,
     };
 
-    CURL *curl = curl_easy_init();
+    CURL *curl = holepunch_curl_easy_init();
     if(!curl)
     {
         free(response_data.data);
@@ -3545,7 +3591,7 @@ static ChiakiErrorCode http_send_session_message(Session *session, SessionMessag
         session->console_type == CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4 ? "PS4" : "PS5"
     );
     CHIAKI_LOGV(session->log, "Message to send: %s", msg_buf);
-    CURL *curl = curl_easy_init();
+    CURL *curl = holepunch_curl_easy_init();
     if(!curl)
     {
         free(payload_str);
@@ -3626,7 +3672,7 @@ static ChiakiErrorCode deleteSession(Session *session)
     char url[128] = {0};
     snprintf(url, sizeof(url), delete_messsage_url_fmt, session->session_id);
 
-    CURL *curl = curl_easy_init();
+    CURL *curl = holepunch_curl_easy_init();
     if(!curl)
     {
         free(response_data.data);
@@ -3786,6 +3832,34 @@ static ChiakiErrorCode get_client_addr_local(Session *session, Candidate *local_
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
+#ifdef __ANDROID__
+    // A phone has several interfaces up at once (Wi-Fi, mobile data, VPN), and getifaddrs()
+    // returns them in no useful order. Use the address of the interface Android routes
+    // internet traffic over: connecting a UDP socket sends nothing, it only picks the source.
+    chiaki_socket_t probe_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if(!CHIAKI_SOCKET_IS_INVALID(probe_sock))
+    {
+        struct sockaddr_in probe_dst;
+        memset(&probe_dst, 0, sizeof(probe_dst));
+        probe_dst.sin_family = AF_INET;
+        probe_dst.sin_port = htons(53);
+        inet_pton(AF_INET, "1.1.1.1", &probe_dst.sin_addr);
+        struct sockaddr_in probe_src;
+        memset(&probe_src, 0, sizeof(probe_src));
+        socklen_t probe_src_len = sizeof(probe_src);
+        bool probe_ok = connect(probe_sock, (struct sockaddr *)&probe_dst, sizeof(probe_dst)) == 0
+            && getsockname(probe_sock, (struct sockaddr *)&probe_src, &probe_src_len) == 0
+            && probe_src.sin_addr.s_addr != htonl(INADDR_ANY)
+            && inet_ntop(AF_INET, &probe_src.sin_addr, local_console_candidate->addr, sizeof(local_console_candidate->addr));
+        CHIAKI_SOCKET_CLOSE(probe_sock);
+        if(probe_ok)
+        {
+            CHIAKI_LOGI(session->log, "get_client_addr_local: Using local address %s of the default route", local_console_candidate->addr);
+            return CHIAKI_ERR_SUCCESS;
+        }
+        CHIAKI_LOGW(session->log, "get_client_addr_local: Could not get the default route's address, falling back to the first interface");
+    }
+#endif
     if(getifaddrs(&local_addrs) != 0)
     {
         CHIAKI_LOGE(session->log, "Couldn't get local address");
@@ -3814,12 +3888,12 @@ static ChiakiErrorCode get_client_addr_local(Session *session, Candidate *local_
         status = true;
         break;
     }
+    freeifaddrs(local_addrs);
     if(!status)
     {
         CHIAKI_LOGE(session->log, "Couldn't find a valid external address!");
         return CHIAKI_ERR_NETWORK;
     }
-    freeifaddrs(local_addrs);
     return err;
 #endif
 }
@@ -4091,12 +4165,10 @@ static ChiakiErrorCode check_candidates(
     Candidate candidates[num_candidates + EXTRA_CANDIDATE_ADDRESSES];
     memcpy(candidates, candidates_received, num_candidates * sizeof(Candidate));
     int responses_received[num_candidates + EXTRA_CANDIDATE_ADDRESSES];
-#ifdef __SWITCH__
-    // Use poll() on Switch — select() fails when FD numbers >= FD_SETSIZE (256)
+#ifdef HOLEPUNCH_USE_POLL
+    // Use poll() — select() fails when FD numbers >= FD_SETSIZE (256 on Switch, 1024 on Android,
+    // where port guessing opens up to RANDOM_ALLOCATION_SOCKS_NUMBER sockets in an app with many FDs)
     struct pollfd *pollfds = NULL;
-#endif
-#ifdef __ANDROID__
-    fd_set fds;
 #endif
     bool failed = true;
     char service_remote[6];
@@ -4329,7 +4401,7 @@ static ChiakiErrorCode check_candidates(
         }
     }
 #endif
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
     int poll_capacity = 0;
     if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
         poll_capacity++;
@@ -4354,10 +4426,10 @@ static ChiakiErrorCode check_candidates(
     {
         bool timed_out = false;
         chiaki_socket_t ready_sock = CHIAKI_INVALID_SOCKET;
-#if !defined(__SWITCH__)
+#ifndef HOLEPUNCH_USE_POLL
         struct timeval timeout;
 #endif
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
         nfds_t npollfds = 0;
         if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
         {
@@ -4408,88 +4480,6 @@ static ChiakiErrorCode check_candidates(
                     continue;
                 ready_sock = pollfds[pi].fd;
                 break;
-            }
-        }
-#elif defined(__ANDROID__)
-        chiaki_socket_t maxfd = -1;
-        FD_ZERO(&fds);
-        if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
-        {
-            FD_SET(session->ipv4_sock, &fds);
-            maxfd = session->ipv4_sock;
-        }
-        if(!CHIAKI_SOCKET_IS_INVALID(session->ipv6_sock))
-        {
-            FD_SET(session->ipv6_sock, &fds);
-            if(session->ipv6_sock > maxfd)
-                maxfd = session->ipv6_sock;
-        }
-        if(session->stun_random_allocation)
-        {
-            for(int i=0; i<socks_count; i++)
-            {
-                if(CHIAKI_SOCKET_IS_INVALID(socks[i]))
-                    continue;
-                if(socks[i] > maxfd)
-                    maxfd = socks[i];
-                FD_SET(socks[i], &fds);
-            }
-        }
-        maxfd = maxfd + 1;
-        if(connecting)
-        {
-            timeout.tv_sec = SELECT_CANDIDATE_CONNECTION_SEC;
-            timeout.tv_usec = 0;
-        }
-        else
-        {
-            timeout.tv_usec = (int)(SELECT_CANDIDATE_TIMEOUT_SEC * SECOND_US);
-            timeout.tv_sec = 0;
-        }
-        int ret = select(maxfd, &fds, NULL, NULL, &timeout);
-        if (ret < 0 && errno != EINTR)
-        {
-            CHIAKI_LOGE(session->log, "check_candidates: Select failed with error: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-            err = CHIAKI_ERR_NETWORK;
-            goto cleanup_sockets;
-        }
-        else if (ret == 0)
-        {
-            timed_out = true;
-        }
-        else
-        {
-            if (!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock) && FD_ISSET(session->ipv4_sock, &fds))
-            {
-                ready_sock = session->ipv4_sock;
-            }
-            else if (!CHIAKI_SOCKET_IS_INVALID(session->ipv6_sock) && FD_ISSET(session->ipv6_sock, &fds))
-            {
-                ready_sock = session->ipv6_sock;
-            }
-            else
-            {
-                for(int i=0; i<socks_count; i++)
-                {
-                    if(CHIAKI_SOCKET_IS_INVALID(socks[i]))
-                        continue;
-                    if(!FD_ISSET(socks[i], &fds))
-                        continue;
-                    ready_sock = socks[i];
-                    int ttl = 64;
-                    if (setsockopt(ready_sock, IPPROTO_IP, IP_TTL, (const CHIAKI_SOCKET_BUF_TYPE)&ttl, sizeof(ttl)) < 0)
-                    {
-                        CHIAKI_LOGE(session->log, "setsockopt(IP_TTL) failed with error" CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-                        if (!CHIAKI_SOCKET_IS_INVALID(socks[i]))
-                        {
-                            CHIAKI_SOCKET_CLOSE(socks[i]);
-                            socks[i] = CHIAKI_INVALID_SOCKET;
-                        }
-                        err = CHIAKI_ERR_UNKNOWN;
-                        goto cleanup_sockets;
-                    }
-                    break;
-                }
             }
         }
 #else
@@ -4874,7 +4864,7 @@ static ChiakiErrorCode check_candidates(
     memcpy(out_candidate, selected_candidate, sizeof(Candidate));
     session->ipv4_sock = CHIAKI_INVALID_SOCKET;
     session->ipv6_sock = CHIAKI_INVALID_SOCKET;
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
     free(pollfds);
 #endif
     free(socks);
@@ -4892,7 +4882,7 @@ cleanup_sockets:
         poll_ctx.base = NULL;
     }
 #endif
-#ifdef __SWITCH__
+#ifdef HOLEPUNCH_USE_POLL
     free(pollfds);
     pollfds = NULL;
 #endif
@@ -5980,7 +5970,7 @@ static ChiakiErrorCode get_stun_servers(Session *session)
 {
     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
     const char STUN_HOSTS_URL[] = "https://raw.githubusercontent.com/pradt2/always-online-stun/master/valid_hosts.txt";
-    CURL *curl = curl_easy_init();
+    CURL *curl = holepunch_curl_easy_init();
     if(!curl)
     {
         CHIAKI_LOGE(session->log, "Curl could not init");
@@ -6068,7 +6058,7 @@ static ChiakiErrorCode get_stun_servers(Session *session)
     curl_easy_cleanup(curl);
     curl = NULL;
     const char STUN_HOSTS_URL_IPV6[] = "https://raw.githubusercontent.com/pradt2/always-online-stun/master/valid_ipv6s.txt";
-    curl = curl_easy_init();
+    curl = holepunch_curl_easy_init();
     if(!curl)
     {
         CHIAKI_LOGE(session->log, "Curl could not init");

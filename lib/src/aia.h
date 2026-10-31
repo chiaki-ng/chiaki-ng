@@ -53,6 +53,13 @@ typedef struct {
 	CURL *connection;
 } ChiakiAiaControl;
 
+/**
+ * CA bundle (PEM) to trust when libcurl has no default trust store (e.g. Android).
+ * Used for the recovery trust store and for issuer downloads. NULL resets.
+ */
+void chiaki_aia_set_ca_info(const char *path);
+const char *chiaki_aia_ca_info(void);
+
 void *chiaki_aia_trust_store(CURL *connection);
 void chiaki_aia_trust_store_free(void *store);
 bool chiaki_aia_verify_with_store(
