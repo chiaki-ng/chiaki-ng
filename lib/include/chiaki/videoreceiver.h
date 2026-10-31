@@ -37,6 +37,7 @@ typedef struct chiaki_video_receiver_t
 	ChiakiBitstream bitstream;
 	ChiakiMutex waiting_for_idr_mutex;
 	bool waiting_for_idr;
+	uint64_t idr_request_last_ms; // when the IDR being waited for was last requested
 	ChiakiMutex frames_lost_mutex;
 } ChiakiVideoReceiver;
 
