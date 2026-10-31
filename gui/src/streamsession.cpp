@@ -2346,6 +2346,12 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 		return;
 	}
 
+	// Keep at most 60 ms queued (haptics_buffer_size is 10 ms of 4-channel S16) so haptics
+	// don't fall behind the game after a network stall
+	const Uint32 haptics_most_queued = static_cast<Uint32>(haptics_buffer_size * 4 * sizeof(int16_t) * 6);
+	if (SDL_GetQueuedAudioSize(haptics_output) > haptics_most_queued)
+		SDL_ClearQueuedAudio(haptics_output);
+
 	if (SDL_QueueAudio(haptics_output, cvt.buf, cvt.len_cvt) < 0)
 	{
 		CHIAKI_LOGE(log.GetChiakiLog(), "Failed to submit haptics audio to device: %s", SDL_GetError());
