@@ -37,7 +37,7 @@
 // before the ctrl channel is given up. A single bad packet must not end it: without ctrl
 // the console stops hearing heartbeat replies and ends the session.
 #define CTRL_RUDP_ERROR_LIMIT_MS 10000
-#define CTRL_RUDP_ERROR_RETRY_MS 10
+#define CTRL_RUDP_ERROR_RETRY_MS 50
 
 // The console ends the session when no heartbeat reply reaches it for 30 seconds. Over PSN a
 // reply can be lost after its retries run out, so once the console has asked for one, a reply
@@ -557,15 +557,17 @@ static void *ctrl_thread_func(void *user)
 				{
 					CHIAKI_LOGW(ctrl->session->log, "Failed to receive Rudp ctrl packet, skipping it");
 					rudp_error_since_ms = now_ms;
+					continue;
 				}
-				else if(now_ms - rudp_error_since_ms >= CTRL_RUDP_ERROR_LIMIT_MS)
+				if(now_ms - rudp_error_since_ms >= CTRL_RUDP_ERROR_LIMIT_MS)
 				{
 					CHIAKI_LOGE(ctrl->session->log, "Failed to receive Rudp ctrl packets for %d ms, giving up", CTRL_RUDP_ERROR_LIMIT_MS);
 					ctrl_failed(ctrl, CHIAKI_QUIT_REASON_CTRL_UNKNOWN);
 					break;
 				}
-				// a socket stuck in an error state stays readable, so pause instead of spinning;
-				// a message to send or a stop request still wakes the loop at once
+				// a socket stuck in an error state stays readable and logs every failed receive, so
+				// pause between repeated errors instead of spinning; a message to send or a stop
+				// request still wakes the loop at once
 				chiaki_mutex_unlock(&ctrl->notif_mutex);
 				chiaki_stop_pipe_sleep(&ctrl->notif_pipe, CTRL_RUDP_ERROR_RETRY_MS);
 				chiaki_mutex_lock(&ctrl->notif_mutex);
