@@ -3104,10 +3104,12 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
             // Resetting now would free frames the render thread is drawing; the next render
             // applies this frame before it updates the queue and resets it then
             defer_queue_reset = true;
+            queue_rollback_pending = true;
         } else if (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin) {
             logPtsRollback("presentFrame/rollback", frame.pts, queue_pts_origin, false, frame.duration * 1000.0);
             pl_queue_reset(placebo_queue);
             placebo_queue_resets++;
+            queue_rollback_pending = false;
             resetQueueDepthTracking();
             ts_start = 0;
             queue_pts_origin = frame.pts;
@@ -4241,7 +4243,9 @@ bool QmlMainWindow::queueStoredFrame(AVFrame *frame, double pts, float duration,
     }
     {
         QMutexLocker locker(&placebo_state_mutex);
-        if (!synthetic_warmup && newest_queued_frame_pts >= 0.0 && pts <= newest_queued_frame_pts + 1e-6) {
+        // A rolled-back frame is older than what is queued by definition, so it isn't stale
+        const bool rollback_pending = !synthetic_warmup && queue_rollback_pending;
+        if (!synthetic_warmup && !rollback_pending && newest_queued_frame_pts >= 0.0 && pts <= newest_queued_frame_pts + 1e-6) {
             logDroppedFrameReason("stale_stored_frame", static_cast<qint64>(chiaki_time_now_monotonic_us()), pts,
                                   "before queue submission");
             qCInfo(chiakiGui)
@@ -4255,10 +4259,11 @@ bool QmlMainWindow::queueStoredFrame(AVFrame *frame, double pts, float duration,
         const bool preserve_timeline = preserve_playback_timeline;
         preserve_playback_timeline = false;
         double queue_origin = synthetic_warmup ? pts : queue_pts_origin;
-        if (!synthetic_warmup && (queue_pts_origin < 0.0 || pts + 1e-6 < queue_pts_origin)) {
+        if (!synthetic_warmup && (rollback_pending || queue_pts_origin < 0.0 || pts + 1e-6 < queue_pts_origin)) {
             logPtsRollback("applyPendingFrame/rollback", pts, queue_pts_origin, preserve_timeline, duration * 1000.0);
             pl_queue_reset(placebo_queue);
             placebo_queue_resets++;
+            queue_rollback_pending = false;
             resetQueueDepthTracking();
             const double old_origin = queue_pts_origin;
             queue_pts_origin = pts;

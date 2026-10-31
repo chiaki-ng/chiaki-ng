@@ -284,6 +284,9 @@ private:
     // frame_mix points at frames owned by placebo_queue, and pl_queue_reset frees them, so
     // render() marks the mix in use until it returns; both guarded by placebo_state_mutex
     bool frame_mix_in_use = false;
+    // A timestamp rollback that arrived while frame_mix was in use; the next stored frame resets
+    // the queue for it. Guarded by placebo_state_mutex
+    bool queue_rollback_pending = false;
     quint64 placebo_queue_resets = 0;
     // Direct rendering retains the displayed mapping and replaces only pending input.
     bool bypass_frame_queue = true;
