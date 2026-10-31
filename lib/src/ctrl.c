@@ -38,6 +38,11 @@
 // the console stops hearing heartbeat replies and ends the session.
 #define CTRL_RUDP_ERROR_LIMIT_MS 10000
 
+// The console ends the session when no heartbeat reply reaches it for 30 seconds. Over PSN a
+// reply can be lost after its retries run out, so once the console has asked for one, a reply
+// is also sent on this interval without being asked.
+#define CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS 4950
+
 typedef enum ctrl_message_type_t {
 	CTRL_MESSAGE_TYPE_SESSION_ID = 0x33,
 	CTRL_MESSAGE_TYPE_HEARTBEAT_REQ = 0xfe,
@@ -152,6 +157,7 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_ctrl_init(ChiakiCtrl *ctrl, ChiakiSession *
 	ctrl->cant_displayb = false;
 	ctrl->msg_queue = NULL;
 	ctrl->keyboard_text_counter = 0;
+	ctrl->heartbeat_rep_last_ms = 0;
 	ctrl->sock = CHIAKI_INVALID_SOCKET;
 
 	err = chiaki_stop_pipe_init(&ctrl->stop_pipe);
@@ -467,14 +473,32 @@ static void *ctrl_thread_func(void *user)
 		}
 		else
 		{
+			uint64_t timeout_ms = UINT64_MAX;
+			if(ctrl->session->rudp && ctrl->heartbeat_rep_last_ms)
+			{
+				uint64_t since_ms = chiaki_time_now_monotonic_ms() - ctrl->heartbeat_rep_last_ms;
+				timeout_ms = since_ms < CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS ? CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS - since_ms : 0;
+			}
 			chiaki_stop_pipe_reset(&ctrl->notif_pipe);
 			chiaki_mutex_unlock(&ctrl->notif_mutex);
 			if(ctrl->session->rudp)
-				err = chiaki_rudp_stop_pipe_select_single(ctrl->session->rudp, &ctrl->notif_pipe, UINT64_MAX);
+				err = chiaki_rudp_stop_pipe_select_single(ctrl->session->rudp, &ctrl->notif_pipe, timeout_ms);
 			else
-				err = chiaki_stop_pipe_select_single(&ctrl->notif_pipe, ctrl->sock, false, UINT64_MAX);
+				err = chiaki_stop_pipe_select_single(&ctrl->notif_pipe, ctrl->sock, false, timeout_ms);
 			chiaki_mutex_lock(&ctrl->notif_mutex);
 		}
+
+		if(ctrl->session->rudp && ctrl->heartbeat_rep_last_ms && !ctrl->should_stop
+			&& chiaki_time_now_monotonic_ms() - ctrl->heartbeat_rep_last_ms >= CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS)
+		{
+			chiaki_mutex_unlock(&ctrl->notif_mutex);
+			ctrl_message_send(ctrl, CTRL_MESSAGE_TYPE_HEARTBEAT_REP, NULL, 0);
+			chiaki_mutex_lock(&ctrl->notif_mutex);
+			ctrl->heartbeat_rep_last_ms = chiaki_time_now_monotonic_ms();
+		}
+
+		if(err == CHIAKI_ERR_TIMEOUT)
+			continue;
 
 		if(err == CHIAKI_ERR_CANCELED)
 		{
@@ -962,6 +986,7 @@ static void ctrl_message_received_heartbeat_req(ChiakiCtrl *ctrl, uint8_t *paylo
 
 	CHIAKI_LOGI(ctrl->session->log, "Ctrl received Heartbeat, sending reply");
 	ctrl_message_send(ctrl, CTRL_MESSAGE_TYPE_HEARTBEAT_REP, NULL, 0);
+	ctrl->heartbeat_rep_last_ms = chiaki_time_now_monotonic_ms();
 }
 
 static void ctrl_message_received_switch_to_stream_connection(ChiakiCtrl *ctrl, uint8_t *payload, size_t payload_size)
