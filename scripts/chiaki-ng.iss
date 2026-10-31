@@ -83,6 +83,8 @@ Source: "{#MyAppPath}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+; Switches the renderer to OpenGL for systems where Vulkan shows a blank window or crashes
+Name: "{group}\{#MyAppName} (OpenGL)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--opengl"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]

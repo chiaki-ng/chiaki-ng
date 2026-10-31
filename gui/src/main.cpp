@@ -177,6 +177,9 @@ int real_main(int argc, char *argv[])
 	QCommandLineOption passcode_option("passcode", "Automatically send your PlayStation login passcode (only affects users with a login passcode set on their PlayStation console).", "passcode");
 	parser.addOption(passcode_option);
 
+	QCommandLineOption opengl_option("opengl", "Switch the renderer to OpenGL from now on, for systems where Vulkan shows a blank window or crashes (switch back under Settings > Video > Renderer Backend).");
+	parser.addOption(opengl_option);
+
 	parser.process(app);
 	QStringList args = parser.positionalArguments();
 
@@ -190,6 +193,14 @@ int real_main(int argc, char *argv[])
 	bool use_alt_settings = false;
 	if(!parser.isSet(profile_option))
 		use_alt_settings = true;
+
+	if(parser.isSet(opengl_option))
+	{
+		Settings *active_settings = use_alt_settings ? &alt_settings : &settings;
+		active_settings->SetRenderBackend(RenderBackend::OpenGL);
+		active_settings->SetVulkanStartupPending(false);
+		active_settings->Sync();
+	}
 
 	if(args.length() == 0)
 		return RunMain(app, use_alt_settings ? &alt_settings : &settings, exit_app_on_stream_exit);
