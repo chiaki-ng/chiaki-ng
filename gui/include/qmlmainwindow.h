@@ -279,6 +279,10 @@ private:
     bool has_video = false;
     struct pl_queue_params qparams;
     struct pl_frame_mix frame_mix;
+    // frame_mix points at frames owned by placebo_queue, and pl_queue_reset frees them, so
+    // render() marks the mix in use until it returns; both guarded by placebo_state_mutex
+    bool frame_mix_in_use = false;
+    quint64 placebo_queue_resets = 0;
     // Direct rendering retains the displayed mapping and replaces only pending input.
     bool bypass_frame_queue = true;
     QMutex direct_frame_mutex;

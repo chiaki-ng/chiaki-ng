@@ -3069,6 +3069,7 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         if (!synthetic_warmup_frame && !has_video && startup_first_real_frame_queued_pending_visibility.loadAcquire() == 0)
             startup_first_real_frame_queued_pending_visibility.storeRelease(1);
     };
+    bool defer_queue_reset = false;
     if (!synthetic_warmup_frame) {
         if (!placebo_state_mutex.tryLock()) {
             if (storePendingFrame(frame, true, synthetic_warmup_frame)) {
@@ -3093,9 +3094,14 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
                     mutex->unlock();
             }
         } placebo_state_unlocker{&placebo_state_mutex};
-        if (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin) {
+        if (frame_mix_in_use && (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin)) {
+            // Resetting now would free frames the render thread is drawing; the next render
+            // applies this frame before it updates the queue and resets it then
+            defer_queue_reset = true;
+        } else if (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin) {
             logPtsRollback("presentFrame/rollback", frame.pts, queue_pts_origin, false, frame.duration * 1000.0);
             pl_queue_reset(placebo_queue);
+            placebo_queue_resets++;
             resetQueueDepthTracking();
             ts_start = 0;
             queue_pts_origin = frame.pts;
@@ -3111,6 +3117,16 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         deinterlace_enabled = this->renderparams_opts->params.deinterlace_params;
     } else {
         deinterlace_enabled = this->renderparams_opts->params.deinterlace_params;
+    }
+    if (defer_queue_reset) {
+        if (storePendingFrame(frame, true, synthetic_warmup_frame)) {
+            snapshotPendingFrame();
+            armStartupVisibility();
+        }
+        if (frame.frame)
+            av_frame_free(&frame.frame);
+        queuePendingFrameRelease();
+        return;
     }
 
     struct pl_source_frame src_frame{
@@ -3446,6 +3462,7 @@ void QmlMainWindow::resetPlaceboQueue()
         << "queue_pts_origin=" << queue_pts_origin
         << "playback_started=" << playback_started;
     pl_queue_reset(placebo_queue);
+    placebo_queue_resets++;
     renderer_cache_flush_pending.storeRelaxed(1);
     newest_queued_frame_pts = -1.0;
     resetQueueDepthTracking();
@@ -4235,6 +4252,7 @@ bool QmlMainWindow::queueStoredFrame(AVFrame *frame, double pts, float duration,
         if (!synthetic_warmup && (queue_pts_origin < 0.0 || pts + 1e-6 < queue_pts_origin)) {
             logPtsRollback("applyPendingFrame/rollback", pts, queue_pts_origin, preserve_timeline, duration * 1000.0);
             pl_queue_reset(placebo_queue);
+            placebo_queue_resets++;
             resetQueueDepthTracking();
             const double old_origin = queue_pts_origin;
             queue_pts_origin = pts;
@@ -5129,6 +5147,7 @@ renderer_backend_ready:
             {
                 QMutexLocker locker(&placebo_state_mutex);
                 pl_queue_reset(placebo_queue);
+                placebo_queue_resets++;
                 newest_queued_frame_pts = -1.0;
             }
             resetQueueDepthTracking();
@@ -6701,6 +6720,7 @@ void QmlMainWindow::render()
     bool kept_frame_enqueued = false;
     const qint64 queue_update_begin_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     int queue_depth_before_update = -1;
+    quint64 frame_mix_resets = 0;
     struct pl_frame direct_render_frame = {};
     const struct pl_frame *direct_frames[] = { &direct_render_frame };
     // pl_frame_mix timestamps are float before libplacebo API 387 and double from it
@@ -6782,7 +6802,20 @@ void QmlMainWindow::render()
                 }
             }
         }
+        frame_mix_in_use = true;
+        frame_mix_resets = placebo_queue_resets;
     }
+    struct FrameMixRelease
+    {
+        QmlMainWindow *window;
+        ~FrameMixRelease()
+        {
+            if (!window)
+                return;
+            QMutexLocker locker(&window->placebo_state_mutex);
+            window->frame_mix_in_use = false;
+        }
+    } frame_mix_release{bypass_frame_queue ? nullptr : this};
     switch (queue_status) {
     case PL_QUEUE_ERR:
         finalize_render();
@@ -6797,6 +6830,19 @@ void QmlMainWindow::render()
             pending_frame_release_queued.storeRelease(0);
         else
             queuePendingFrameRelease();
+        if (!bypass_frame_queue) {
+            // Applying the pending frame can reset the queue, which frees the frames in frame_mix
+            TimedMutexLocker locker(placebo_state_mutex, "render_queue_refresh");
+            if (placebo_queue_resets != frame_mix_resets) {
+                queue_status = pl_queue_update(placebo_queue, &frame_mix, &qparams);
+                queue_depth_cached.storeRelease(pl_queue_num_frames(placebo_queue));
+                frame_mix_resets = placebo_queue_resets;
+            }
+        }
+        if (queue_status == PL_QUEUE_ERR) {
+            finalize_render();
+            return;
+        }
     }
     {
         const qint64 queue_update_after_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
