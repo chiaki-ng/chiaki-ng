@@ -291,6 +291,7 @@ private:
     QTimer *psn_reconnect_timer = {};
     QTimer *psn_auto_connect_timer = {};
     QTimer *wakeup_start_timer = {};
+    QTimer *wakeup_resend_timer = {};
     int psn_reconnect_tries = 0;
     QThread psn_connection_thread;
     PsnConnectState psn_connect_state;
@@ -334,6 +335,10 @@ private:
     QString auto_connect_nickname = "";
     QString wakeup_nickname = "";
     bool wakeup_start = false;
+    // console the last wakeup was sent to, resent while a session waits for it to wake
+    QString wakeup_host = "";
+    QByteArray wakeup_regist_key = {};
+    bool wakeup_ps5 = false;
     QMap<QString, PsnHost> psn_hosts = {};
     QMap<QString, PsnHost> psn_nickname_hosts = {};
 #ifdef CHIAKI_HAVE_WEBENGINE
