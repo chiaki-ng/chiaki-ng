@@ -20,6 +20,8 @@
 #define PS_TOUCHPAD_MAXY 1079
 
 class Controller;
+class Settings;
+class GyroSteerBridge;
 
 class ControllerManager : public QObject
 {
@@ -37,6 +39,10 @@ class ControllerManager : public QObject
 		bool is_app_active;
 		bool moved;
 		uint8_t dualsense_intensity;
+		bool ds5_gyro_fix_enabled;
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+		GyroSteerBridge *gyro_steer_bridge;
+#endif
 
 		void ControllerClosed(Controller *controller);
 		void CheckMoved();
@@ -58,6 +64,10 @@ class ControllerManager : public QObject
 		void SetIsAppActive(bool active);
 		void SetDualSenseIntensity(uint8_t intensity) { dualsense_intensity = intensity; };
 		uint8_t GetDualSenseIntensity() { return dualsense_intensity; };
+		void SetDS5GyroFixEnabled(bool enabled) { ds5_gyro_fix_enabled = enabled; };
+		bool GetDS5GyroFixEnabled() { return ds5_gyro_fix_enabled; };
+		void ApplyGyroSteerSettings(const Settings *settings);
+		GyroSteerBridge *GetGyroSteerBridge();
 		void creatingControllerMapping(bool creating_controller_mapping);
 		QSet<int> GetAvailableControllers();
 		Controller *OpenController(int device_id);
@@ -128,6 +138,8 @@ class Controller : public QObject
 		bool IsPS();
 		QString GetGUIDString();
 		ChiakiControllerState GetState();
+		// True when the controller reports a wired (USB) power source.
+		bool IsWired();
 		void SetRumble(uint8_t left, uint8_t right);
 		void SetTriggerEffects(uint8_t type_left, const uint8_t *data_left, uint8_t type_right, const uint8_t *data_right);
 		void SetDualsenseMic(bool on);

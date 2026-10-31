@@ -305,6 +305,27 @@ class Settings : public QObject
 		float GetHapticOverride() const 			{ return settings.value("settings/haptic_override", 1.0).toFloat(); }
 		void SetHapticOverride(float override)	{ settings.setValue("settings/haptic_override", override); }
 
+		bool GetDS5GyroFixEnabled() const       { return settings.value("settings/ds5_gyro_fix", false).toBool(); }
+		void SetDS5GyroFixEnabled(bool enabled) { settings.setValue("settings/ds5_gyro_fix", enabled); }
+
+		bool GetGyroSteeringEnabled() const        { return settings.value("settings/gyro_steering", false).toBool(); }
+		void SetGyroSteeringEnabled(bool enabled)  { settings.setValue("settings/gyro_steering", enabled); }
+
+		float GetGyroSteeringSensitivity() const   { return settings.value("settings/gyro_steering_sensitivity", 30.0).toFloat(); }
+		void SetGyroSteeringSensitivity(float v)   { settings.setValue("settings/gyro_steering_sensitivity", v); }
+
+		float GetGyroSteeringDeadzone() const      { return settings.value("settings/gyro_steering_deadzone", 3.0).toFloat(); }
+		void SetGyroSteeringDeadzone(float v)      { settings.setValue("settings/gyro_steering_deadzone", v); }
+
+		bool GetGyroSteeringInvert() const         { return settings.value("settings/gyro_steering_invert", false).toBool(); }
+		void SetGyroSteeringInvert(bool invert)    { settings.setValue("settings/gyro_steering_invert", invert); }
+
+		bool GetHapticsAntiLatencyEnabled() const       { return settings.value("settings/haptics_anti_latency", true).toBool(); }
+		void SetHapticsAntiLatencyEnabled(bool enabled) { settings.setValue("settings/haptics_anti_latency", enabled); }
+
+		int GetHapticsAntiLatencyMs() const       { return settings.value("settings/haptics_anti_latency_ms", 50).toInt(); }
+		void SetHapticsAntiLatencyMs(int ms) { settings.setValue("settings/haptics_anti_latency_ms", ms); }
+
 		ChiakiVideoResolutionPreset GetResolutionLocalPS4() const;
 		ChiakiVideoResolutionPreset GetResolutionRemotePS4() const;
 		ChiakiVideoResolutionPreset GetResolutionLocalPS5() const;

@@ -27,7 +27,7 @@ typedef struct chiaki_accel_new_zero
 
 CHIAKI_EXPORT void chiaki_orientation_init(ChiakiOrientation *orient);
 CHIAKI_EXPORT void chiaki_orientation_update(ChiakiOrientation *orient,
-		float gx, float gy, float gz, float ax, float ay, float az, float beta, float time_step_sec);
+		float gx, float gy, float gz, float ax, float ay, float az, float beta, float time_step_sec, bool fuzz_enabled);
 
 /**
  * Extension of ChiakiOrientation, also tracking an absolute timestamp and the current gyro/accel state
@@ -39,6 +39,7 @@ typedef struct chiaki_orientation_tracker_t
 	ChiakiOrientation orient;
 	uint32_t timestamp;
 	uint64_t sample_index;
+	bool fuzz_enabled;
 } ChiakiOrientationTracker;
 
 CHIAKI_EXPORT void chiaki_orientation_tracker_init(ChiakiOrientationTracker *tracker);
