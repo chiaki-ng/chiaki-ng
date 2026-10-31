@@ -89,4 +89,13 @@ chmod +x linuxdeploy-plugin-qt-${ARCH}.AppImage
     --exclude-library='libva*' \
     --exclude-library='libvulkan*' \
     --output appimage
+
+# sdl2-compat must find the bundled SDL3 before any copy on the host
+for sdl2_lib in "${appdir}"/usr/lib/libSDL2-2.0.so.0*; do
+    sdl2_rpath="$(readelf -d "${sdl2_lib}" | grep -E 'R(UN)?PATH' || true)"
+    if [[ "${sdl2_rpath}" != *'$ORIGIN'* || "${sdl2_rpath}" == *'/usr/'* ]]; then
+        echo "${sdl2_lib} doesn't search its own directory first for SDL3: ${sdl2_rpath}" >&2
+        exit 1
+    fi
+done
 mv chiaki-ng-${ARCH}.AppImage chiaki-ng.AppImage
