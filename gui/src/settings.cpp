@@ -704,13 +704,7 @@ static const QMap<RenderBackend, QString> render_backend_values = {
 	{ RenderBackend::OpenGL, "opengl" },
 };
 
-#if defined(Q_OS_MACOS) && QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
-// Default to OpenGL on macOS with Qt >= 6.10, which macOS users have been on since Vulkan crashed there;
-// Vulkan can be chosen in the settings
-static const RenderBackend render_backend_default = RenderBackend::OpenGL;
-#else
 static const RenderBackend render_backend_default = RenderBackend::Vulkan;
-#endif
 
 RenderBackend Settings::GetRenderBackend() const
 {
