@@ -33,6 +33,9 @@ class QmlSettings : public QObject
     Q_PROPERTY(bool showStreamStats READ showStreamStats WRITE setShowStreamStats NOTIFY showStreamStatsChanged)
     Q_PROPERTY(bool streamerMode READ streamerMode WRITE setStreamerMode NOTIFY streamerModeChanged)
     Q_PROPERTY(float hapticOverride READ hapticOverride WRITE setHapticOverride NOTIFY hapticOverrideChanged)
+    Q_PROPERTY(bool ds5GyroFix READ ds5GyroFix WRITE setDS5GyroFix NOTIFY ds5GyroFixChanged)
+    Q_PROPERTY(bool hapticsAntiLatency READ hapticsAntiLatency WRITE setHapticsAntiLatency NOTIFY hapticsAntiLatencyChanged)
+    Q_PROPERTY(int hapticsAntiLatencyMs READ hapticsAntiLatencyMs WRITE setHapticsAntiLatencyMs NOTIFY hapticsAntiLatencyMsChanged)
     Q_PROPERTY(int displayTargetContrast READ displayTargetContrast WRITE setDisplayTargetContrast NOTIFY displayTargetContrastChanged)
     Q_PROPERTY(int displayTargetPeak READ displayTargetPeak WRITE setDisplayTargetPeak NOTIFY displayTargetPeakChanged)
     Q_PROPERTY(int displayTargetPrim READ displayTargetPrim WRITE setDisplayTargetPrim NOTIFY displayTargetPrimChanged)
@@ -255,6 +258,15 @@ public:
 
     float hapticOverride() const;
     void setHapticOverride(float override);
+
+    bool ds5GyroFix() const;
+    void setDS5GyroFix(bool enabled);
+
+    bool hapticsAntiLatency() const;
+    void setHapticsAntiLatency(bool enabled);
+
+    int hapticsAntiLatencyMs() const;
+    void setHapticsAntiLatencyMs(int ms);
 
     int fpsLocalPS4() const;
     void setFpsLocalPS4(int fps);
@@ -639,6 +651,9 @@ signals:
     void addSteamShortcutAskChanged();
     void hideCursorChanged();
     void hapticOverrideChanged();
+    void ds5GyroFixChanged();
+    void hapticsAntiLatencyChanged();
+    void hapticsAntiLatencyMsChanged();
     void audioVideoDisabledChanged();
     void showStreamStatsChanged();
     void streamerModeChanged();

@@ -133,6 +133,39 @@ void QmlSettings::setHapticOverride(float override)
     emit hapticOverrideChanged();
 }
 
+bool QmlSettings::ds5GyroFix() const
+{
+    return settings->GetDS5GyroFixEnabled();
+}
+
+void QmlSettings::setDS5GyroFix(bool enabled)
+{
+    settings->SetDS5GyroFixEnabled(enabled);
+    emit ds5GyroFixChanged();
+}
+
+bool QmlSettings::hapticsAntiLatency() const
+{
+    return settings->GetHapticsAntiLatencyEnabled();
+}
+
+void QmlSettings::setHapticsAntiLatency(bool enabled)
+{
+    settings->SetHapticsAntiLatencyEnabled(enabled);
+    emit hapticsAntiLatencyChanged();
+}
+
+int QmlSettings::hapticsAntiLatencyMs() const
+{
+    return settings->GetHapticsAntiLatencyMs();
+}
+
+void QmlSettings::setHapticsAntiLatencyMs(int ms)
+{
+    settings->SetHapticsAntiLatencyMs(ms);
+    emit hapticsAntiLatencyMsChanged();
+}
+
 int QmlSettings::audioVideoDisabled() const
 {
     return static_cast<int>(settings->GetAudioVideoDisabled());
@@ -1892,6 +1925,9 @@ void QmlSettings::refreshAllKeys()
     emit logSanitizeChanged();
     emit vSyncEnabledChanged();
     emit hapticOverrideChanged();
+    emit ds5GyroFixChanged();
+    emit hapticsAntiLatencyChanged();
+    emit hapticsAntiLatencyMsChanged();
     emit rumbleHapticsIntensityChanged();
     emit buttonsByPositionChanged();
     emit allowJoystickBackgroundEventsChanged();
