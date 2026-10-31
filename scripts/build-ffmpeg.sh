@@ -6,8 +6,8 @@ cd "./$1"
 shift
 ROOT="`pwd`"
 
-TAG=n7.1
-NV_CODEC_TAG=n13.0.19.0
+TAG=n9.0.2
+NV_CODEC_TAG=n13.1.15.0
 
 FFMPEG_NV_CODEC_FLAGS=()
 if [ "$(uname -s)" = "Linux" ] && [ "$(uname -m)" = "x86_64" ]
