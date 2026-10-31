@@ -24,6 +24,7 @@ extern "C" {
 #include <QPointer>
 #include <QColor>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QThread>
 #include <QShortcut>
 #include <QStandardPaths>
@@ -5158,9 +5159,8 @@ renderer_backend_ready:
         if (session)
             session->BlockInput(0);
         // Only drain at session end (teardown): prevents frame_mix use-after-free.
-        // At session start there is no prior in-flight frame_mix, and the queue
-        // reset below is mutex-protected, so blocking the main thread here is
-        // unnecessary and causes a visible freeze in the connecting UI.
+        // At session start draining would visibly freeze the connecting UI, so the
+        // queue reset below waits only for a render that is drawing queued frames.
         if (!s)
             drainRenderThread();
         if (!preserve_startup_warmup) {
@@ -5171,6 +5171,17 @@ renderer_backend_ready:
             }
             {
                 QMutexLocker locker(&placebo_state_mutex);
+                // pl_queue_reset frees the frames a render may still be drawing, so let that render
+                // finish with them first; that's far shorter than draining the render thread
+                QElapsedTimer frame_mix_wait;
+                frame_mix_wait.start();
+                while (frame_mix_in_use && frame_mix_wait.elapsed() < 1000) {
+                    locker.unlock();
+                    QThread::usleep(500);
+                    locker.relock();
+                }
+                if (frame_mix_in_use)
+                    qCWarning(chiakiGui) << "Resetting the frame queue while a render still uses it after waiting 1 s";
                 pl_queue_reset(placebo_queue);
                 placebo_queue_resets++;
                 newest_queued_frame_pts = -1.0;
