@@ -36,7 +36,7 @@ jobs:
       contents: write
     needs: create-release
     env:
-      sdl2_compat_tag: 2.32.64
+      sdl2_compat_tag: 2.32.74
     defaults:
       run:
         shell: msys2 {0}

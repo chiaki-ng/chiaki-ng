@@ -248,13 +248,13 @@ modules:
     sources:
       - type: git
         url: https://github.com/libsdl-org/SDL.git
-        tag: release-3.4.0
+        tag: release-3.4.18
 
   - name: sdl2-compat
     sources:
       - type: git
         url: https://github.com/libsdl-org/sdl2-compat
-        tag: release-2.32.64
+        tag: release-2.32.74
     buildsystem: cmake-ninja
     config-opts:
       - -DSDL2COMPAT_TESTS=OFF

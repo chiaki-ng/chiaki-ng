@@ -107,7 +107,7 @@ jobs:
     needs: [check-changes, create-release]
     if: needs.check-changes.outputs.win_x64 == 'true'
     env:
-      sdl2_compat_tag: 2.32.64
+      sdl2_compat_tag: 2.32.74
     defaults:
       run:
         shell: msys2 {0}

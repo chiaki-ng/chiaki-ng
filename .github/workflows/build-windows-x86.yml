@@ -15,7 +15,7 @@ jobs:
       vcpkg_baseline: 42bb0d9e8d4cf33485afb9ee2229150f79f61a1f
       dep_folder: deps
       libplacebo_tag: v7.360.1
-      sdl2_compat_tag: 2.32.64
+      sdl2_compat_tag: 2.32.74
 
     defaults:
       run:

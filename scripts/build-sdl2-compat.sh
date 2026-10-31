@@ -7,8 +7,8 @@ cd "./$1"
 ROOT="`pwd`"
 MSYSTEM_LOWER="$(printf '%s' "${MSYSTEM:-}" | tr '[:upper:]' '[:lower:]')"
 
-SDL_VER=3.4.0
-SDL_COMPAT_VER=2.32.64
+SDL_VER=3.4.18
+SDL_COMPAT_VER=2.32.74
 URL=https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VER}/SDL3-${SDL_VER}.tar.gz
 FILE=SDL3-${SDL_VER}.tar.gz
 DIR=SDL3-${SDL_VER}
