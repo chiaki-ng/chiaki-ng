@@ -1215,9 +1215,32 @@ void StreamSession::UpdateGamepads()
 
 void StreamSession::WaitHaptics()
 {
+	haptics_retry_attempt = 0;
+	RetryHaptics(++haptics_retry_generation);
+}
+
+void StreamSession::RetryHaptics(quint64 generation)
+{
+	if(generation != haptics_retry_generation)
+		return;
 	ConnectHaptics();
-	if(!(this->haptics_output > 0))
-		QTimer::singleShot(14000, this, &StreamSession::ConnectHaptics);
+	if(this->haptics_output > 0)
+		return;
+	// A wired DualSense's audio device can appear a few seconds after the controller,
+	// so keep trying with a growing delay; a wireless one has no audio device to wait for
+	bool wired_dualsense = false;
+	for(auto controller : controllers)
+	{
+		if((controller->IsDualSense() || controller->IsDualSenseEdge()) && controller->IsWired())
+		{
+			wired_dualsense = true;
+			break;
+		}
+	}
+	static const int retry_delays_ms[] = { 500, 1000, 1000, 2000, 2000, 4000, 4000 };
+	if(!wired_dualsense || haptics_retry_attempt >= std::size(retry_delays_ms))
+		return;
+	QTimer::singleShot(retry_delays_ms[haptics_retry_attempt++], this, [this, generation] { RetryHaptics(generation); });
 }
 
 void StreamSession::DpadSendFeedbackState()
@@ -1756,6 +1779,7 @@ void StreamSession::InitHaptics()
 
 void StreamSession::DisconnectHaptics()
 {
+	haptics_retry_generation++;
 	if (this->haptics_output > 0)
 	{
 		SDL_CloseAudioDevice(haptics_output);

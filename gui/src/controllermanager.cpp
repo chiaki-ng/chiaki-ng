@@ -775,6 +775,18 @@ ChiakiControllerState Controller::GetState()
 	return state;
 }
 
+bool Controller::IsWired()
+{
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(!controller)
+		return false;
+	SDL_Joystick *joystick = SDL_GameControllerGetJoystick(controller);
+	return joystick && SDL_JoystickCurrentPowerLevel(joystick) == SDL_JOYSTICK_POWER_WIRED;
+#else
+	return false;
+#endif
+}
+
 void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
@@ -784,7 +796,9 @@ void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 		return;
 	DS5EffectsState_t state;
 	SDL_zero(state);
-	if(firmware_version < 0x0224)
+	// Match SDL's DualSense driver: the Edge and firmware 0 (often all that is read over
+	// Bluetooth) take the current rumble bits, which newer firmware needs to rumble at all
+	if(!is_dualsense_edge && firmware_version != 0 && firmware_version < 0x0224)
 	{
 		state.ucEnableBits1 |= 0x01;
 		state.ucRumbleLeft = left >> 1;
