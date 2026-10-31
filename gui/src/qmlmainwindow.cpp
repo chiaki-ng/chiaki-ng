@@ -5356,10 +5356,12 @@ void QmlMainWindow::update()
 
     if (quick_need_sync.fetchAndStoreRelaxed(0) != 0) {
         quick_render->polishItems();
+        // QQuickRenderControl::sync() reads the QML items, so the GUI thread has to wait
+        // for it; otherwise it can change or free them while the scene graph is synced
         if (quick_render->thread() == QThread::currentThread())
             sync();
         else
-            QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::QueuedConnection);
+            QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::BlockingQueuedConnection);
     }
 
     last_render_dispatch_us.storeRelease(static_cast<qint64>(chiaki_time_now_monotonic_us()));
@@ -6143,10 +6145,11 @@ void QmlMainWindow::updateSwapchain()
     else
         QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::resizeSwapchain, this), Qt::QueuedConnection);
     quick_render->polishItems();
+    // the GUI thread has to wait for sync(), as in update()
     if (quick_render->thread() == QThread::currentThread())
         sync();
     else
-        QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::QueuedConnection);
+        QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::BlockingQueuedConnection);
     QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::render, this), Qt::QueuedConnection);
     const qint64 update_swapchain_end_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     if (update_swapchain_end_us >= update_swapchain_begin_us && update_swapchain_end_us - update_swapchain_begin_us >= 12000) {
