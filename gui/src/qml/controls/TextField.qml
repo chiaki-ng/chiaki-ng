@@ -5,6 +5,8 @@ import QtQuick.Controls.Material
 TextField {
     property bool firstInFocusChain: false
     property bool lastInFocusChain: false
+    Material.containerStyle: Material.Outlined
+    Material.roundedScale: Material.SmallScale
     property bool sendOutput: false
     readOnly: true
 

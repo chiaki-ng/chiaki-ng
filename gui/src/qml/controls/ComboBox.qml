@@ -5,6 +5,8 @@ import QtQuick.Controls.Material
 ComboBox {
     property bool firstInFocusChain: false
     property bool lastInFocusChain: false
+    Material.containerStyle: Material.Outlined
+    Material.roundedScale: Material.SmallScale
     implicitContentWidthPolicy: ComboBox.WidestText
 
     Keys.onPressed: (event) => {

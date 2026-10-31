@@ -40,6 +40,7 @@ int main(int argc, char *argv[]) { return real_main(argc, argv); }
 #include <QCommandLineParser>
 #include <QMap>
 #include <QSurfaceFormat>
+#include <QFontDatabase>
 
 Q_DECLARE_METATYPE(ChiakiLogLevel)
 Q_DECLARE_METATYPE(ChiakiRegistEventType)
@@ -124,6 +125,10 @@ int real_main(int argc, char *argv[])
 	QtWebEngineQuick::initialize();
 #endif
 	QApplication app(argc, argv);
+
+	// Bundled UI font, referenced by qtquickcontrols2.conf and the QML theme
+	for (const char *font : {":/fonts/Inter-Regular.ttf", ":/fonts/Inter-Medium.ttf", ":/fonts/Inter-SemiBold.ttf", ":/fonts/Inter-Bold.ttf"})
+		QFontDatabase::addApplicationFont(font);
 
 #ifdef Q_OS_MACOS
 	QGuiApplication::setWindowIcon(QIcon(":/icons/chiaking_macos.svg"));
