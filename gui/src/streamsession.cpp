@@ -592,7 +592,8 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 #if CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	connect(ControllerManager::GetInstance(), &ControllerManager::AvailableControllersUpdated, this, &StreamSession::UpdateGamepads);
 	connect(ControllerManager::GetInstance(), &ControllerManager::AudioOutputDeviceAdded, this, [this](const QString &name) {
-		if(haptics_output > 0 || !name.contains(DUALSENSE_AUDIO_DEVICE_NEEDLE))
+		// haptics_resampler_buf is only allocated when DualSense features are on
+		if(haptics_output > 0 || !haptics_resampler_buf || !name.contains(DUALSENSE_AUDIO_DEVICE_NEEDLE))
 			return;
 		for(auto controller : controllers)
 		{
