@@ -6881,6 +6881,12 @@ void QmlMainWindow::render()
             // Applying the pending frame can reset the queue, which frees the frames in frame_mix
             TimedMutexLocker locker(placebo_state_mutex, "render_queue_refresh");
             if (placebo_queue_resets != frame_mix_resets) {
+                // the reset can restart the timeline (ts_start, playback_started), so aim at the
+                // new one rather than the target worked out before it
+                const uint64_t ts_refresh = chiaki_time_now_monotonic_us();
+                qparams.pts = playback_started && ts_refresh > ts_start
+                    ? (double)(ts_refresh - ts_start) / 1000000.0 + vsync_duration - kPtsStaleMarginS
+                    : 0.0;
                 queue_status = pl_queue_update(placebo_queue, &frame_mix, &qparams);
                 queue_depth_cached.storeRelease(pl_queue_num_frames(placebo_queue));
                 frame_mix_resets = placebo_queue_resets;
