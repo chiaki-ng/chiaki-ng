@@ -6643,6 +6643,10 @@ void QmlMainWindow::render()
     const int target_prim = apply_display_target ? settings->GetDisplayTargetPrim() : 0;
     const int target_peak = apply_display_target ? settings->GetDisplayTargetPeak() : 0;
     const int target_contrast = apply_display_target ? settings->GetDisplayTargetContrast() : 0;
+    const bool target_peak_hdr_only = apply_display_target ? settings->GetDisplayTargetPeakHdrOnly() : false;
+
+    struct pl_color_map_params auto_inverse_tonemap_params;
+    const bool auto_inverse_tonemap = apply_display_target && settings->GetDisplayTargetAutoInverseTonemap();
 
     uint64_t ts_pre_update = chiaki_time_now_monotonic_us();
     double refresh_rate = screen() ? screen()->refreshRate() : 60.0;
@@ -7153,6 +7157,25 @@ void QmlMainWindow::render()
     if (!hint_frame && frame_mix.num_frames)
         hint_frame = frame_mix.frames[0];
     struct pl_color_space hint = hint_frame ? hint_frame->color : pl_color_space{};
+    // Detect whether the *client display* is in HDR mode, i.e. whether the
+    // output / swapchain is HDR-capable. This follows the Windows HDR display
+    // setting (the OS decides whether an HDR swapchain can be created), NOT the
+    // source stream and NOT the raw monitor capability. When the client display
+    // is SDR (Windows HDR turned off) the manually configured target peak is
+    // meaningless for the output, so with "Target Peak HDR Only" enabled it
+    // falls back to automatic; when the display is HDR it is applied.
+    // sw_frame.color_space is filled by pl_swapchain_start_frame from the actual
+    // surface format, so it reflects the real output state. Use libplacebo's own
+    // HDR detection (hdr.max_luma > SDR_WHITE || transfer is HDR) so it matches
+    // how the renderer itself decides HDR.
+    const bool display_is_hdr = pl_color_space_is_hdr(&sw_frame.color_space);
+    const int effective_target_peak = (target_peak_hdr_only && !display_is_hdr) ? 0 : target_peak;
+    if (auto_inverse_tonemap && effective_target_peak > 0)
+    {
+        auto_inverse_tonemap_params = params.color_map_params ? *params.color_map_params : pl_color_map_default_params;
+        auto_inverse_tonemap_params.inverse_tone_mapping = true;
+        params.color_map_params = &auto_inverse_tonemap_params;
+    }
     struct pl_color_space target_csp = sw_frame.color_space;
     if (target_csp.hdr.max_luma <= 0.0f) {
         target_csp.hdr.max_luma = 0.0f;
@@ -7168,8 +7191,8 @@ void QmlMainWindow::render()
         hint.hdr.prim = *pl_raw_primaries_get(hint.primaries);
     }
 
-    if(target_peak)
-        hint.hdr.max_luma = target_peak;
+    if(effective_target_peak)
+        hint.hdr.max_luma = effective_target_peak;
 
     switch(target_contrast)
     {
@@ -7249,9 +7272,9 @@ void QmlMainWindow::render()
     if(target_trc)
         target_frame.color.transfer = static_cast<pl_color_transfer>(target_trc);
 
-    if(target_peak && !target_frame.color.hdr.max_luma)
+    if(effective_target_peak)
     {
-        target_frame.color.hdr.max_luma = target_peak;
+        target_frame.color.hdr.max_luma = effective_target_peak;
     }
     if(!target_frame.color.hdr.min_luma)
     {
