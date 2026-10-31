@@ -2555,8 +2555,8 @@ QmlMainWindow::~QmlMainWindow()
 {
     Q_ASSERT(!placebo_swapchain);
 
-    // Quitting before Vulkan showed a frame isn't a crash
-    if (settings && render_backend == RenderBackend::Vulkan && vulkan_startup_confirmed.loadRelaxed() == 0) {
+    // A normal exit isn't a crash, whether or not Vulkan showed a frame or the queued clear ran
+    if (settings && render_backend == RenderBackend::Vulkan) {
         settings->SetVulkanStartupPending(false);
         settings->Sync();
     }
