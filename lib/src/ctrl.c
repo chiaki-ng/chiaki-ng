@@ -1326,6 +1326,7 @@ static ChiakiErrorCode ctrl_connect(ChiakiCtrl *ctrl)
 			"RP-ClientType: 11\r\n"
 			"RP-OSType: %s\r\n"
 			"RP-ConPath: 1\r\n"
+			"%s"
 			"%s%s%s"
 			"%s%s%s"
 			"\r\n";
@@ -1343,6 +1344,9 @@ static ChiakiErrorCode ctrl_connect(ChiakiCtrl *ctrl)
 	int request_len = snprintf(send_buf, sizeof(send_buf), request_fmt,
 			path, session->connect_info.hostname, port, auth_b64,
 			rp_version ? rp_version : "", did_b64, ostype_b64,
+			// without it a PS5 sends some adaptive trigger effects (such as Bow) in a form the
+			// controller doesn't apply
+			chiaki_target_is_ps5(session->target) ? "RP-PadProcNo: 3\r\n" : "",
 			have_bitrate ? "RP-StartBitrate: " : "",
 			have_bitrate ? bitrate_b64 : "",
 			have_bitrate ? "\r\n" : "",
