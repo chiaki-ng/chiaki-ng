@@ -378,6 +378,10 @@ class Settings : public QObject
 
 		RenderBackend GetRenderBackend() const;
 		void SetRenderBackend(RenderBackend backend);
+		// Set while Vulkan starts up and cleared once it has shown a frame, so a launch that
+		// crashed inside the Vulkan driver or a Vulkan layer can be told apart on the next one
+		bool GetVulkanStartupPending() const { return settings.value("settings/vulkan_startup_pending", false).toBool(); }
+		void SetVulkanStartupPending(bool pending) { settings.setValue("settings/vulkan_startup_pending", pending); }
 		void Sync();
 
 		float GetZoomFactor() const;

@@ -234,6 +234,8 @@ private:
     void beginFrame();
     void endFrame();
     void render();
+    // Clears the Vulkan startup marker once Vulkan has presented a frame; callable from any thread
+    void confirmVulkanStartup();
     void handleVulkanDeviceLost(const QString &reason);
     void handleVulkanRendererFallback(const QString &title, const QString &message, const QString &fallback_reason);
     void applyPendingFrame();
@@ -452,6 +454,7 @@ private:
     qint64 next_buffered_update_us = 0;
     qint64 last_buffered_interval_us = 0;
     QString pending_renderer_fallback_reason;
+    QAtomicInteger<int> vulkan_startup_confirmed = 0;
     VkPhysicalDeviceProperties vk_device_props = {};
     VkPhysicalDeviceDriverProperties vk_device_driver_props = {};
     pl_options renderparams_opts = {};

@@ -2555,6 +2555,12 @@ QmlMainWindow::~QmlMainWindow()
 {
     Q_ASSERT(!placebo_swapchain);
 
+    // Quitting before Vulkan showed a frame isn't a crash
+    if (settings && render_backend == RenderBackend::Vulkan && vulkan_startup_confirmed.loadRelaxed() == 0) {
+        settings->SetVulkanStartupPending(false);
+        settings->Sync();
+    }
+
     if (stats_overlay_widget) {
         stats_overlay_widget->hide();
         delete stats_overlay_widget;
@@ -4899,6 +4905,9 @@ void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
     auto fallbackToOpenGL = [&](const QString &reason) {
         qCWarning(chiakiGui) << "Vulkan renderer initialization failed, falling back to OpenGL:" << reason;
         pending_renderer_fallback_reason = reason;
+        // Vulkan was given up on without a crash, so the next launch shouldn't count this one
+        settings->SetVulkanStartupPending(false);
+        settings->Sync();
 
         if (placebo_vulkan)
             pl_vulkan_destroy(&placebo_vulkan);
@@ -4925,6 +4934,17 @@ void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
             fallbackToOpenGL(reason);
             goto renderer_backend_ready;
         }
+
+        if (settings->GetVulkanStartupPending()) {
+            // The last launch closed before Vulkan showed a frame, which is how a crash inside the
+            // Vulkan driver or a third-party Vulkan layer looks; keep OpenGL until switched back
+            settings->SetRenderBackend(RenderBackend::OpenGL);
+            fallbackToOpenGL(tr("chiaki-ng closed while starting Vulkan last time, so it now uses OpenGL. "
+                                "You can switch back under Settings > Video > Renderer Backend."));
+            goto renderer_backend_ready;
+        }
+        settings->SetVulkanStartupPending(true);
+        settings->Sync();
 
         const char *vk_exts[] = {
             nullptr,
@@ -5711,6 +5731,7 @@ void QmlMainWindow::processDeferredSwapTask(qint64 submit_begin_us,
         if (!pl_swapchain_submit_frame(placebo_swapchain))
             qCWarning(chiakiGui) << "Failed to submit Placebo frame on deferred thread!";
         else {
+            confirmVulkanStartup();
             const qint64 submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_call_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()
@@ -6341,6 +6362,16 @@ void QmlMainWindow::endFrame()
     const qint64 quick_release_after_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     if (quick_release_after_us >= quick_release_begin_us)
         logQuickReleaseStats(quick_release_after_us, quick_release_after_us - quick_release_begin_us);
+}
+
+void QmlMainWindow::confirmVulkanStartup()
+{
+    if (render_backend != RenderBackend::Vulkan || vulkan_startup_confirmed.fetchAndStoreRelaxed(1) != 0)
+        return;
+    QMetaObject::invokeMethod(this, [this]() {
+        settings->SetVulkanStartupPending(false);
+        settings->Sync();
+    }, Qt::QueuedConnection);
 }
 
 void QmlMainWindow::handleVulkanDeviceLost(const QString &reason)
@@ -7088,6 +7119,7 @@ void QmlMainWindow::render()
                 if (!pl_swapchain_submit_frame(placebo_swapchain))
                     qCWarning(chiakiGui) << "Failed to submit Placebo frame!";
                 else {
+                    confirmVulkanStartup();
                     submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()
