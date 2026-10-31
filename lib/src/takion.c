@@ -45,7 +45,6 @@
 #define TAKION_REORDER_QUEUE_SIZE_EXP 4 // => 16 entries
 #define TAKION_AV_VIDEO_REORDER_QUEUE_SIZE_EXP 6 // => 64 entries
 #define TAKION_AV_REORDER_TIMEOUT_US 16000 // ~1 frame at 60fps
-#define TAKION_SEND_BUFFER_SIZE 16
 
 #define TAKION_POSTPONE_PACKETS_SIZE 32
 
@@ -1114,7 +1113,7 @@ static void *takion_thread_func(void *user)
 	chiaki_reorder_queue_set_drop_cb(&takion->data_queue, takion_data_drop, takion);
 
 	// The send buffer size MUST be consistent with the acked seqnums array size in takion_handle_packet_message_data_ack()
-	if(chiaki_takion_send_buffer_init(&takion->send_buffer, takion, TAKION_SEND_BUFFER_SIZE) != CHIAKI_ERR_SUCCESS)
+	if(chiaki_takion_send_buffer_init(&takion->send_buffer, takion, CHIAKI_TAKION_SEND_BUFFER_SIZE) != CHIAKI_ERR_SUCCESS)
 		goto error_reoder_queue;
 	chiaki_mutex_lock(&takion->send_buffer_active_mutex);
 	takion->send_buffer_active = true;
@@ -1486,7 +1485,7 @@ static void takion_handle_packet_message_data_ack(ChiakiTakion *takion, uint8_t 
 	CHIAKI_LOGV(takion->log, "Takion received data ack with cumulative_seq_num = %#x, a_rwnd = %#x, gap_ack_blocks_count = %#x, dup_tsns_count = %#x",
 			cumulative_seq_num, a_rwnd, gap_ack_blocks_count, dup_tsns_count);
 
-	ChiakiSeqNum32 acked_seq_nums[TAKION_SEND_BUFFER_SIZE];
+	ChiakiSeqNum32 acked_seq_nums[CHIAKI_TAKION_SEND_BUFFER_SIZE];
 	size_t acked_seq_nums_count = 0;
 	chiaki_takion_send_buffer_ack(&takion->send_buffer, cumulative_seq_num, acked_seq_nums, &acked_seq_nums_count);
 
