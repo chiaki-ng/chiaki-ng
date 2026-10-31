@@ -68,7 +68,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/haasn/libplacebo
-        tag: v7.360.1
+        tag: v7.387.0
 
   - name: libevent
     buildsystem: meson
@@ -78,7 +78,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/libevent/libevent
-        tag: release-2.2.9-stable
+        tag: release-2.1.13-stable
 
   - name: nv-codec-headers
     only-arches:
@@ -229,7 +229,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/json-c/json-c.git
-        tag: json-c-0.18-20240915
+        tag: json-c-0.19-20260627
 
   - name: miniupnpc
     buildsystem: cmake-ninja
@@ -237,7 +237,7 @@ modules:
     sources:
     - type: git
       url: https://github.com/miniupnp/miniupnp
-      tag: miniupnpc_2_3_0
+      tag: miniupnpc_2_3_3
 
   - name: SDL3
     buildsystem: cmake-ninja
