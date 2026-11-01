@@ -25,6 +25,7 @@ extern "C" {
 #include <libavutil/pixfmt.h>
 }
 
+#include <type_traits>
 #include <QByteArray>
 #include <QPointer>
 #include <QColor>
@@ -6815,7 +6816,9 @@ void QmlMainWindow::render()
     int queue_depth_before_update = -1;
     struct pl_frame direct_render_frame = {};
     const struct pl_frame *direct_frames[] = { &direct_render_frame };
-    const float direct_timestamps[] = { 0.0f };
+    // pl_frame_mix::timestamps is float in older libplacebo and double in newer releases.
+    using frame_mix_timestamp_t = std::remove_cv_t<std::remove_pointer_t<decltype(pl_frame_mix::timestamps)>>;
+    const frame_mix_timestamp_t direct_timestamps[] = { 0 };
     // Set when this render presents a frame left over from frame generation.
     struct pl_frame fg_override_frame = {};
     bool fg_override = false;

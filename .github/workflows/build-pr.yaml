@@ -36,7 +36,6 @@ jobs:
             curl:p
             fast_float:p
             fftw:p
-            hidapi:p
             json-c:p
             lcms2:p
             libdovi:p
