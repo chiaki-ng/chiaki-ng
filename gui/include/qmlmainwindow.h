@@ -331,6 +331,10 @@ private:
     // Set when the crash guard turned frame generation off at startup; logged
     // again when the next stream starts, since only its log is kept.
     QString fg_crash_guard_notice;
+    // Why frame generation is skipped, logged once per stream (0 = not logged).
+    int fg_skip_logged = 0;
+    QAtomicInteger<int> enhancement_log_reset = 0;
+    bool fg_refresh_limited = false;
     QString video_enhancement_status;
     bool going_full = false;
     VideoMode video_mode = VideoMode::Normal;

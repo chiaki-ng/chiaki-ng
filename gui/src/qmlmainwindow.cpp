@@ -5152,6 +5152,9 @@ renderer_backend_ready:
         session = s;
         stream_session_active.storeRelease(s ? 1 : 0);
         // A session that ended normally did not crash in frame generation.
+        // The render thread logs the VSR / frame generation state again in
+        // each stream's log.
+        enhancement_log_reset.storeRelease(1);
         if (!s)
             QFile::remove(frameGenCrashGuardPath());
         else if (!fg_crash_guard_notice.isEmpty()) {
@@ -5344,6 +5347,7 @@ renderer_backend_ready:
                 switch (fg_status_reason.loadRelaxed()) {
                 case 1: part += tr(": needs Direct Mapping"); break;
                 case 2: part += tr(": unavailable (see log)"); break;
+                case 3: part += tr(": display refresh rate too low"); break;
                 default: part += tr(": idle"); break;
                 }
             }
@@ -7625,6 +7629,11 @@ void QmlMainWindow::render()
             }
         }
     }
+    if (enhancement_log_reset.fetchAndStoreAcquire(0)) {
+        rtx_vsr_active = false;
+        fg_skip_logged = 0;
+    }
+
     if (!fg_override && vsr_applied != rtx_vsr_active) {
         rtx_vsr_active = vsr_applied;
         qCInfo(chiakiGui) << "RTX Video Super Resolution" << (vsr_applied ? "active" : "inactive");
@@ -7651,6 +7660,14 @@ void QmlMainWindow::render()
             ? static_cast<int>(std::floor(refresh_rate * stream_interval_s + 0.15))
             : 2;
         int multiplier = qMin(settings->GetFrameGenMultiplier(), refresh_cap);
+        fg_refresh_limited = multiplier < 2;
+        if (fg_refresh_limited && fg_skip_logged != 3) {
+            fg_skip_logged = 3;
+            qCInfo(chiakiGui).nospace() << "Frame generation skipped: the display runs at " << refresh_rate
+                << " Hz, which leaves no room for extra frames at "
+                << (stream_interval_s > 0.0 ? 1.0 / stream_interval_s : 0.0)
+                << " fps (needs at least twice the stream frame rate)";
+        }
         if (multiplier >= 2 && frame_gen->ensureInitialized(placebo_vulkan, backend_choice)) {
             multiplier = qMin(multiplier, frame_gen->maxMultiplier());
             const int fg_out_w = static_cast<int>(lroundf(fabsf(pl_rect_w(target_frame.crop))));
@@ -7698,7 +7715,13 @@ void QmlMainWindow::render()
             reason = 1;
         else if (fg_backend > 0 && frame_gen->backendFailed(static_cast<FrameGen::Backend>(fg_backend)))
             reason = 2;
+        else if (fg_backend > 0 && fg_refresh_limited)
+            reason = 3;
         fg_status_reason.storeRelaxed(reason);
+        if (reason == 1 && fg_backend > 0 && fg_skip_logged != 1) {
+            fg_skip_logged = 1;
+            qCInfo(chiakiGui) << "Frame generation skipped: it needs Frame Mapping set to Direct Mapping";
+        }
     }
 
     if ((vsr_applied && !RtxVsr::keepsResolution(rtx_vsr_quality)) || fg_applied) {
