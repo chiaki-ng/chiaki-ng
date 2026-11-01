@@ -1,5 +1,7 @@
 #include "qmlsettings.h"
 #include "sessionlog.h"
+#include "rtxvsr.h"
+#include "framegen.h"
 
 #include <QSet>
 #include <QKeySequence>
@@ -989,6 +991,82 @@ void QmlSettings::setDirectFrameMapping(bool enabled)
     emit directFrameMappingChanged();
 }
 
+int QmlSettings::rtxVsrQuality() const
+{
+    return settings->GetRtxVsrQuality();
+}
+
+void QmlSettings::setRtxVsrQuality(int quality)
+{
+    if (quality == settings->GetRtxVsrQuality())
+        return;
+    settings->SetRtxVsrQuality(quality);
+    emit rtxVsrQualityChanged();
+}
+
+void QmlSettings::toggleRtxVsr()
+{
+    setRtxVsrQuality(settings->GetRtxVsrQuality() ? 0 : settings->GetRtxVsrLastQuality());
+}
+
+void QmlSettings::toggleFrameGen()
+{
+    if (settings->GetFrameGenBackend()) {
+        setFrameGenBackend(0);
+        return;
+    }
+    int backend = settings->GetFrameGenLastBackend();
+    if (!backend || !FrameGen::backendCompiledIn(static_cast<FrameGen::Backend>(backend)))
+        backend = FrameGen::backendCompiledIn(FrameGen::Backend::Dlss) ? 1 : 2;
+    setFrameGenBackend(backend);
+}
+
+bool QmlSettings::rtxVsrSupported() const
+{
+    return RtxVsr::compiledIn();
+}
+
+int QmlSettings::frameGenBackend() const
+{
+    return settings->GetFrameGenBackend();
+}
+
+void QmlSettings::setFrameGenBackend(int backend)
+{
+    if (backend == settings->GetFrameGenBackend())
+        return;
+    settings->SetFrameGenBackend(backend);
+    emit frameGenBackendChanged();
+}
+
+int QmlSettings::frameGenMultiplier() const
+{
+    return settings->GetFrameGenMultiplier();
+}
+
+void QmlSettings::setFrameGenMultiplier(int multiplier)
+{
+    if (multiplier == settings->GetFrameGenMultiplier())
+        return;
+    settings->SetFrameGenMultiplier(multiplier);
+    emit frameGenMultiplierChanged();
+}
+
+bool QmlSettings::frameGenSupported() const
+{
+    return FrameGen::compiledIn();
+}
+
+bool QmlSettings::frameGenDlssSupported() const
+{
+    return FrameGen::backendCompiledIn(FrameGen::Backend::Dlss);
+}
+
+bool QmlSettings::frameGenFsrSupported() const
+{
+    return FrameGen::backendCompiledIn(FrameGen::Backend::Fsr);
+}
+
 void QmlSettings::setPlaceboFrameMixer(int mixer)
 {
     settings->SetPlaceboFrameMixer(static_cast<PlaceboFrameMixer>(mixer));
@@ -1907,6 +1985,9 @@ void QmlSettings::refreshAllKeys()
     emit noiseSuppressLevelChanged();
     emit echoSuppressLevelChanged();
 #endif
+    emit rtxVsrQualityChanged();
+    emit frameGenBackendChanged();
+    emit frameGenMultiplierChanged();
     emit displayTargetContrastChanged();
     emit displayTargetPeakChanged();
     emit displayTargetPrimChanged();

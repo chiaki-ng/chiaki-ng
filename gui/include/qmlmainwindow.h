@@ -9,6 +9,7 @@
 #include <QQuickWindow>
 #include <QLoggingCategory>
 #include <deque>
+#include <vector>
 #include <atomic>
 
 extern "C" {
@@ -43,6 +44,8 @@ class QmlBackend;
 class QOffscreenSurface;
 class QOpenGLContext;
 class QOpenGLFramebufferObject;
+class RtxVsr;
+class FrameGen;
 class QWidget;
 class QLabel;
 class QVBoxLayout;
@@ -58,6 +61,9 @@ class QmlMainWindow : public QWindow
     Q_OBJECT
     Q_PROPERTY(bool hasVideo READ hasVideo NOTIFY hasVideoChanged)
     Q_PROPERTY(int droppedFrames READ droppedFrames NOTIFY droppedFramesChanged)
+    Q_PROPERTY(QString videoEnhancementStatus READ videoEnhancementStatus NOTIFY videoEnhancementStatusChanged)
+    Q_PROPERTY(double streamFps READ streamFps NOTIFY fpsChanged)
+    Q_PROPERTY(double displayFps READ displayFps NOTIFY fpsChanged)
     Q_PROPERTY(bool keepVideo READ keepVideo WRITE setKeepVideo NOTIFY keepVideoChanged)
     Q_PROPERTY(bool loadingTransitionComplete READ loadingTransitionComplete NOTIFY loadingTransitionCompleteChanged)
     Q_PROPERTY(VideoMode videoMode READ videoMode WRITE setVideoMode NOTIFY videoModeChanged)
@@ -110,6 +116,9 @@ public:
 
     bool hasVideo() const;
     int droppedFrames() const;
+    QString videoEnhancementStatus() const { return video_enhancement_status; }
+    double streamFps() const { return stream_fps; }
+    double displayFps() const { return display_fps; }
     void increaseDroppedFrames();
 
     bool directStream() const;
@@ -172,6 +181,8 @@ public slots:
 signals:
     void hasVideoChanged();
     void droppedFramesChanged();
+    void videoEnhancementStatusChanged();
+    void fpsChanged();
     void keepVideoChanged();
     void videoModeChanged();
     void zoomFactorChanged();
@@ -309,6 +320,34 @@ private:
     bool is_window_adjustable = false;
     bool is_stream_window_adjustable = false;
     QAtomicInteger<int> dropped_frames_current = 0;
+    // Frames decoded from the stream / frames handed to the swapchain, counted
+    // between two ticks of the 1 s stats timer.
+    QAtomicInteger<int> stream_frames_current = 0;
+    QAtomicInteger<int> display_frames_current = 0;
+    double stream_fps = 0.0;
+    double display_fps = 0.0;
+    qint64 fps_sample_us = 0;
+    // Written by the render thread, shown in the stats overlay.
+    // Configured RTX VSR mode (0 = off) and its state: 1 active, 2 idle, 3 mode unsupported.
+    QAtomicInteger<int> vsr_status_quality = 0;
+    QAtomicInteger<int> vsr_status_state = 0;
+    // Configured frame generation backend (0 = off), active multiplier (0 =
+    // inactive) and why it is inactive: 1 needs Direct Mapping, 2 unavailable.
+    QAtomicInteger<int> fg_status_backend = 0;
+    QAtomicInteger<int> fg_status_multiplier = 0;
+    QAtomicInteger<int> fg_status_reason = 0;
+    // Marker file present while frame generation starts; found at startup it
+    // means the last start crashed, and frame generation is switched off.
+    bool fg_crash_guard_armed = false;
+    int fg_crash_guard_good_frames = 0;
+    // Set when the crash guard turned frame generation off at startup; logged
+    // again when the next stream starts, since only its log is kept.
+    QString fg_crash_guard_notice;
+    // Why frame generation is skipped, logged once per stream (0 = not logged).
+    int fg_skip_logged = 0;
+    QAtomicInteger<int> enhancement_log_reset = 0;
+    bool fg_refresh_limited = false;
+    QString video_enhancement_status;
     bool going_full = false;
     VideoMode video_mode = VideoMode::Normal;
     float zoom_factor = 0;
@@ -333,6 +372,14 @@ private:
     pl_opengl placebo_opengl = {};
     pl_swapchain placebo_swapchain = {};
     pl_renderer placebo_renderer = {};
+    RtxVsr *rtx_vsr = nullptr;
+    bool rtx_vsr_active = false;
+    FrameGen *frame_gen = nullptr;
+    // Frames still to be presented for the last stream frame: generated ones first, the real one last.
+    std::vector<struct pl_frame> fg_pending_frames;
+    int fg_active_multiplier = 1;
+    int fg_last_backend = 0;
+    uint64_t direct_frame_serial = 0;
     pl_queue placebo_queue = {};
     std::array<pl_tex, 8> placebo_tex{};
     VkSurfaceKHR surface = VK_NULL_HANDLE;

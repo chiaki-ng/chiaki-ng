@@ -100,6 +100,13 @@ class QmlSettings : public QObject
 	Q_PROPERTY(int placeboPlaneDownscaler READ placeboPlaneDownscaler WRITE setPlaceboPlaneDownscaler NOTIFY placeboPlaneDownscalerChanged)
 	Q_PROPERTY(int placeboFrameMixer READ placeboFrameMixer WRITE setPlaceboFrameMixer NOTIFY placeboFrameMixerChanged)
 	Q_PROPERTY(bool directFrameMapping READ directFrameMapping WRITE setDirectFrameMapping NOTIFY directFrameMappingChanged)
+	Q_PROPERTY(int rtxVsrQuality READ rtxVsrQuality WRITE setRtxVsrQuality NOTIFY rtxVsrQualityChanged)
+	Q_PROPERTY(bool rtxVsrSupported READ rtxVsrSupported CONSTANT)
+	Q_PROPERTY(int frameGenBackend READ frameGenBackend WRITE setFrameGenBackend NOTIFY frameGenBackendChanged)
+	Q_PROPERTY(int frameGenMultiplier READ frameGenMultiplier WRITE setFrameGenMultiplier NOTIFY frameGenMultiplierChanged)
+	Q_PROPERTY(bool frameGenSupported READ frameGenSupported CONSTANT)
+	Q_PROPERTY(bool frameGenDlssSupported READ frameGenDlssSupported CONSTANT)
+	Q_PROPERTY(bool frameGenFsrSupported READ frameGenFsrSupported CONSTANT)
 	Q_PROPERTY(bool placeboDeinterlaceEnabled READ placeboDeinterlaceEnabled WRITE setPlaceboDeinterlaceEnabled NOTIFY placeboDeinterlaceEnabledChanged)
 	Q_PROPERTY(int placeboDeinterlacePreset READ placeboDeinterlacePreset WRITE setPlaceboDeinterlacePreset NOTIFY placeboDeinterlacePresetChanged)
 	Q_PROPERTY(int placeboDeinterlaceAlgorithm READ placeboDeinterlaceAlgorithm WRITE setPlaceboDeinterlaceAlgorithm NOTIFY placeboDeinterlaceAlgorithmChanged)
@@ -347,6 +354,18 @@ public:
     int placeboFrameMixer() const;
     bool directFrameMapping() const;
     void setDirectFrameMapping(bool enabled);
+    int rtxVsrQuality() const;
+    void setRtxVsrQuality(int quality);
+    Q_INVOKABLE void toggleRtxVsr();
+    Q_INVOKABLE void toggleFrameGen();
+    bool rtxVsrSupported() const;
+    int frameGenBackend() const;
+    void setFrameGenBackend(int backend);
+    int frameGenMultiplier() const;
+    void setFrameGenMultiplier(int multiplier);
+    bool frameGenSupported() const;
+    bool frameGenDlssSupported() const;
+    bool frameGenFsrSupported() const;
     void setPlaceboFrameMixer(int mixer);
 
     bool placeboDeinterlaceEnabled() const;
@@ -704,6 +723,9 @@ signals:
     void placeboPlaneDownscalerChanged();
     void placeboFrameMixerChanged();
     void directFrameMappingChanged();
+    void rtxVsrQualityChanged();
+    void frameGenBackendChanged();
+    void frameGenMultiplierChanged();
     void placeboDeinterlaceEnabledChanged();
     void placeboDeinterlacePresetChanged();
     void placeboDeinterlaceAlgorithmChanged();

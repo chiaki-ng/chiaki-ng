@@ -190,12 +190,70 @@ static ChiakiErrorCode takion_recv_message_cookie_ack(ChiakiTakion *takion);
 static void takion_handle_packet_av(ChiakiTakion *takion, uint8_t base_type, uint8_t *buf, size_t buf_size);
 static ChiakiErrorCode takion_read_extra_sock_messages(ChiakiTakion *takion);
 
+// mingw-w64's qos2.h uses QOS_FLOWID before declaring it, so qWAVE is only
+// used with the Windows SDK (MSVC / clang-cl builds).
+#if defined(_WIN32) && defined(_MSC_VER)
+#define TAKION_WIN_QOS 1
+#include <qos2.h>
+#endif
+
+#ifdef TAKION_WIN_QOS
+// Windows ignores IP_TOS set by programs. The sanctioned way to mark traffic
+// is qWAVE: an audio/video flow gets DSCP CS5 and 802.1p priority 5, which a
+// Wi-Fi driver maps to the WMM video access category. It marks what we send
+// (acks, feedback, controller input), not the console's video.
+// One qWAVE handle for the process; each takion socket joins it as a flow and
+// leaves before its socket closes. Adapted from P5M for Windows (AGPL-3.0).
+static HANDLE takion_qos_handle = NULL;
+
+static void takion_qos_add(ChiakiTakion *takion)
+{
+	takion->qos_flow = 0;
+	if(!takion_qos_handle)
+	{
+		QOS_VERSION version = { 1, 0 };
+		HANDLE handle = NULL;
+		if(!QOSCreateHandle(&version, &handle))
+		{
+			CHIAKI_LOGW(takion->log, "Takion: qWAVE unavailable (error %lu), socket left unmarked", (unsigned long)GetLastError());
+			return;
+		}
+		if(InterlockedCompareExchangePointer(&takion_qos_handle, handle, NULL) != NULL)
+			QOSCloseHandle(handle);
+	}
+	// A connected socket needs no destination; one punched by the PSN
+	// holepunch may not be connected, so pass the peer when it has one.
+	struct sockaddr_storage peer;
+	int peer_len = sizeof(peer);
+	struct sockaddr *dest = NULL;
+	if(getpeername(takion->sock, (struct sockaddr *)&peer, &peer_len) == 0)
+		dest = (struct sockaddr *)&peer;
+	QOS_FLOWID flow = 0;
+	if(!QOSAddSocketToFlow(takion_qos_handle, takion->sock, dest, QOSTrafficTypeAudioVideo, QOS_NON_ADAPTIVE_FLOW, &flow))
+	{
+		CHIAKI_LOGW(takion->log, "Takion: qWAVE audio/video flow refused (error %lu)", (unsigned long)GetLastError());
+		return;
+	}
+	takion->qos_flow = flow;
+	CHIAKI_LOGI(takion->log, "Takion: socket joined a qWAVE audio/video flow (DSCP CS5, 802.1p 5)");
+}
+
+static void takion_qos_remove(ChiakiTakion *takion)
+{
+	if(!takion->qos_flow || !takion_qos_handle)
+		return;
+	QOSRemoveSocketFromFlow(takion_qos_handle, takion->sock, takion->qos_flow, 0);
+	takion->qos_flow = 0;
+}
+#endif
+
 CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, ChiakiTakionConnectInfo *info, chiaki_socket_t *sock)
 {
 	ChiakiErrorCode ret = CHIAKI_ERR_SUCCESS;
 
 	takion->log = info->log;
 	takion->close_socket = info->close_socket;
+	takion->qos_flow = 0;
 	takion->version = info->protocol_version;
 	takion->disable_audio_video = info->disable_audio_video;
 
@@ -437,6 +495,10 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, Chiaki
 		}
 	}
 
+#ifdef TAKION_WIN_QOS
+	takion_qos_add(takion);
+#endif
+
 	err = chiaki_thread_create(&takion->thread, takion_thread_func, takion);
 
 	chiaki_thread_set_name(&takion->thread, "Chiaki Takion");
@@ -446,6 +508,9 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, Chiaki
 error_sock:
 	if(!CHIAKI_SOCKET_IS_INVALID(takion->sock))
 	{
+#ifdef TAKION_WIN_QOS
+		takion_qos_remove(takion);
+#endif
 		CHIAKI_SOCKET_CLOSE(takion->sock);
 		takion->sock = CHIAKI_INVALID_SOCKET;
 	}
@@ -1180,6 +1245,11 @@ beach:
 		event.type = CHIAKI_TAKION_EVENT_TYPE_DISCONNECT;
 		takion->cb(&event, takion->cb_user);
 	}
+#ifdef TAKION_WIN_QOS
+	// Also when the socket stays open: over PSN it belongs to the holepunch.
+	if(!CHIAKI_SOCKET_IS_INVALID(takion->sock))
+		takion_qos_remove(takion);
+#endif
 	if(takion->close_socket)
 	{
 		if(!CHIAKI_SOCKET_IS_INVALID(takion->sock))

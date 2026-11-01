@@ -11,6 +11,7 @@
 #include "macWakeSleep.h"
 #elif defined(Q_OS_WINDOWS)
 #include "windowsWakeSleep.h"
+#include "windowsStreamTuning.h"
 #endif
 #if CHIAKI_GUI_ENABLE_STEAM_SHORTCUT
 #include "steamtools.h"
@@ -425,6 +426,7 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
     windows_wake_sleep = new WindowsWakeSleep(this);
     connect(windows_wake_sleep, &WindowsWakeSleep::wokeUp, this, &QmlBackend::resumeFromSleep);
     connect(windows_wake_sleep, &WindowsWakeSleep::sleeping, this, &QmlBackend::goToSleep);
+    connect(this, &QmlBackend::sessionChanged, this, [](StreamSession *s) { setWindowsStreamActivity(s != nullptr); });
 #endif
     refreshPsnToken();
 }

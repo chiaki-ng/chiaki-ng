@@ -336,6 +336,34 @@ Item {
 
                 Label {
                     Layout.alignment: Qt.AlignRight
+                    text: qsTr("fps stream / display")
+                    font.pixelSize: 15
+                    visible: Chiaki.session ? true : false
+
+                    Label {
+                        anchors {
+                            right: parent.left
+                            baseline: parent.baseline
+                            rightMargin: 5
+                        }
+                        text: parent.visible ? "%1 / %2".arg(Chiaki.window.streamFps.toFixed(0)).arg(Chiaki.window.displayFps.toFixed(0)) : ""
+                        font.bold: true
+                        color: "#ffe082"
+                        font.pixelSize: 18
+                    }
+                }
+
+                Label {
+                    Layout.alignment: Qt.AlignRight
+                    text: Chiaki.window.videoEnhancementStatus
+                    font.pixelSize: 15
+                    font.bold: true
+                    color: "#a5d6a7"
+                    visible: Chiaki.session && text.length > 0
+                }
+
+                Label {
+                    Layout.alignment: Qt.AlignRight
                     text: qsTr("queue depth avg")
                     font.pixelSize: 15
                     opacity: Chiaki.session ? 1 : 0
@@ -724,6 +752,10 @@ Item {
                 KeyNavigation.right: {
                     if(Chiaki.window.videoPreset == ChiakiWindow.VideoPreset.Custom)
                         placeboSettingsButton;
+                    else if (rtxVsrToggleButton.visible)
+                        rtxVsrToggleButton;
+                    else if (frameGenToggleButton.visible)
+                        frameGenToggleButton;
                     else
                         displaySettingsButton;
                 }
@@ -742,11 +774,45 @@ Item {
                 checkable: false
                 onClicked: root.openPlaceboSettings()
                 KeyNavigation.left: displaySettingsButton
+                KeyNavigation.right: rtxVsrToggleButton.visible ? rtxVsrToggleButton : frameGenToggleButton
                 visible: Chiaki.window.videoPreset == ChiakiWindow.VideoPreset.Custom
                 Keys.onReturnPressed: {
                     menuController.close();
                     clicked();
                 }
+                Keys.onEscapePressed: menuController.close()
+            }
+
+            ToolSeparator {
+                Layout.leftMargin: -10
+                Layout.rightMargin: -10
+                visible: rtxVsrToggleButton.visible || frameGenToggleButton.visible
+            }
+
+            ToolButton {
+                id: rtxVsrToggleButton
+                text: qsTr("RTX VSR")
+                padding: 10
+                checkable: false
+                checked: Chiaki.settings.rtxVsrQuality > 0
+                visible: Chiaki.settings.rtxVsrSupported
+                onClicked: Chiaki.settings.toggleRtxVsr()
+                KeyNavigation.left: placeboSettingsButton.visible ? placeboSettingsButton : displaySettingsButton
+                KeyNavigation.right: frameGenToggleButton
+                Keys.onReturnPressed: clicked()
+                Keys.onEscapePressed: menuController.close()
+            }
+
+            ToolButton {
+                id: frameGenToggleButton
+                text: qsTr("Frame Gen")
+                padding: 10
+                checkable: false
+                checked: Chiaki.settings.frameGenBackend > 0
+                visible: Chiaki.settings.frameGenSupported
+                onClicked: Chiaki.settings.toggleFrameGen()
+                KeyNavigation.left: rtxVsrToggleButton.visible ? rtxVsrToggleButton : (placeboSettingsButton.visible ? placeboSettingsButton : displaySettingsButton)
+                Keys.onReturnPressed: clicked()
                 Keys.onEscapePressed: menuController.close()
             }
             }
@@ -795,6 +861,26 @@ Item {
                         right: parent.right
                         top: parent.bottom
                         topMargin: 12
+                    }
+
+                    Label {
+                        // Leaves room for the packet loss value drawn left of its title.
+                        Layout.rightMargin: 80
+                        text: qsTr("fps")
+                        font.pixelSize: 15
+                        visible: parent.visible && Chiaki.session ? true : false
+
+                        Label {
+                            anchors {
+                                right: parent.left
+                                baseline: parent.baseline
+                                rightMargin: 5
+                            }
+                            text: visible ? "%1 / %2".arg(Chiaki.window.streamFps.toFixed(0)).arg(Chiaki.window.displayFps.toFixed(0)) : ""
+                            color: "#ffe082"
+                            font.bold: true
+                            font.pixelSize: 18
+                        }
                     }
 
                     Label {

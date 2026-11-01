@@ -1,4 +1,9 @@
 #include "qmlmainwindow.h"
+#include "rtxvsr.h"
+#include "framegen.h"
+#ifdef Q_OS_WIN
+#include "windowsStreamTuning.h"
+#endif
 #include "qmlbackend.h"
 #include "qmlsvgprovider.h"
 #include "chiaki/log.h"
@@ -164,17 +169,21 @@ public:
         valueFont.setBold(true);
 
         bitrateRow = makeRow(tr("Mbps"), QColor(QStringLiteral("#00a7ff")), titleFont, valueFont, bitrateValue);
+        fpsRow = makeRow(tr("fps stream / display"), QColor(QStringLiteral("#ffe082")), titleFont, valueFont, fpsValue);
         queueRow = makeRow(tr("queue depth avg"), QColor(QStringLiteral("#90caf9")), titleFont, valueFont, queueDepthValue);
         pendingRow = makeRow(tr("pending frame age"), QColor(QStringLiteral("#90caf9")), titleFont, valueFont, pendingAgeValue);
         packetLossRow = makeRow(tr("packet loss"), QColor(QStringLiteral("#ef9a9a")), titleFont, valueFont, packetLossValue);
         droppedFramesRow = makeRow(tr("dropped frames"), QColor(QStringLiteral("#ef9a9a")), titleFont, valueFont, droppedFramesValue);
         lostFramesRow = makeRow(tr("lost frames"), QColor(QStringLiteral("#ef9a9a")), titleFont, valueFont, lostFramesValue);
+        enhancementRow = makeRow(tr("enhancement"), QColor(QStringLiteral("#a5d6a7")), titleFont, valueFont, enhancementValue);
 
         outer->addWidget(panel, 0, Qt::AlignRight | Qt::AlignVCenter);
 
         connect(owner, &QmlMainWindow::queueDepthAverageChanged, this, &StatsOverlayWidget::refresh);
         connect(owner, &QmlMainWindow::pendingFrameAgeChanged, this, &StatsOverlayWidget::refresh);
         connect(owner, &QmlMainWindow::droppedFramesChanged, this, &StatsOverlayWidget::refresh);
+        connect(owner, &QmlMainWindow::videoEnhancementStatusChanged, this, &StatsOverlayWidget::refresh);
+        connect(owner, &QmlMainWindow::fpsChanged, this, &StatsOverlayWidget::refresh);
         if (backend) {
             connect(backend, &QmlBackend::sessionChanged, this, [this](StreamSession *s) {
                 setSession(s);
@@ -246,6 +255,12 @@ public:
         else
             bitrateValue->clear();
 
+        fpsRow->setVisible(hasSession);
+        if (hasSession && owner)
+            fpsValue->setText(QStringLiteral("%1 / %2").arg(owner->streamFps(), 0, 'f', 0).arg(owner->displayFps(), 0, 'f', 0));
+        else
+            fpsValue->clear();
+
         queueRow->setVisible(true);
         queueDepthValue->setText(QString::number(owner ? owner->queueDepthAverage() : 0.0, 'f', 1));
         pendingRow->setVisible(true);
@@ -268,6 +283,10 @@ public:
             lostFramesValue->setText(QString::number(session->GetFramesLost()));
         else
             lostFramesValue->clear();
+
+        const QString enhancement = owner ? owner->videoEnhancementStatus() : QString();
+        enhancementValue->setText(enhancement);
+        enhancementRow->setVisible(hasSession && !enhancement.isEmpty());
     }
 
 private:
@@ -275,17 +294,21 @@ private:
     QPointer<QmlBackend> backend;
     QPointer<StreamSession> current_session;
     QWidget *bitrateRow = nullptr;
+    QWidget *fpsRow = nullptr;
+    QLabel *fpsValue = nullptr;
     QWidget *queueRow = nullptr;
     QWidget *pendingRow = nullptr;
     QWidget *packetLossRow = nullptr;
     QWidget *droppedFramesRow = nullptr;
     QWidget *lostFramesRow = nullptr;
+    QWidget *enhancementRow = nullptr;
     QLabel *bitrateValue = nullptr;
     QLabel *queueDepthValue = nullptr;
     QLabel *pendingAgeValue = nullptr;
     QLabel *packetLossValue = nullptr;
     QLabel *droppedFramesValue = nullptr;
     QLabel *lostFramesValue = nullptr;
+    QLabel *enhancementValue = nullptr;
 };
 
 class DeferredPresentPacerThread final : public QThread
@@ -2405,6 +2428,11 @@ static AVFrame *make_startup_warmup_frame(unsigned width, unsigned height, bool 
     return frame;
 }
 
+static QString frameGenCrashGuardPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/framegen-starting";
+}
+
 static QString shader_cache_path()
 {
     static QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/pl_shader.cache";
@@ -2668,6 +2696,11 @@ QmlMainWindow::~QmlMainWindow()
     }
     pl_cache_destroy(&placebo_cache);
     pl_queue_destroy(&placebo_queue);
+    delete frame_gen;
+    frame_gen = nullptr;
+    QFile::remove(frameGenCrashGuardPath());
+    delete rtx_vsr;
+    rtx_vsr = nullptr;
     pl_renderer_destroy(&placebo_renderer);
     if (render_backend == RenderBackend::Vulkan) {
         pl_vulkan_destroy(&placebo_vulkan);
@@ -3007,6 +3040,7 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
 
     if (!frame.frame)
         return;
+    stream_frames_current.fetchAndAddRelaxed(1);
 
     if (bypass_frame_queue) {
         {
@@ -4922,15 +4956,24 @@ void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
         vk_exts[0] = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
 #endif
 
-        const char *opt_extensions[] = {
+        std::vector<const char *> opt_extensions = {
             VK_EXT_HDR_METADATA_EXTENSION_NAME,
         };
+        std::vector<const char *> opt_dev_extensions = {
+            VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
+            VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
+            VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME,
+            VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
+        };
+        // NGX (RTX Video Super Resolution) extensions are optional; without
+        // them VSR initialization fails and libplacebo scaling is used.
+        RtxVsr::appendRequiredExtensions(opt_extensions, opt_dev_extensions);
 
         struct pl_vk_inst_params vk_inst_params = {
             .extensions = vk_exts,
             .num_extensions = 2,
-            .opt_extensions = opt_extensions,
-            .num_opt_extensions = 1,
+            .opt_extensions = opt_extensions.data(),
+            .num_opt_extensions = static_cast<int>(opt_extensions.size()),
         };
         placebo_vk_inst = pl_vk_inst_create(placebo_log, &vk_inst_params);
         if (!placebo_vk_inst) {
@@ -4960,21 +5003,14 @@ void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
         GET_PROC(vkGetPhysicalDeviceProperties2)
 #undef GET_PROC
 
-        const char *opt_dev_extensions[] = {
-            VK_KHR_VIDEO_QUEUE_EXTENSION_NAME,
-            VK_KHR_VIDEO_DECODE_QUEUE_EXTENSION_NAME,
-            VK_KHR_VIDEO_DECODE_H264_EXTENSION_NAME,
-            VK_KHR_VIDEO_DECODE_H265_EXTENSION_NAME,
-        };
-
         struct pl_vulkan_params vulkan_params = {
             .instance = placebo_vk_inst->instance,
             .get_proc_addr = placebo_vk_inst->get_proc_addr,
             .allow_software = true,
             PL_VULKAN_DEFAULTS
             .extra_queues = VK_QUEUE_VIDEO_DECODE_BIT_KHR,
-            .opt_extensions = opt_dev_extensions,
-            .num_opt_extensions = 4,
+            .opt_extensions = opt_dev_extensions.data(),
+            .num_opt_extensions = static_cast<int>(opt_dev_extensions.size()),
         };
         placebo_vulkan = pl_vulkan_create(placebo_log, &vulkan_params);
         if (!placebo_vulkan) {
@@ -5057,6 +5093,26 @@ renderer_backend_ready:
         placebo_log,
         placeboGpu()
     );
+    if (render_backend == RenderBackend::Vulkan && RtxVsr::compiledIn())
+        rtx_vsr = new RtxVsr(placebo_log);
+    if (render_backend == RenderBackend::Vulkan && FrameGen::compiledIn())
+        frame_gen = new FrameGen(placebo_log);
+    if (QFile::exists(frameGenCrashGuardPath())) {
+        // The last start of frame generation never completed: chiaki-ng most
+        // likely crashed in it. Turn it off instead of crashing again.
+        QFile marker(frameGenCrashGuardPath());
+        QString backend_name;
+        if (marker.open(QIODevice::ReadOnly))
+            backend_name = QString::fromUtf8(marker.readAll());
+        marker.close();
+        QFile::remove(frameGenCrashGuardPath());
+        fg_crash_guard_notice = QStringLiteral("Frame generation %1 did not finish starting last time (crash?); "
+                                               "it has been turned off. Turn it back on in Settings > Video to retry.")
+                                    .arg(backend_name);
+        qCWarning(chiakiGui).noquote() << fg_crash_guard_notice;
+        if (settings)
+            settings->SetFrameGenBackend(0);
+    }
 
     placebo_queue = pl_queue_create(placeboGpu());
 
@@ -5106,6 +5162,21 @@ renderer_backend_ready:
         startup_warmup_preserve_next_session_change = false;
         session = s;
         stream_session_active.storeRelease(s ? 1 : 0);
+        // A session that ended normally did not crash in frame generation.
+        // The render thread logs the VSR / frame generation state again in
+        // each stream's log.
+        enhancement_log_reset.storeRelease(1);
+        if (!s)
+            QFile::remove(frameGenCrashGuardPath());
+        else if (!fg_crash_guard_notice.isEmpty()) {
+            qCWarning(chiakiGui).noquote() << fg_crash_guard_notice;
+            fg_crash_guard_notice.clear();
+        }
+        vsr_status_quality.storeRelaxed(0);
+        vsr_status_state.storeRelaxed(0);
+        fg_status_backend.storeRelaxed(0);
+        fg_status_multiplier.storeRelaxed(0);
+        fg_status_reason.storeRelaxed(0);
         startup_video_visible_generation.fetchAndAddRelaxed(1);
         grab_input = 0;
         if (session)
@@ -5221,6 +5292,10 @@ renderer_backend_ready:
 
         quick_render->prepareThread(render_thread);
         quick_render->moveToThread(render_thread);
+#ifdef Q_OS_WIN
+        // The render thread paces presentation; keep it from waking late.
+        QMetaObject::invokeMethod(quick_render, []() { setCurrentThreadGamePriority(); }, Qt::QueuedConnection);
+#endif
     }
 
     connect(quick_render, &QQuickRenderControl::sceneChanged, this, [this]() {
@@ -5250,6 +5325,64 @@ renderer_backend_ready:
         if (dropped_frames != dropped_frames_next) {
             dropped_frames = dropped_frames_next;
             emit droppedFramesChanged();
+        }
+
+        const qint64 fps_now_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
+        const int stream_frames = stream_frames_current.fetchAndStoreRelaxed(0);
+        const int display_frames = display_frames_current.fetchAndStoreRelaxed(0);
+        if (fps_sample_us > 0 && fps_now_us > fps_sample_us) {
+            const double elapsed_s = (fps_now_us - fps_sample_us) / 1e6;
+            const double next_stream_fps = stream_frames / elapsed_s;
+            const double next_display_fps = display_frames / elapsed_s;
+            if (qAbs(next_stream_fps - stream_fps) >= 0.05 || qAbs(next_display_fps - display_fps) >= 0.05) {
+                stream_fps = next_stream_fps;
+                display_fps = next_display_fps;
+                emit fpsChanged();
+            }
+        }
+        fps_sample_us = fps_now_us;
+
+        QStringList parts;
+        const int vsr_quality = vsr_status_quality.loadRelaxed();
+        if (RtxVsr::isValidQuality(vsr_quality) && rtx_vsr) {
+            QString part = QStringLiteral("RTX VSR %1").arg(QLatin1String(RtxVsr::qualityName(vsr_quality)));
+            switch (vsr_status_state.loadRelaxed()) {
+            case 1:
+                if (rtx_vsr->gpuTimeMs() > 0.0f)
+                    part += QStringLiteral(" %1 ms").arg(rtx_vsr->gpuTimeMs(), 0, 'f', 1);
+                break;
+            case 3:
+                part += tr(": not supported (DLL/GPU)");
+                break;
+            default:
+                part += tr(": idle");
+                break;
+            }
+            parts << part;
+        }
+        const int fg_backend_status = fg_status_backend.loadRelaxed();
+        if (fg_backend_status > 0 && frame_gen) {
+            QString part = fg_backend_status == static_cast<int>(FrameGen::Backend::Dlss)
+                ? QStringLiteral("DLSS FG") : QStringLiteral("FSR FG");
+            const int multiplier = fg_status_multiplier.loadRelaxed();
+            if (multiplier > 1) {
+                part += QStringLiteral(" %1x").arg(multiplier);
+                if (frame_gen->gpuTimeMs() > 0.0f)
+                    part += QStringLiteral(" %1 ms").arg(frame_gen->gpuTimeMs(), 0, 'f', 1);
+            } else {
+                switch (fg_status_reason.loadRelaxed()) {
+                case 1: part += tr(": needs Direct Mapping"); break;
+                case 2: part += tr(": unavailable (see log)"); break;
+                case 3: part += tr(": display refresh rate too low"); break;
+                default: part += tr(": idle"); break;
+                }
+            }
+            parts << part;
+        }
+        const QString status = parts.join(QStringLiteral(" · "));
+        if (status != video_enhancement_status) {
+            video_enhancement_status = status;
+            emit videoEnhancementStatusChanged();
         }
     });
 
@@ -5686,6 +5819,7 @@ void QmlMainWindow::processDeferredSwapTask(qint64 submit_begin_us,
         if (!pl_swapchain_submit_frame(placebo_swapchain))
             qCWarning(chiakiGui) << "Failed to submit Placebo frame on deferred thread!";
         else {
+            display_frames_current.fetchAndAddRelaxed(1);
             const qint64 submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_call_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()
@@ -6656,9 +6790,10 @@ void QmlMainWindow::render()
     const double present_interval_s = refresh_interval_s;
     const bool stream_active = stream_session_active.loadAcquire() != 0;
     const bool timer_owned_playback = stream_active && mixer_active;
+    // With frame generation every stream frame is presented as several frames.
     const double present_submit_interval_s = timer_owned_playback
         ? present_interval_s
-        : stream_interval_s;
+        : stream_interval_s / qMax(1, fg_active_multiplier);
     const qint64 present_interval_us = static_cast<qint64>(qMax(1.0, vsync_duration * 1000000.0) + 0.5);
     const bool pending_overflow_waiting = hasPendingFrameOverflow();
     const bool pending_frame_waiting = snapshotQueueDepth() >= effectiveQueueDepthLimit() || hasPendingFrame();
@@ -6681,7 +6816,36 @@ void QmlMainWindow::render()
     struct pl_frame direct_render_frame = {};
     const struct pl_frame *direct_frames[] = { &direct_render_frame };
     const float direct_timestamps[] = { 0.0f };
-    if (bypass_frame_queue) {
+    // Set when this render presents a frame left over from frame generation.
+    struct pl_frame fg_override_frame = {};
+    bool fg_override = false;
+    bool direct_frame_fresh = false;
+    if (bypass_frame_queue && !fg_pending_frames.empty()) {
+        bool incoming_waiting = false;
+        {
+            QMutexLocker locker(&direct_frame_mutex);
+            incoming_waiting = direct_pending_frame != nullptr;
+        }
+        if (incoming_waiting) {
+            // A new stream frame is already waiting: drop the remaining
+            // generated frames but still show the real one.
+            fg_override_frame = fg_pending_frames.back();
+            fg_pending_frames.clear();
+        } else {
+            fg_override_frame = fg_pending_frames.front();
+            fg_pending_frames.erase(fg_pending_frames.begin());
+        }
+        fg_override = true;
+    }
+    if (bypass_frame_queue && fg_override) {
+        direct_render_frame = fg_override_frame;
+        frame_mix = {};
+        frame_mix.num_frames = 1;
+        frame_mix.frames = direct_frames;
+        frame_mix.timestamps = direct_timestamps;
+        queue_status = PL_QUEUE_OK;
+        queue_depth_before_update = 0;
+    } else if (bypass_frame_queue) {
         AVFrame *incoming = nullptr;
         bool reset_direct_frame = false;
         {
@@ -6689,6 +6853,8 @@ void QmlMainWindow::render()
             std::swap(incoming, direct_pending_frame);
             reset_direct_frame = direct_frame_reset.fetchAndStoreRelaxed(0) != 0;
         }
+        if (reset_direct_frame && frame_gen)
+            frame_gen->reset();
         if (reset_direct_frame) {
             pl_unmap_avframe(placeboGpu(), &direct_frame);
             direct_frame = {};
@@ -6705,6 +6871,9 @@ void QmlMainWindow::render()
                 direct_frame = {};
                 if (backend && backend->zeroCopy())
                     backend->disableZeroCopy();
+            } else {
+                direct_frame_serial++;
+                direct_frame_fresh = true;
             }
             av_frame_free(&incoming);
         }
@@ -7018,6 +7187,7 @@ void QmlMainWindow::render()
                 if (!pl_swapchain_submit_frame(placebo_swapchain))
                     qCWarning(chiakiGui) << "Failed to submit Placebo frame!";
                 else {
+                    display_frames_current.fetchAndAddRelaxed(1);
                     submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()
@@ -7451,6 +7621,150 @@ void QmlMainWindow::render()
         }
     }
 
+    // RTX Video Super Resolution: replace each source frame with an NVIDIA
+    // upscaled RGB frame at the output size, so libplacebo only color maps it
+    // and scales it ~1:1. Any failure keeps the regular libplacebo path.
+    constexpr int kRtxVsrMaxMixFrames = 8;
+    struct pl_frame_mix vsr_frame_mix = frame_mix;
+    std::array<struct pl_frame, kRtxVsrMaxMixFrames> vsr_frames;
+    std::array<const struct pl_frame *, kRtxVsrMaxMixFrames> vsr_frame_ptrs;
+    std::array<uint64_t, kRtxVsrMaxMixFrames> vsr_signatures;
+    bool vsr_applied = false;
+    const int rtx_vsr_quality = rtx_vsr && has_settings ? settings->GetRtxVsrQuality() : 0;
+    if (!fg_override && rtx_vsr_quality > 0 && nvidia_card && stream_active && rtx_vsr->ensureInitialized(placebo_vulkan)) {
+        const int vsr_out_w = static_cast<int>(lroundf(fabsf(pl_rect_w(target_frame.crop))));
+        const int vsr_out_h = static_cast<int>(lroundf(fabsf(pl_rect_h(target_frame.crop))));
+        if (bypass_frame_queue) {
+            struct pl_frame upscaled = {};
+            uint64_t upscaled_signature = 0;
+            if (direct_render_frame.num_planes > 0 &&
+                rtx_vsr->process(&direct_render_frame, direct_frame_serial, vsr_out_w, vsr_out_h,
+                                 rtx_vsr_quality, &upscaled, &upscaled_signature)) {
+                direct_render_frame = upscaled;
+                vsr_applied = true;
+            }
+        } else if (frame_mix.num_frames <= kRtxVsrMaxMixFrames) {
+            vsr_applied = frame_mix.num_frames > 0;
+            for (int i = 0; i < frame_mix.num_frames && vsr_applied; i++) {
+                vsr_applied = rtx_vsr->process(frame_mix.frames[i], frame_mix.signatures[i],
+                                               vsr_out_w, vsr_out_h, rtx_vsr_quality,
+                                               &vsr_frames[i], &vsr_signatures[i]);
+                vsr_frame_ptrs[i] = &vsr_frames[i];
+            }
+            if (vsr_applied) {
+                vsr_frame_mix.frames = vsr_frame_ptrs.data();
+                vsr_frame_mix.signatures = vsr_signatures.data();
+            }
+        }
+    }
+    if (enhancement_log_reset.fetchAndStoreAcquire(0)) {
+        rtx_vsr_active = false;
+        fg_skip_logged = 0;
+    }
+
+    if (!fg_override && vsr_applied != rtx_vsr_active) {
+        rtx_vsr_active = vsr_applied;
+        qCInfo(chiakiGui) << "RTX Video Super Resolution" << (vsr_applied ? "active" : "inactive");
+    }
+
+    // Frame generation (Direct Mapping only): turn each new stream frame into
+    // `multiplier` frames. The first one is presented now, the rest by the
+    // following renders, spaced by the presentation throttle.
+    const int fg_backend = frame_gen && has_settings ? settings->GetFrameGenBackend() : 0;
+    if (fg_backend != fg_last_backend) {
+        fg_last_backend = fg_backend;
+        fg_pending_frames.clear();
+        fg_active_multiplier = 1;
+        if (frame_gen)
+            frame_gen->reset();
+        if (fg_backend && !bypass_frame_queue)
+            qCInfo(chiakiGui) << "Frame generation requires Direct Mapping and stays disabled";
+    }
+    bool fg_applied = fg_override;
+    if (!fg_override && direct_frame_fresh && fg_backend > 0 && stream_active && direct_render_frame.num_planes > 0) {
+        const auto backend_choice = static_cast<FrameGen::Backend>(fg_backend);
+        // More output frames than the display can show only adds latency.
+        const int refresh_cap = stream_interval_s > 0.0
+            ? static_cast<int>(std::floor(refresh_rate * stream_interval_s + 0.15))
+            : 2;
+        int multiplier = qMin(settings->GetFrameGenMultiplier(), refresh_cap);
+        fg_refresh_limited = multiplier < 2;
+        if (fg_refresh_limited && fg_skip_logged != 3) {
+            fg_skip_logged = 3;
+            qCInfo(chiakiGui).nospace() << "Frame generation skipped: the display runs at " << refresh_rate
+                << " Hz, which leaves no room for extra frames at "
+                << (stream_interval_s > 0.0 ? 1.0 / stream_interval_s : 0.0)
+                << " fps (needs at least twice the stream frame rate)";
+        }
+        if (multiplier >= 2 && frame_gen->ensureInitialized(placebo_vulkan, backend_choice)) {
+            multiplier = qMin(multiplier, frame_gen->maxMultiplier());
+            const int fg_out_w = static_cast<int>(lroundf(fabsf(pl_rect_w(target_frame.crop))));
+            const int fg_out_h = static_cast<int>(lroundf(fabsf(pl_rect_h(target_frame.crop))));
+            std::vector<struct pl_frame> fg_outputs;
+            if (!fg_crash_guard_armed && fg_crash_guard_good_frames == 0) {
+                // Cleared once generated frames have been shown for a while.
+                QDir().mkpath(QFileInfo(frameGenCrashGuardPath()).absolutePath());
+                QFile marker(frameGenCrashGuardPath());
+                if (marker.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                    marker.write(FrameGen::backendName(backend_choice));
+                    marker.flush();
+                    marker.close();
+                    fg_crash_guard_armed = true;
+                }
+            }
+            if (multiplier >= 2 &&
+                frame_gen->process(&direct_render_frame, fg_out_w, fg_out_h, multiplier,
+                                   static_cast<float>(stream_interval_s * 1000.0), fg_outputs) &&
+                !fg_outputs.empty()) {
+                if (fg_outputs.size() > 1 && fg_crash_guard_armed && ++fg_crash_guard_good_frames >= 120) {
+                    QFile::remove(frameGenCrashGuardPath());
+                    fg_crash_guard_armed = false;
+                }
+                direct_render_frame = fg_outputs.front();
+                fg_pending_frames.assign(fg_outputs.begin() + 1, fg_outputs.end());
+                if (fg_active_multiplier != multiplier)
+                    qCInfo(chiakiGui) << "Frame generation active:" << FrameGen::backendName(backend_choice)
+                                      << multiplier << "x";
+                fg_active_multiplier = multiplier;
+                fg_applied = true;
+            }
+        }
+    }
+    if (direct_frame_fresh && !fg_applied && fg_active_multiplier != 1) {
+        qCInfo(chiakiGui) << "Frame generation inactive";
+        fg_active_multiplier = 1;
+        fg_pending_frames.clear();
+    }
+    if (direct_frame_fresh || !bypass_frame_queue) {
+        fg_status_backend.storeRelaxed(stream_active ? fg_backend : 0);
+        fg_status_multiplier.storeRelaxed(fg_applied ? fg_active_multiplier : 0);
+        int reason = 0;
+        if (!bypass_frame_queue)
+            reason = 1;
+        else if (fg_backend > 0 && frame_gen->backendFailed(static_cast<FrameGen::Backend>(fg_backend)))
+            reason = 2;
+        else if (fg_backend > 0 && fg_refresh_limited)
+            reason = 3;
+        fg_status_reason.storeRelaxed(reason);
+        if (reason == 1 && fg_backend > 0 && fg_skip_logged != 1) {
+            fg_skip_logged = 1;
+            qCInfo(chiakiGui) << "Frame generation skipped: it needs Frame Mapping set to Direct Mapping";
+        }
+    }
+
+    if ((vsr_applied && !RtxVsr::keepsResolution(rtx_vsr_quality)) || fg_applied) {
+        // The frame already is at display size; skip the shader upscalers.
+        params.hooks = nullptr;
+        params.num_hooks = 0;
+    }
+    // Generated frames reuse the last stream frame's VSR state.
+    if (!fg_override) {
+        const bool vsr_wanted = rtx_vsr && rtx_vsr_quality > 0 && nvidia_card && stream_active;
+        vsr_status_quality.storeRelaxed(vsr_wanted ? rtx_vsr_quality : 0);
+        vsr_status_state.storeRelaxed(vsr_applied ? 1 : (vsr_wanted && rtx_vsr->modeFailed(rtx_vsr_quality) ? 3 : 2));
+    }
+    const struct pl_frame_mix *render_frame_mix = vsr_applied ? &vsr_frame_mix : &frame_mix;
+
     const qint64 render_setup_ready_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     if (render_setup_ready_us >= render_setup_config_after_us) {
         const auto render_schedule_state = snapshotRenderScheduleState();
@@ -7477,7 +7791,7 @@ void QmlMainWindow::render()
         logRenderSetupStats(render_call_begin_us, render_call_begin_us - render_setup_begin_us);
     if (!(bypass_frame_queue
         ? pl_render_image(placebo_renderer, &direct_render_frame, &target_frame, &params)
-        : pl_render_image_mix(placebo_renderer, &frame_mix, &target_frame, &params)))
+        : pl_render_image_mix(placebo_renderer, render_frame_mix, &target_frame, &params)))
     {
         qCWarning(chiakiGui) << "Failed to render Placebo frame!";
         close_started_frame(false);
@@ -7505,7 +7819,9 @@ void QmlMainWindow::render()
     if (!scheduled_pending)
         schedulePostRenderWork();
     schedulePostSwapchainRecreateRefresh();
-
+    // Frames left over from frame generation are presented by the next renders.
+    if (!fg_pending_frames.empty())
+        scheduleUpdate(false, UpdateRequestReason::PendingFrame);
 }
 
 bool QmlMainWindow::handleShortcut(QKeyEvent *event)

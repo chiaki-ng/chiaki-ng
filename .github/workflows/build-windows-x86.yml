@@ -2,6 +2,9 @@ name: Build chiaki-ng Windows x86_64 (VC)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - claude/happy-gauss-7i9rwm
 
 jobs:
   build-win_x64:
@@ -12,9 +15,14 @@ jobs:
       CXX: clang-cl.exe
       VULKAN_SDK: C:\VulkanSDK\
       triplet: x64-windows
-      vcpkg_baseline: 42bb0d9e8d4cf33485afb9ee2229150f79f61a1f
+      # vcpkg 2026.10.16; the older baseline points at MSYS2 packages that were removed from the mirrors
+      vcpkg_baseline: 9eec002df1cd109f8f104cd966a763daf9751489
       dep_folder: deps
       libplacebo_tag: v7.360.1
+      # The pinned vcpkg ports (e.g. json-c) still declare cmake_minimum_required < 3.5,
+      # which the runner's CMake 4.x rejects unless a policy minimum is set.
+      CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+      VCPKG_KEEP_ENV_VARS: CMAKE_POLICY_VERSION_MINIMUM
       sdl2_compat_tag: 2.32.64
 
     defaults:
@@ -33,9 +41,9 @@ jobs:
       - name: Setup Vulkan
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          $ver = (Invoke-WebRequest -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
+          $ver = (Invoke-WebRequest -UseBasicParsing -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
           echo Version $ver
-          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/vulkansdk-windows-X64-$ver.exe" -OutFile VulkanSDK.exe
+          Invoke-WebRequest -UseBasicParsing -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/vulkansdk-windows-X64-$ver.exe" -OutFile VulkanSDK.exe
           echo Downloaded
           .\VulkanSDK.exe --root ${{ env.VULKAN_SDK }}  --accept-licenses --default-answer --confirm-command install
 
@@ -57,6 +65,7 @@ jobs:
           host: 'windows'
           target: 'desktop'
           modules: 'qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport'
+          cache: true
 
       - name: Install pip dependencies
         run: |
@@ -96,16 +105,46 @@ jobs:
 
       - name: Setup shaderc
         run: |
-          $ProgressPreference = 'SilentlyContinue'
-          $url = ((Invoke-WebRequest -UseBasicParsing -Uri "https://storage.googleapis.com/shaderc/badges/build_link_windows_vs2019_release.html").Content | Select-String -Pattern 'url=(.*)"').Matches.Groups[1].Value
-          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile .\shaderc.zip
-          Expand-Archive -LiteralPath "shaderc.zip" -DestinationPath "."
-          cp "./install/*" "./${{ env.dep_folder }}" -Force -Recurse
-          rm "./install" -r -force
+          # The shaderc badge download links are gone; use the shaderc shipped with the Vulkan SDK.
+          $deps = "${{ github.workspace }}\${{ env.dep_folder }}"
+          New-Item -ItemType Directory -Force -Path "$deps\bin", "$deps\lib\pkgconfig", "$deps\include" | Out-Null
+          Copy-Item "${{ env.VULKAN_SDK }}Bin\shaderc_shared.dll" "$deps\bin" -Force
+          Copy-Item "${{ env.VULKAN_SDK }}Lib\shaderc_shared.lib" "$deps\lib" -Force
+          Copy-Item "${{ env.VULKAN_SDK }}Include\shaderc" "$deps\include" -Recurse -Force
+          $prefix = $deps -replace '\\','/'
+          $pc = @(
+            "prefix=$prefix",
+            'libdir=${prefix}/lib',
+            'includedir=${prefix}/include',
+            '',
+            'Name: shaderc',
+            'Description: shaderc from the Vulkan SDK',
+            'Version: 2024.0',
+            'Libs: -L${libdir} -lshaderc_shared',
+            'Cflags: -I${includedir}'
+          )
+          Set-Content -Path "$deps\lib\pkgconfig\shaderc.pc" -Value $pc -Encoding ascii
+          Get-Content "$deps\lib\pkgconfig\shaderc.pc"
 
       - name: Make build directory
         run: |
           mkdir build
+
+      # vcpkg removed the x-gha binary cache that run-vcpkg defaults to, so keep
+      # the built packages in a plain folder cached with actions/cache instead.
+      - name: Set up vcpkg binary cache
+        run: |
+          $cache = "${{ github.workspace }}\vcpkg-binary-cache"
+          New-Item -ItemType Directory -Force -Path $cache | Out-Null
+          echo "VCPKG_BINARY_SOURCES=clear;files,$cache,readwrite" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache/restore@v4
+        with:
+          path: vcpkg-binary-cache
+          key: vcpkg-bin-${{ runner.os }}-${{ env.triplet }}-${{ env.vcpkg_baseline }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-bin-${{ runner.os }}-${{ env.triplet }}-${{ env.vcpkg_baseline }}-
 
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
@@ -113,6 +152,14 @@ jobs:
           vcpkgGitCommitId: ${{ env.vcpkg_baseline }}
           runVcpkgInstall: true
           vcpkgJsonGlob: "vcpkg.json"
+
+      # Saved right away so later failures in the job still keep the packages.
+      - name: Save vcpkg binary cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-binary-cache
+          key: vcpkg-bin-${{ runner.os }}-${{ env.triplet }}-${{ env.vcpkg_baseline }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Build libplacebo
         run: |
@@ -137,6 +184,23 @@ jobs:
         run: |
           git apply --ignore-whitespace --verbose --directory=third-party/gf-complete/ scripts/windows-vc/gf-complete.patch
 
+      - name: Fetch NVIDIA NGX SDK (RTX Video Super Resolution, DLSS Frame Generation)
+        run: |
+          git clone --depth 1 --filter=blob:none --no-checkout https://github.com/NVIDIA/DLSS.git ngx-sdk
+          cd ngx-sdk
+          git sparse-checkout set --no-cone /include/ /lib/Windows_x86_64/x64/nvsdk_ngx_d.lib /lib/Windows_x86_64/rel/nvngx_dlssg.dll /LICENSE.txt
+          git checkout
+          if (-not (Test-Path "lib\Windows_x86_64\x64\nvsdk_ngx_d.lib")) { throw "NGX library missing" }
+          if (-not (Test-Path "lib\Windows_x86_64\rel\nvngx_dlssg.dll")) { throw "DLSS Frame Generation runtime missing" }
+
+      - name: Fetch AMD FidelityFX SDK (FSR 3.1 Frame Generation)
+        run: |
+          git clone --depth 1 --branch v1.1.4 --filter=blob:none --no-checkout https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK.git ffx-sdk
+          cd ffx-sdk
+          git sparse-checkout set --no-cone /ffx-api/include/ /PrebuiltSignedDLL/amd_fidelityfx_vk.dll /LICENSE.txt
+          git checkout
+          if (-not (Test-Path "PrebuiltSignedDLL\amd_fidelityfx_vk.dll")) { throw "FidelityFX runtime missing" }
+
       - name: Configure chiaki-ng
         run: |
           cmake `
@@ -149,6 +213,10 @@ jobs:
           -DCHIAKI_ENABLE_CLI=OFF `
           -DCHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER=ON `
           -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF `
+          -DCHIAKI_ENABLE_NGX=ON `
+          -DCHIAKI_NGX_SDK_DIR="${{ github.workspace }}\ngx-sdk" `
+          -DCHIAKI_ENABLE_FFX=ON `
+          -DCHIAKI_FFX_SDK_DIR="${{ github.workspace }}\ffx-sdk" `
           -DPYTHON_EXECUTABLE="${{ env.pythonLocation }}\python.exe" `
           -DCMAKE_PREFIX_PATH="${{ github.workspace }}\${{ env.dep_folder }};${{ env.VULKAN_SDK }}"
 
@@ -162,17 +230,10 @@ jobs:
           cp build\gui\chiaki.exe chiaki-ng-Win
           cp build\third-party\cpp-steam-tools\cpp-steam-tools.dll chiaki-ng-Win
           cp scripts\qtwebengine_import.qml gui\src\qml\
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\libcrypto-*-x64.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\libssl-*-x64.dll" chiaki-ng-Win
+          # Ship every runtime DLL vcpkg built; names change between vcpkg versions (e.g. lcms2).
+          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\*.dll" chiaki-ng-Win
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\SDL2.dll" chiaki-ng-Win
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\SDL3.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\hidapi.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\fftw3.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\opus.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\libspeexdsp.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\lcms2.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\miniupnpc.dll" chiaki-ng-Win
-          cp "${env:VCPKG_INSTALLED_DIR}\${{ env.triplet }}\bin\json-c.dll" chiaki-ng-Win
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\swresample-*.dll" chiaki-ng-Win
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\avcodec-*.dll" chiaki-ng-Win
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\avutil-*.dll" chiaki-ng-Win
@@ -180,6 +241,12 @@ jobs:
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\libplacebo-*.dll" chiaki-ng-Win
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\shaderc_shared.dll" chiaki-ng-Win
           cp "${{ github.workspace }}\${{ env.dep_folder }}\bin\spirv-cross-c-shared.dll" chiaki-ng-Win
+          # Frame generation runtimes (redistributable parts of the NVIDIA DLSS SDK and the AMD FidelityFX SDK)
+          cp "${{ github.workspace }}\ngx-sdk\lib\Windows_x86_64\rel\nvngx_dlssg.dll" chiaki-ng-Win
+          cp "${{ github.workspace }}\ffx-sdk\PrebuiltSignedDLL\amd_fidelityfx_vk.dll" chiaki-ng-Win
+          mkdir chiaki-ng-Win\licenses
+          cp "${{ github.workspace }}\ngx-sdk\LICENSE.txt" chiaki-ng-Win\licenses\NVIDIA-DLSS-SDK-LICENSE.txt
+          cp "${{ github.workspace }}\ffx-sdk\LICENSE.txt" chiaki-ng-Win\licenses\AMD-FidelityFX-SDK-LICENSE.txt
           windeployqt.exe --no-translations --qmldir=gui\src\qml --release chiaki-ng-Win\chiaki.exe
 
       - name: Package chiaki-ng

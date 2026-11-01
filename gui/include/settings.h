@@ -516,6 +516,37 @@ class Settings : public QObject
 		PlaceboFrameMixer GetPlaceboFrameMixer() const;
 		bool GetDirectFrameMapping() const { return settings.value("settings/direct_frame_mapping", true).toBool(); }
 		void SetDirectFrameMapping(bool enabled) { settings.setValue("settings/direct_frame_mapping", enabled); }
+		// RTX Video mode passed to NGX as VSR.QualityLevel: 0 = off, 1-4 = upscale,
+		// 8-11 = artifact reduction, 21/23 = streaming (see RtxVsr::isValidQuality)
+		int GetRtxVsrQuality() const { return ValidRtxVsrQuality(settings.value("settings/rtx_vsr_quality", 0).toInt()); }
+		void SetRtxVsrQuality(int quality)
+		{
+			quality = ValidRtxVsrQuality(quality);
+			settings.setValue("settings/rtx_vsr_quality", quality);
+			if (quality)
+				settings.setValue("settings/rtx_vsr_last_quality", quality);
+		}
+		// Mode restored when RTX VSR is switched back on from the stream menu.
+		int GetRtxVsrLastQuality() const
+		{
+			const int q = ValidRtxVsrQuality(settings.value("settings/rtx_vsr_last_quality", 4).toInt());
+			return q ? q : 4;
+		}
+		static int ValidRtxVsrQuality(int q) { return ((q >= 1 && q <= 4) || (q >= 8 && q <= 11) || q == 21 || q == 23) ? q : 0; }
+		// Frame generation backend: 0 = off, 1 = DLSS Frame Generation, 2 = FSR 3.1 Frame Generation
+		int GetFrameGenBackend() const { return qBound(0, settings.value("settings/frame_gen_backend", 0).toInt(), 2); }
+		void SetFrameGenBackend(int backend)
+		{
+			backend = qBound(0, backend, 2);
+			settings.setValue("settings/frame_gen_backend", backend);
+			if (backend)
+				settings.setValue("settings/frame_gen_last_backend", backend);
+		}
+		// Backend restored when frame generation is switched back on from the stream menu (0 = never chosen).
+		int GetFrameGenLastBackend() const { return qBound(0, settings.value("settings/frame_gen_last_backend", 0).toInt(), 2); }
+		// Output frames per stream frame (2 = one generated frame per real frame)
+		int GetFrameGenMultiplier() const { return qBound(2, settings.value("settings/frame_gen_multiplier", 2).toInt(), 4); }
+		void SetFrameGenMultiplier(int multiplier) { settings.setValue("settings/frame_gen_multiplier", qBound(2, multiplier, 4)); }
 		void SetPlaceboFrameMixer(PlaceboFrameMixer frame_mixer);
 
 		bool GetPlaceboDeinterlaceEnabled() const;

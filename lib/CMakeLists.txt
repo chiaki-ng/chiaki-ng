@@ -133,6 +133,10 @@ set_target_properties(chiaki-lib PROPERTIES OUTPUT_NAME chiaki)
 
 if(WIN32)
 	target_link_libraries(chiaki-lib wsock32 ws2_32 bcrypt iphlpapi)
+	if(MSVC)
+		# qWAVE marks the Takion socket as audio/video traffic (see takion.c).
+		target_link_libraries(chiaki-lib qwave)
+	endif()
 	if(NOT CHIAKI_LIB_ENABLE_MBEDTLS)
 		target_link_libraries(chiaki-lib crypt32)
 	endif()

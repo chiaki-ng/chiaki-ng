@@ -167,6 +167,7 @@ typedef struct chiaki_takion_t
 	uint32_t tag_local;
 	uint32_t tag_remote;
 	bool close_socket;
+	unsigned long qos_flow; // Windows qWAVE flow id (QOS_FLOWID), 0 = none
 
 	ChiakiSeqNum32 seq_num_local;
 	ChiakiMutex seq_num_local_mutex;

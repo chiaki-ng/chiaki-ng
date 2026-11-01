@@ -38,6 +38,9 @@ int main(int argc, char *argv[]) { return real_main(argc, argv); }
 #endif
 
 #include <QCommandLineParser>
+#ifdef Q_OS_WIN
+#include "windowsStreamTuning.h"
+#endif
 #include <QMap>
 #include <QSurfaceFormat>
 
@@ -89,6 +92,7 @@ int real_main(int argc, char *argv[])
 
 	qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu");
 #if defined(Q_OS_WIN)
+	installWindowsStreamThreadPriority();
 	const size_t cSize = strlen(argv[0])+1;
 	wchar_t wc[cSize];
 	mbstowcs (wc, argv[0], cSize);
