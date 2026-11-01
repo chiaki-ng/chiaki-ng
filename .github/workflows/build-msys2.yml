@@ -36,7 +36,6 @@ jobs:
             curl:p
             fast_float:p
             fftw:p
-            hidapi:p
             json-c:p
             libevent:p
             lcms2:p
@@ -87,6 +86,13 @@ jobs:
         run: |
           INSTALL_PREFIX=/mingw64 scripts/build-sdl2-compat.sh .
           cp /mingw64/lib/pkgconfig/sdl2-compat.pc /mingw64/lib/pkgconfig/sdl2.pc
+
+      - name: Build hidapi
+        run: |
+          git clone --depth 1 --branch hidapi-0.15.0 https://github.com/libusb/hidapi.git /tmp/hidapi
+          cmake -S /tmp/hidapi -B /tmp/hidapi/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/mingw64 -DHIDAPI_BUILD_HIDTEST=OFF
+          cmake --build /tmp/hidapi/build
+          cmake --install /tmp/hidapi/build
 
       - name: Configure chiaki-ng
         run: |
