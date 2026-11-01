@@ -48,9 +48,13 @@ set(CPACK_PACKAGE_DESCRIPTION "Open Source PlayStation Remote Play client for Li
 set(CPACK_PACKAGE_VERSION_MAJOR ${CHIAKI_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${CHIAKI_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${CHIAKI_VERSION_PATCH})
+set(CPACK_PACKAGE_CONTACT "chiaki-ng contributors <https://github.com/streetpea/chiaki-ng>")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/streetpea/chiaki-ng")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION ${CPACK_PACKAGE_DESCRIPTION})
 set(CPACK_DEBIAN_PACKAGE_SECTION "games")
+# libqt6webenginewidgets6 pulls in core Qt6 libs transitively; list other runtime deps not covered
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6webenginewidgets6 (>= 6.2), libopus0, libssl3, libudev1")
 include(CPack)
 
 set(CHIAKI_IS_SWITCH ${NSWITCH})
