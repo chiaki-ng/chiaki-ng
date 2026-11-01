@@ -102,6 +102,8 @@ class QmlSettings : public QObject
 	Q_PROPERTY(bool directFrameMapping READ directFrameMapping WRITE setDirectFrameMapping NOTIFY directFrameMappingChanged)
 	Q_PROPERTY(int rtxVsrQuality READ rtxVsrQuality WRITE setRtxVsrQuality NOTIFY rtxVsrQualityChanged)
 	Q_PROPERTY(bool rtxVsrSupported READ rtxVsrSupported CONSTANT)
+	Q_PROPERTY(bool rtxVsrExtendedModes READ rtxVsrExtendedModes CONSTANT)
+	Q_PROPERTY(QString rtxVsrDllVersion READ rtxVsrDllVersion CONSTANT)
 	Q_PROPERTY(int frameGenBackend READ frameGenBackend WRITE setFrameGenBackend NOTIFY frameGenBackendChanged)
 	Q_PROPERTY(int frameGenMultiplier READ frameGenMultiplier WRITE setFrameGenMultiplier NOTIFY frameGenMultiplierChanged)
 	Q_PROPERTY(bool frameGenSupported READ frameGenSupported CONSTANT)
@@ -359,6 +361,8 @@ public:
     Q_INVOKABLE void toggleRtxVsr();
     Q_INVOKABLE void toggleFrameGen();
     bool rtxVsrSupported() const;
+    bool rtxVsrExtendedModes() const;
+    QString rtxVsrDllVersion() const;
     int frameGenBackend() const;
     void setFrameGenBackend(int backend);
     int frameGenMultiplier() const;

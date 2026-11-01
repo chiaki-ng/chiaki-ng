@@ -4,6 +4,13 @@
 #include "vkguard.h"
 
 #include <QLoggingCategory>
+#include <QCoreApplication>
+#include <QDir>
+#include <QVersionNumber>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 Q_DECLARE_LOGGING_CATEGORY(chiakiGui);
 
@@ -32,6 +39,44 @@ const char *RtxVsr::qualityName(int quality)
     case 23: return "Streaming Ultra";
     default: return "Off";
     }
+}
+
+static QString readDllVersion()
+{
+#ifdef _WIN32
+    const QString path = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("nvngx_vsr.dll"));
+    const std::wstring wpath = QDir::toNativeSeparators(path).toStdWString();
+    DWORD handle = 0;
+    const DWORD size = GetFileVersionInfoSizeW(wpath.c_str(), &handle);
+    if (!size)
+        return QString();
+    std::vector<unsigned char> data(size);
+    if (!GetFileVersionInfoW(wpath.c_str(), 0, size, data.data()))
+        return QString();
+    VS_FIXEDFILEINFO *info = nullptr;
+    UINT info_len = 0;
+    if (!VerQueryValueW(data.data(), L"\\", reinterpret_cast<void **>(&info), &info_len) || !info || info_len < sizeof(*info))
+        return QString();
+    return QStringLiteral("%1.%2.%3.%4")
+        .arg(HIWORD(info->dwFileVersionMS)).arg(LOWORD(info->dwFileVersionMS))
+        .arg(HIWORD(info->dwFileVersionLS)).arg(LOWORD(info->dwFileVersionLS));
+#else
+    return QString();
+#endif
+}
+
+QString RtxVsr::dllVersion()
+{
+    static const QString version = readDllVersion();
+    return version;
+}
+
+bool RtxVsr::extendedModesAvailable()
+{
+    const QString version = dllVersion();
+    if (version.isEmpty())
+        return false;
+    return QVersionNumber::fromString(version) >= QVersionNumber(1, 8, 2);
 }
 
 #if defined(CHIAKI_HAVE_NGX)
@@ -612,7 +657,9 @@ bool RtxVsr::ensureInitialized(pl_vulkan vk)
         return false;
     }
     impl->initialized = true;
-    qCInfo(chiakiGui) << "[rtx-vsr] RTX Video Super Resolution initialized";
+    qCInfo(chiakiGui).nospace() << "[rtx-vsr] RTX Video Super Resolution initialized (nvngx_vsr.dll "
+                                << (dllVersion().isEmpty() ? QStringLiteral("version unknown") : dllVersion())
+                                << (extendedModesAvailable() ? ", all modes" : ", upscale modes only") << ")";
     return true;
 }
 

@@ -1,6 +1,8 @@
 #ifndef CHIAKI_GUI_RTXVSR_H
 #define CHIAKI_GUI_RTXVSR_H
 
+#include <QString>
+
 #include <libplacebo/renderer.h>
 #include <libplacebo/vulkan.h>
 
@@ -26,6 +28,14 @@ public:
     static bool keepsResolution(int quality);
     // Short human readable name of a mode, e.g. "High" or "AR Medium".
     static const char *qualityName(int quality);
+    // File version of the nvngx_vsr.dll next to the executable, e.g. "1.6.0.0"
+    // (empty when missing or unreadable). Read once and cached.
+    static QString dllVersion();
+    // Whether the installed nvngx_vsr.dll is new enough for the Artifact
+    // Reduction and Streaming modes (1.8.2 or newer).
+    static bool extendedModesAvailable();
+    // Whether `quality` needs the newer DLL (Artifact Reduction / Streaming).
+    static bool isExtendedQuality(int quality) { return quality > 4; }
 
     // Appends the Vulkan instance/device extensions NGX needs. They must be
     // requested as *optional* extensions before the instance/device is created.

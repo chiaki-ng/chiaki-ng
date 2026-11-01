@@ -1006,7 +1006,14 @@ void QmlSettings::setRtxVsrQuality(int quality)
 
 void QmlSettings::toggleRtxVsr()
 {
-    setRtxVsrQuality(settings->GetRtxVsrQuality() ? 0 : settings->GetRtxVsrLastQuality());
+    if (settings->GetRtxVsrQuality()) {
+        setRtxVsrQuality(0);
+        return;
+    }
+    int quality = settings->GetRtxVsrLastQuality();
+    if (RtxVsr::isExtendedQuality(quality) && !RtxVsr::extendedModesAvailable())
+        quality = 4;
+    setRtxVsrQuality(quality);
 }
 
 void QmlSettings::toggleFrameGen()
@@ -1024,6 +1031,16 @@ void QmlSettings::toggleFrameGen()
 bool QmlSettings::rtxVsrSupported() const
 {
     return RtxVsr::compiledIn();
+}
+
+bool QmlSettings::rtxVsrExtendedModes() const
+{
+    return RtxVsr::extendedModesAvailable();
+}
+
+QString QmlSettings::rtxVsrDllVersion() const
+{
+    return RtxVsr::dllVersion();
 }
 
 int QmlSettings::frameGenBackend() const

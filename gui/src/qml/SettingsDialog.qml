@@ -1000,6 +1000,7 @@ DialogView {
                     }
 
                     C.ComboBox {
+                        id: rtxVsrCombo
                         Layout.preferredWidth: 400
                         visible: Chiaki.settings.rtxVsrSupported
                         // NGX VSR.QualityLevel for each entry
@@ -1010,9 +1011,26 @@ DialogView {
                             qsTr("Artifact Reduction High"), qsTr("Artifact Reduction Ultra"),
                             qsTr("Streaming Medium (RTX 30+)"), qsTr("Streaming Ultra (RTX 30+)")]
                         currentIndex: Math.max(0, modes.indexOf(Chiaki.settings.rtxVsrQuality))
-                        onActivated: index => Chiaki.settings.rtxVsrQuality = modes[index]
+                        // Artifact Reduction / Streaming need nvngx_vsr.dll 1.8.2+.
+                        function modeAvailable(index) {
+                            return modes[index] <= 4 || Chiaki.settings.rtxVsrExtendedModes;
+                        }
+                        onActivated: index => {
+                            if (modeAvailable(index))
+                                Chiaki.settings.rtxVsrQuality = modes[index];
+                            else
+                                currentIndex = Qt.binding(() => Math.max(0, modes.indexOf(Chiaki.settings.rtxVsrQuality)));
+                        }
+                        delegate: ItemDelegate {
+                            required property var modelData
+                            required property int index
+                            width: ListView.view ? ListView.view.width : implicitWidth
+                            enabled: rtxVsrCombo.modeAvailable(index)
+                            text: enabled ? modelData : qsTr("%1 (needs nvngx_vsr.dll 1.8.2+)").arg(modelData)
+                            highlighted: rtxVsrCombo.highlightedIndex === index
+                        }
                         ToolTip.visible: hovered
-                        ToolTip.text: qsTr("NVIDIA RTX Video on SDR streams (RTX 20 series or newer, Vulkan renderer). Needs nvngx_vsr.dll next to chiaki.exe.\nUpscale: sharper picture when the window is larger than the stream.\nArtifact Reduction: removes compression blocking and banding at stream resolution.\nStreaming: upscale plus artifact cleanup for compressed streams.\nArtifact Reduction and Streaming need nvngx_vsr.dll 1.8.2 or newer (NVIDIA VFX SDK 1.2/1.3).")
+                        ToolTip.text: qsTr("NVIDIA RTX Video on SDR streams (RTX 20 series or newer, Vulkan renderer). Needs nvngx_vsr.dll next to chiaki.exe.\nUpscale: sharper picture when the window is larger than the stream.\nArtifact Reduction: removes compression blocking and banding at stream resolution.\nStreaming: upscale plus artifact cleanup for compressed streams.\nArtifact Reduction and Streaming need nvngx_vsr.dll 1.8.2 or newer (NVIDIA VFX SDK 1.2/1.3).\nInstalled nvngx_vsr.dll: %1").arg(Chiaki.settings.rtxVsrDllVersion.length ? Chiaki.settings.rtxVsrDllVersion : qsTr("not found"))
                     }
 
                     Label {

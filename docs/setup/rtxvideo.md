@@ -24,8 +24,16 @@ of latency).
 | Artifact Reduction Low … Ultra | removes compression blocking and banding at stream resolution; libplacebo scales afterwards | 1.8.2 or newer (NVIDIA VFX SDK 1.2+) |
 | Streaming Medium / Ultra | upscaling plus artifact cleanup tuned for compressed streams, RTX 30 series or newer | 1.8.3 or newer (NVIDIA VFX SDK 1.3+) |
 
-If a mode is not supported by the installed DLL or GPU, VSR turns itself off for
-the session and the log says which version is needed.
+chiaki-ng reads the version of the installed `nvngx_vsr.dll` at startup. With a
+DLL older than 1.8.2 the Artifact Reduction and Streaming entries are greyed out
+in Settings (the tooltip shows the installed version). If a mode is still
+rejected by the DLL or GPU, only that mode is skipped, the overlay shows
+"not supported (DLL/GPU)" and the log says which version is needed.
+
+As of late 2026 the public NVIDIA downloads for GeForce cards only ship
+`nvngx_vsr.dll` 1.6.0 (RTX Video SDK); the NVIDIA Video Effects 1.3 package is
+only offered for the RTX Spark series, and Video Effects 0.7.6 does not include
+`nvngx_vsr.dll`.
 
 ## Usage
 

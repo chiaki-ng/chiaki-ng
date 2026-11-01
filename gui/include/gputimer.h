@@ -14,7 +14,7 @@
 class VkGpuTimer
 {
 public:
-    bool init(pl_vulkan vk, PFN_vkGetDeviceProcAddr get_device_proc, uint32_t slots)
+    bool init(pl_vulkan vk, PFN_vkGetDeviceProcAddr get_device_proc, uint32_t slot_count)
     {
         destroy();
         auto get_instance_proc = vk->get_proc_addr;
@@ -37,13 +37,13 @@ public:
         VkQueryPoolCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
         info.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        info.queryCount = slots * 2;
+        info.queryCount = slot_count * 2;
         if (create_pool(vk->device, &info, nullptr, &pool) != VK_SUCCESS) {
             pool = VK_NULL_HANDLE;
             return false;
         }
         device = vk->device;
-        written.assign(slots, false);
+        written.assign(slot_count, false);
         return true;
     }
 
