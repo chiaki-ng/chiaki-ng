@@ -36,7 +36,6 @@ jobs:
             curl:p
             fast_float:p
             fftw:p
-            hidapi:p
             json-c:p
             lcms2:p
             libdovi:p
@@ -85,6 +84,13 @@ jobs:
         run: |
           INSTALL_PREFIX=/mingw64 scripts/build-sdl2-compat.sh .
           cp /mingw64/lib/pkgconfig/sdl2-compat.pc /mingw64/lib/pkgconfig/sdl2.pc
+
+      - name: Build hidapi
+        run: |
+          git clone --depth 1 --branch hidapi-0.15.0 https://github.com/libusb/hidapi.git /tmp/hidapi
+          cmake -S /tmp/hidapi -B /tmp/hidapi/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/mingw64 -DHIDAPI_BUILD_HIDTEST=OFF
+          cmake --build /tmp/hidapi/build
+          cmake --install /tmp/hidapi/build
 
       - name: Configure chiaki-ng
         run: |
@@ -147,6 +153,7 @@ jobs:
           brew update
           brew uninstall pkgconfig || true
           brew install qt@6 ffmpeg pkgconfig opus openssl@3 cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
+          brew unlink openssl@4 || true
 
       - name: Install sdl2-compat
         run: |
@@ -155,7 +162,7 @@ jobs:
 
       - name: Configure chiaki-ng
         run: |
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DOPENSSL_INCLUDE_DIR="$(brew --prefix)/opt/openssl@3/include" -DOPENSSL_CRYPTO_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libcrypto.dylib" -DOPENSSL_SSL_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libssl.dylib" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
 
       - name: Build chiaki-ng
         run: |
