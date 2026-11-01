@@ -1016,7 +1016,27 @@ Item {
                 Chiaki.stopSession(closeAction == 1);
         }
 
+        Item {
+            implicitWidth: stopDialogLayout.implicitWidth
+            implicitHeight: stopDialogLayout.implicitHeight
+
+            ToolButton {
+                anchors {
+                    right: parent.right
+                    top: parent.top
+                    rightMargin: -24
+                    topMargin: -24
+                }
+                text: "×"
+                font.pixelSize: 28
+                z: 1
+                focusPolicy: Qt.NoFocus
+                onClicked: sessionStopDialog.close()
+            }
+
         ColumnLayout {
+            id: stopDialogLayout
+            anchors.fill: parent
             Label {
                 Layout.alignment: Qt.AlignCenter
                 text: qsTr("Disconnect Session")
@@ -1038,7 +1058,7 @@ Item {
 
                 Button {
                     id: sleepButton
-                    Layout.preferredWidth: 200
+                    Layout.preferredWidth: 180
                     Layout.minimumHeight: 80
                     Layout.maximumHeight: 80
                     text: qsTr("Sleep")
@@ -1057,7 +1077,7 @@ Item {
 
                 Button {
                     id: noButton
-                    Layout.preferredWidth: 200
+                    Layout.preferredWidth: 180
                     Layout.minimumHeight: 80
                     Layout.maximumHeight: 80
                     text: qsTr("No")
@@ -1065,6 +1085,7 @@ Item {
                     Material.roundedScale: Material.SmallScale
                     Material.background: activeFocus ? parent.Material.accent : undefined
                     KeyNavigation.left: sleepButton
+                    KeyNavigation.right: cancelButton
                     Keys.onReturnPressed: clicked()
                     Keys.onEscapePressed: sessionStopDialog.close()
                     onClicked: {
@@ -1072,7 +1093,24 @@ Item {
                         sessionStopDialog.close();
                     }
                 }
+
+                Button {
+                    id: cancelButton
+                    Layout.preferredWidth: 180
+                    Layout.minimumHeight: 80
+                    Layout.maximumHeight: 80
+                    text: qsTr("Cancel")
+                    font.pixelSize: 24
+                    Material.roundedScale: Material.SmallScale
+                    Material.background: activeFocus ? parent.Material.accent : undefined
+                    KeyNavigation.left: noButton
+                    Keys.onReturnPressed: clicked()
+                    Keys.onEscapePressed: sessionStopDialog.close()
+                    // Keeps the stream running.
+                    onClicked: sessionStopDialog.close()
+                }
             }
+        }
         }
     }
 
@@ -1113,6 +1151,19 @@ Item {
             border.width: 1
         }
 
+        ToolButton {
+            anchors {
+                right: parent.right
+                top: parent.top
+                margins: 6
+            }
+            text: "×"
+            font.pixelSize: 28
+            z: 1
+            focusPolicy: Qt.NoFocus
+            onClicked: separateSessionStopWindow.visible = false
+        }
+
         ColumnLayout {
             anchors.centerIn: parent
 
@@ -1137,7 +1188,7 @@ Item {
 
                 Button {
                     id: separateSleepButton
-                    Layout.preferredWidth: 200
+                    Layout.preferredWidth: 180
                     Layout.minimumHeight: 80
                     Layout.maximumHeight: 80
                     text: qsTr("Sleep")
@@ -1155,7 +1206,7 @@ Item {
 
                 Button {
                     id: separateNoButton
-                    Layout.preferredWidth: 200
+                    Layout.preferredWidth: 180
                     Layout.minimumHeight: 80
                     Layout.maximumHeight: 80
                     text: qsTr("No")
@@ -1163,12 +1214,29 @@ Item {
                     Material.roundedScale: Material.SmallScale
                     Material.background: activeFocus ? parent.Material.accent : undefined
                     KeyNavigation.left: separateSleepButton
+                    KeyNavigation.right: separateCancelButton
                     Keys.onReturnPressed: clicked()
                     Keys.onEscapePressed: separateSessionStopWindow.visible = false
                     onClicked: {
                         separateSessionStopWindow.closeAction = 2;
                         separateSessionStopWindow.visible = false;
                     }
+                }
+
+                Button {
+                    id: separateCancelButton
+                    Layout.preferredWidth: 180
+                    Layout.minimumHeight: 80
+                    Layout.maximumHeight: 80
+                    text: qsTr("Cancel")
+                    font.pixelSize: 24
+                    Material.roundedScale: Material.SmallScale
+                    Material.background: activeFocus ? parent.Material.accent : undefined
+                    KeyNavigation.left: separateNoButton
+                    Keys.onReturnPressed: clicked()
+                    Keys.onEscapePressed: separateSessionStopWindow.visible = false
+                    // Keeps the stream running.
+                    onClicked: separateSessionStopWindow.visible = false
                 }
             }
         }
