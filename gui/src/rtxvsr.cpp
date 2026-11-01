@@ -231,16 +231,16 @@ bool RtxVsr::Impl::init(pl_vulkan vk_)
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (vkBeginCommandBuffer(cmd, &begin_info) != VK_SUCCESS)
         return false;
-    unsigned long exception_code = 0;
+    unsigned long seh_code = 0;
     bool ngx_ok;
     {
         // NGX may submit to libplacebo's queues itself.
         VkQueuesLock queues_lock(vk);
-        ngx_ok = guardedCall([&]() { return initNgx(cmd); }, &exception_code);
+        ngx_ok = guardedCall([&]() { return initNgx(cmd); }, &seh_code);
     }
-    if (exception_code) {
+    if (seh_code) {
         qCCritical(chiakiGui).nospace() << "[rtx-vsr] NGX crashed while creating VSR (exception 0x"
-                                        << Qt::hex << exception_code << ")";
+                                        << Qt::hex << seh_code << ")";
         // Never call into NGX again for VSR; leave its objects alone.
         feature = nullptr;
         params = nullptr;
@@ -477,17 +477,17 @@ bool RtxVsr::Impl::evaluate(Image &out, int in_w, int in_h, int quality)
     if (ok) {
         timer.begin(slot.cmd, slot_index);
         NVSDK_NGX_Result result = NVSDK_NGX_Result_Fail;
-        unsigned long exception_code = 0;
+        unsigned long seh_code = 0;
         {
             VkQueuesLock queues_lock(vk);
             guardedCall([&]() {
                 result = NVSDK_NGX_VULKAN_EvaluateFeature_C(slot.cmd, feature, params, nullptr);
                 return true;
-            }, &exception_code);
+            }, &seh_code);
         }
-        if (exception_code) {
+        if (seh_code) {
             qCCritical(chiakiGui).nospace() << "[rtx-vsr] NGX crashed while evaluating VSR (exception 0x"
-                                            << Qt::hex << exception_code << ")";
+                                            << Qt::hex << seh_code << ")";
             crashed = true;
             ok = false;
         } else if (NVSDK_NGX_FAILED(result)) {

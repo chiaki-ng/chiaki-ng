@@ -9,8 +9,9 @@ typedef int (*ChiakiGuardedFunc)(void *ctx);
 
 // Runs fn(ctx). On Windows MSVC/clang-cl builds a structured exception (access
 // violation, ...) raised inside it is caught: the call returns 0 and stores the
-// exception code. Elsewhere fn is called directly and *exception_code is 0.
-int chiaki_guarded_call(ChiakiGuardedFunc fn, void *ctx, unsigned long *exception_code);
+// exception code in *out_code. Elsewhere fn is called directly and *out_code is 0.
+// (Not named exception_code: excpt.h defines a macro of that name.)
+int chiaki_guarded_call(ChiakiGuardedFunc fn, void *ctx, unsigned long *out_code);
 
 #ifdef __cplusplus
 }
@@ -23,12 +24,12 @@ int chiaki_guarded_call(ChiakiGuardedFunc fn, void *ctx, unsigned long *exceptio
 
 // Calls `f` (returning bool) through chiaki_guarded_call.
 template<typename F>
-bool guardedCall(F &&f, unsigned long *exception_code)
+bool guardedCall(F &&f, unsigned long *seh_code)
 {
     using Fn = std::remove_reference_t<F>;
     return chiaki_guarded_call([](void *p) -> int {
         return (*static_cast<Fn *>(p))() ? 1 : 0;
-    }, &f, exception_code) != 0;
+    }, &f, seh_code) != 0;
 }
 
 // Locks every graphics/compute/transfer queue libplacebo created while it is

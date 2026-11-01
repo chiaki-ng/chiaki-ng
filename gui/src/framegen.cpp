@@ -985,11 +985,11 @@ bool FrameGen::ensureInitialized(pl_vulkan vk, Backend backend)
 #endif
     default: break;
     }
-    unsigned long exception_code = 0;
-    const bool init_ok = impl_backend && guardedCall([&]() { return impl_backend->init(d); }, &exception_code);
-    if (exception_code) {
+    unsigned long seh_code = 0;
+    const bool init_ok = impl_backend && guardedCall([&]() { return impl_backend->init(d); }, &seh_code);
+    if (seh_code) {
         qCCritical(chiakiGui).nospace() << "[framegen] " << backendName(backend)
-            << " crashed while starting (exception 0x" << Qt::hex << exception_code << ")";
+            << " crashed while starting (exception 0x" << Qt::hex << seh_code << ")";
         (void)impl_backend.release();
     }
     if (!init_ok) {
@@ -1130,17 +1130,17 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
         ok = d.vkBeginCommandBuffer(slot.cmd, &begin_info) == VK_SUCCESS;
         if (ok) {
             d.timer.begin(slot.cmd, slot_index);
-            unsigned long exception_code = 0;
+            unsigned long seh_code = 0;
             {
                 // The runtimes may submit to libplacebo's queues themselves.
                 VkQueuesLock queues_lock(d.vk);
                 ok = guardedCall([&]() {
                     return d.backend_impl->record(d, slot.cmd, set.real, generated, count, reset, frame_interval_ms);
-                }, &exception_code);
+                }, &seh_code);
             }
-            if (exception_code) {
+            if (seh_code) {
                 qCCritical(chiakiGui).nospace() << "[framegen] " << backendName(d.backend)
-                    << " crashed inside its runtime (exception 0x" << Qt::hex << exception_code << ")";
+                    << " crashed inside its runtime (exception 0x" << Qt::hex << seh_code << ")";
                 backend_crashed = true;
                 ok = false;
             }
