@@ -3,6 +3,7 @@
 #include <streamsession.h>
 #include <settings.h>
 #include <controllermanager.h>
+#include <dualsensebthaptics.h>
 
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>
@@ -653,6 +654,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	key_map = connect_info.key_map;
 	if (connect_info.enable_dualsense)
 	{
+		dualsense_features_enabled = true;
 		InitHaptics();
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 		// Connect Steam Deck haptics with a delay to give other potential haptics time to set up
@@ -716,6 +718,7 @@ StreamSession::~StreamSession()
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 	StopSdeckHaptics();
 #endif
+	StopBtHaptics();
 
 	// Prepare log for shutdown BEFORE joining session threads
 	// This prevents crashes from log callbacks during shutdown
@@ -1150,6 +1153,8 @@ void StreamSession::UpdateGamepads()
 			if (controller->IsDualSense() || controller->IsDualSenseEdge())
 			{
 				DisconnectHaptics();
+				if(controller_id == bt_haptics_controller_id)
+					StopBtHaptics();
 			}
 			if (!controller->IsHandheld() && !controller->IsSteamVirtualUnmasked())
 			{
@@ -1202,6 +1207,13 @@ void StreamSession::UpdateGamepads()
 				uint8_t trigger_intensity = (ps5_trigger_intensity < 0) ? 0xF0 : ps5_trigger_intensity;
 				uint8_t rumble_intensity = (ps5_rumble_intensity < 0) ? 0x0F : ps5_rumble_intensity;
 				controller->SetDualsenseMic(muted);
+				if(controller->IsBluetooth())
+				{
+					// No audio device over Bluetooth: stream haptics as HID reports instead
+					if(!bt_haptics_active)
+						ConnectBtHaptics(controller, controller_id);
+					continue;
+				}
 				if(this->haptics_output > 0)
 					continue;
 				// Connect haptics audio device with a delay to give the sound system time to set up
@@ -1861,6 +1873,72 @@ void StreamSession::ConnectHaptics()
 	return;
 }
 
+void StreamSession::ConnectBtHaptics(Controller *controller, int controller_id)
+{
+	if(!dualsense_features_enabled || bt_haptics_thread)
+		return;
+	QString hid_path = controller->GetHidPath();
+	if(hid_path.isEmpty())
+	{
+		CHIAKI_LOGW(log.GetChiakiLog(), "DualSense connected over Bluetooth but SDL did not report a HID path, using rumble haptics fallback");
+		return;
+	}
+
+	bt_haptics_suppress_rumble = qEnvironmentVariableIntValue("CHIAKI_BT_HAPTICS_KEEP_RUMBLE") == 0;
+	bt_rumble_suppressed = false;
+	bt_haptics_last_nonsilent_ms = 0;
+	CHIAKI_LOGI(log.GetChiakiLog(), "DualSense BT haptics: console rumble %s while haptics play",
+		bt_haptics_suppress_rumble ? "suppressed" : "kept");
+
+	bt_haptics_thread = new QThread(this);
+	bt_haptics = new DualSenseBtHaptics(log.GetChiakiLog());
+	bt_haptics->moveToThread(bt_haptics_thread);
+	bt_haptics_controller_id = controller_id;
+	// The worker is only deleted on its own thread, so capturing it is safe for queued calls
+	DualSenseBtHaptics *worker = bt_haptics;
+	connect(bt_haptics_thread, &QThread::started, worker, [this, worker, hid_path] {
+		bool ok = worker->Open(hid_path);
+		QMetaObject::invokeMethod(this, [this, worker, ok] {
+			if(bt_haptics != worker)
+				return;
+			if(ok)
+				bt_haptics_active = true;
+			else
+				StopBtHaptics();
+		}, Qt::QueuedConnection);
+	});
+	connect(this, &StreamSession::BtHapticsPushed, worker, [this, worker](QByteArray samples) {
+		if(!worker->IsOpen())
+			return;
+		worker->PushSamples(samples);
+		if(!worker->IsOpen())
+		{
+			// Device stopped accepting reports: fall back to rumble haptics
+			bt_haptics_active = false;
+			QMetaObject::invokeMethod(this, &StreamSession::StopBtHaptics, Qt::QueuedConnection);
+		}
+	}, Qt::QueuedConnection);
+	bt_haptics_thread->start();
+}
+
+void StreamSession::StopBtHaptics()
+{
+	bt_haptics_active = false;
+	bt_haptics_controller_id = -1;
+	if(!bt_haptics_thread)
+		return;
+	QThread *thread = bt_haptics_thread;
+	DualSenseBtHaptics *worker = bt_haptics;
+	bt_haptics_thread = nullptr;
+	bt_haptics = nullptr;
+	QMetaObject::invokeMethod(worker, [worker, thread] {
+		delete worker;
+		thread->quit();
+	}, Qt::QueuedConnection);
+	thread->wait();
+	delete thread;
+}
+
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 void StreamSession::ConnectSdeckHaptics()
 {
@@ -2202,6 +2280,30 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 		return;
 	}
 #endif
+	if(bt_haptics_active && haptics_output == 0)
+	{
+		if(ps5_rumble_intensity < 0)
+			return;
+		// 16-bit stereo -> 8-bit stereo, both at the console's native 3 kHz
+		const size_t sample_count = buf_size / sizeof(int16_t);
+		QByteArray samples((qsizetype)sample_count, Qt::Uninitialized);
+		bool nonsilent = false;
+		for(size_t i = 0; i < sample_count; i++)
+		{
+			int16_t amplitude;
+			memcpy(&amplitude, buf + i * sizeof(int16_t), sizeof(int16_t));
+			int32_t adjusted = static_cast<int32_t>(amplitude * haptic_override) / 256;
+			adjusted = (adjusted > INT8_MAX) ? INT8_MAX : adjusted;
+			adjusted = (adjusted < INT8_MIN) ? INT8_MIN : adjusted;
+			if(adjusted != 0)
+				nonsilent = true;
+			samples[(qsizetype)i] = static_cast<char>(static_cast<int8_t>(adjusted));
+		}
+		if(nonsilent)
+			bt_haptics_last_nonsilent_ms = chiaki_time_now_monotonic_ms();
+		emit BtHapticsPushed(samples);
+		return;
+	}
 	if((rumble_haptics_intensity != RumbleHapticsIntensity::Off) && haptics_output == 0)
 	{
 		int16_t amplitudel = 0, amplituder = 0;
@@ -2368,8 +2470,21 @@ void StreamSession::Event(ChiakiEvent *event)
 			uint8_t left_adj = left * rumble_multiplier;
 			uint8_t right_adj = right * rumble_multiplier;
 			QMetaObject::invokeMethod(this, [this, left, right, left_adj, right_adj]() {
-				for(auto controller : controllers)
+				// While a Bluetooth DualSense is playing the console's haptics stream, the
+				// rumble values are a compatibility copy of the same effect. Forwarding them
+				// adds motor buzz on top of the haptics and every change costs an extra
+				// Bluetooth report competing with the haptics reports, so drop them.
+				const bool suppress_bt_rumble = bt_haptics_suppress_rumble && bt_haptics_active
+					&& (chiaki_time_now_monotonic_ms() - bt_haptics_last_nonsilent_ms.load()) < 250;
+				for(auto it = controllers.begin(); it != controllers.end(); ++it)
 				{
+					Controller *controller = it.value();
+					if(suppress_bt_rumble && it.key() == bt_haptics_controller_id)
+					{
+						if(!bt_rumble_suppressed)
+							controller->SetRumble(0, 0);
+						continue;
+					}
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 					if(haptics_handheld < 1 && (controller->IsHandheld() || (sdeck && controller->IsSteamVirtualUnmasked())))
 #else
@@ -2381,6 +2496,7 @@ void StreamSession::Event(ChiakiEvent *event)
 					else
 						controller->SetRumble(left_adj, right_adj);
 				}
+				bt_rumble_suppressed = suppress_bt_rumble;
 			});
 			break;
 		}

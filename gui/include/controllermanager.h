@@ -99,6 +99,7 @@ class Controller : public QObject
 		bool is_steam_virtual;
 		bool is_steam_virtual_unmasked;
 		bool is_dualsense_edge;
+		bool is_bluetooth;
 		bool has_led;
 		bool micbutton_push;
 		uint16_t firmware_version;
@@ -142,6 +143,9 @@ class Controller : public QObject
 		bool IsSteamVirtual();
 		bool IsSteamVirtualUnmasked();
 		bool IsDualSenseEdge();
+		bool IsBluetooth();
+		// Path usable with SDL_hid_open_path(), empty if SDL is not driving the device through HIDAPI
+		QString GetHidPath();
 		void resetMotionControls();
 
 	signals:

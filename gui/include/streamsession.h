@@ -42,6 +42,8 @@
 #include <QThread>
 #include <QWaitCondition>
 #include <QAtomicInteger>
+
+#include <atomic>
 #if CHIAKI_GUI_ENABLE_SPEEX
 #include <QQueue>
 #include <speex/speex_echo.h>
@@ -66,6 +68,8 @@ typedef struct haptic_packet_t
 
 class SdeckHapticsWorker;
 #endif
+
+class DualSenseBtHaptics;
 
 	struct StreamSessionConnectInfo
 	{
@@ -279,6 +283,16 @@ class StreamSession : public QObject
 		QQueue<QByteArray> echo_to_cancel;
 #endif
 		SDL_AudioDeviceID haptics_output;
+		QThread *bt_haptics_thread = nullptr;
+		DualSenseBtHaptics *bt_haptics = nullptr;
+		int bt_haptics_controller_id = -1;
+		bool dualsense_features_enabled = false;
+		std::atomic<bool> bt_haptics_active{false};
+		// Monotonic ms of the last non-silent haptics frame sent over Bluetooth
+		std::atomic<uint64_t> bt_haptics_last_nonsilent_ms{0};
+		// Drop the console's rumble for the BT DualSense while it is playing haptics
+		bool bt_haptics_suppress_rumble = true;
+		bool bt_rumble_suppressed = false;
 		SDL_AudioCVT haptics_cvt;
 		uint8_t *haptics_resampler_buf;
 		MicBuf mic_buf;
@@ -321,6 +335,8 @@ class StreamSession : public QObject
 		void Event(ChiakiEvent *event);
 		void DisconnectHaptics();
 		void ConnectHaptics();
+		void ConnectBtHaptics(Controller *controller, int controller_id);
+		void StopBtHaptics();
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 		void ConnectSdeckHaptics();
 		void StopSdeckHaptics();
@@ -379,6 +395,7 @@ class StreamSession : public QObject
 	signals:
 		void FfmpegFrameAvailable();
 		void RumbleHapticPushed(uint16_t strength);
+		void BtHapticsPushed(QByteArray samples);
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 		void SdeckHapticPushed(haptic_packet_t packetl, haptic_packet_t packetr);
 #endif
