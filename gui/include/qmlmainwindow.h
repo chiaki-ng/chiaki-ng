@@ -62,6 +62,8 @@ class QmlMainWindow : public QWindow
     Q_PROPERTY(bool hasVideo READ hasVideo NOTIFY hasVideoChanged)
     Q_PROPERTY(int droppedFrames READ droppedFrames NOTIFY droppedFramesChanged)
     Q_PROPERTY(QString videoEnhancementStatus READ videoEnhancementStatus NOTIFY videoEnhancementStatusChanged)
+    Q_PROPERTY(double streamFps READ streamFps NOTIFY fpsChanged)
+    Q_PROPERTY(double displayFps READ displayFps NOTIFY fpsChanged)
     Q_PROPERTY(bool keepVideo READ keepVideo WRITE setKeepVideo NOTIFY keepVideoChanged)
     Q_PROPERTY(bool loadingTransitionComplete READ loadingTransitionComplete NOTIFY loadingTransitionCompleteChanged)
     Q_PROPERTY(VideoMode videoMode READ videoMode WRITE setVideoMode NOTIFY videoModeChanged)
@@ -115,6 +117,8 @@ public:
     bool hasVideo() const;
     int droppedFrames() const;
     QString videoEnhancementStatus() const { return video_enhancement_status; }
+    double streamFps() const { return stream_fps; }
+    double displayFps() const { return display_fps; }
     void increaseDroppedFrames();
 
     bool directStream() const;
@@ -178,6 +182,7 @@ signals:
     void hasVideoChanged();
     void droppedFramesChanged();
     void videoEnhancementStatusChanged();
+    void fpsChanged();
     void keepVideoChanged();
     void videoModeChanged();
     void zoomFactorChanged();
@@ -315,6 +320,13 @@ private:
     bool is_window_adjustable = false;
     bool is_stream_window_adjustable = false;
     QAtomicInteger<int> dropped_frames_current = 0;
+    // Frames decoded from the stream / frames handed to the swapchain, counted
+    // between two ticks of the 1 s stats timer.
+    QAtomicInteger<int> stream_frames_current = 0;
+    QAtomicInteger<int> display_frames_current = 0;
+    double stream_fps = 0.0;
+    double display_fps = 0.0;
+    qint64 fps_sample_us = 0;
     // Written by the render thread, shown in the stats overlay.
     // Configured RTX VSR mode (0 = off) and its state: 1 active, 2 idle, 3 mode unsupported.
     QAtomicInteger<int> vsr_status_quality = 0;

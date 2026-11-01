@@ -356,6 +356,8 @@ public:
     void setDirectFrameMapping(bool enabled);
     int rtxVsrQuality() const;
     void setRtxVsrQuality(int quality);
+    Q_INVOKABLE void toggleRtxVsr();
+    Q_INVOKABLE void toggleFrameGen();
     bool rtxVsrSupported() const;
     int frameGenBackend() const;
     void setFrameGenBackend(int backend);

@@ -169,6 +169,7 @@ public:
         valueFont.setBold(true);
 
         bitrateRow = makeRow(tr("Mbps"), QColor(QStringLiteral("#00a7ff")), titleFont, valueFont, bitrateValue);
+        fpsRow = makeRow(tr("fps stream / display"), QColor(QStringLiteral("#ffe082")), titleFont, valueFont, fpsValue);
         queueRow = makeRow(tr("queue depth avg"), QColor(QStringLiteral("#90caf9")), titleFont, valueFont, queueDepthValue);
         pendingRow = makeRow(tr("pending frame age"), QColor(QStringLiteral("#90caf9")), titleFont, valueFont, pendingAgeValue);
         packetLossRow = makeRow(tr("packet loss"), QColor(QStringLiteral("#ef9a9a")), titleFont, valueFont, packetLossValue);
@@ -182,6 +183,7 @@ public:
         connect(owner, &QmlMainWindow::pendingFrameAgeChanged, this, &StatsOverlayWidget::refresh);
         connect(owner, &QmlMainWindow::droppedFramesChanged, this, &StatsOverlayWidget::refresh);
         connect(owner, &QmlMainWindow::videoEnhancementStatusChanged, this, &StatsOverlayWidget::refresh);
+        connect(owner, &QmlMainWindow::fpsChanged, this, &StatsOverlayWidget::refresh);
         if (backend) {
             connect(backend, &QmlBackend::sessionChanged, this, [this](StreamSession *s) {
                 setSession(s);
@@ -253,6 +255,12 @@ public:
         else
             bitrateValue->clear();
 
+        fpsRow->setVisible(hasSession);
+        if (hasSession && owner)
+            fpsValue->setText(QStringLiteral("%1 / %2").arg(owner->streamFps(), 0, 'f', 0).arg(owner->displayFps(), 0, 'f', 0));
+        else
+            fpsValue->clear();
+
         queueRow->setVisible(true);
         queueDepthValue->setText(QString::number(owner ? owner->queueDepthAverage() : 0.0, 'f', 1));
         pendingRow->setVisible(true);
@@ -286,6 +294,8 @@ private:
     QPointer<QmlBackend> backend;
     QPointer<StreamSession> current_session;
     QWidget *bitrateRow = nullptr;
+    QWidget *fpsRow = nullptr;
+    QLabel *fpsValue = nullptr;
     QWidget *queueRow = nullptr;
     QWidget *pendingRow = nullptr;
     QWidget *packetLossRow = nullptr;
@@ -3030,6 +3040,7 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
 
     if (!frame.frame)
         return;
+    stream_frames_current.fetchAndAddRelaxed(1);
 
     if (bypass_frame_queue) {
         {
@@ -5316,6 +5327,21 @@ renderer_backend_ready:
             emit droppedFramesChanged();
         }
 
+        const qint64 fps_now_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
+        const int stream_frames = stream_frames_current.fetchAndStoreRelaxed(0);
+        const int display_frames = display_frames_current.fetchAndStoreRelaxed(0);
+        if (fps_sample_us > 0 && fps_now_us > fps_sample_us) {
+            const double elapsed_s = (fps_now_us - fps_sample_us) / 1e6;
+            const double next_stream_fps = stream_frames / elapsed_s;
+            const double next_display_fps = display_frames / elapsed_s;
+            if (qAbs(next_stream_fps - stream_fps) >= 0.05 || qAbs(next_display_fps - display_fps) >= 0.05) {
+                stream_fps = next_stream_fps;
+                display_fps = next_display_fps;
+                emit fpsChanged();
+            }
+        }
+        fps_sample_us = fps_now_us;
+
         QStringList parts;
         const int vsr_quality = vsr_status_quality.loadRelaxed();
         if (RtxVsr::isValidQuality(vsr_quality) && rtx_vsr) {
@@ -5793,6 +5819,7 @@ void QmlMainWindow::processDeferredSwapTask(qint64 submit_begin_us,
         if (!pl_swapchain_submit_frame(placebo_swapchain))
             qCWarning(chiakiGui) << "Failed to submit Placebo frame on deferred thread!";
         else {
+            display_frames_current.fetchAndAddRelaxed(1);
             const qint64 submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_call_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()
@@ -7160,6 +7187,7 @@ void QmlMainWindow::render()
                 if (!pl_swapchain_submit_frame(placebo_swapchain))
                     qCWarning(chiakiGui) << "Failed to submit Placebo frame!";
                 else {
+                    display_frames_current.fetchAndAddRelaxed(1);
                     submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()

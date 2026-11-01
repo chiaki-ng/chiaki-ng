@@ -1004,6 +1004,23 @@ void QmlSettings::setRtxVsrQuality(int quality)
     emit rtxVsrQualityChanged();
 }
 
+void QmlSettings::toggleRtxVsr()
+{
+    setRtxVsrQuality(settings->GetRtxVsrQuality() ? 0 : settings->GetRtxVsrLastQuality());
+}
+
+void QmlSettings::toggleFrameGen()
+{
+    if (settings->GetFrameGenBackend()) {
+        setFrameGenBackend(0);
+        return;
+    }
+    int backend = settings->GetFrameGenLastBackend();
+    if (!backend || !FrameGen::backendCompiledIn(static_cast<FrameGen::Backend>(backend)))
+        backend = FrameGen::backendCompiledIn(FrameGen::Backend::Dlss) ? 1 : 2;
+    setFrameGenBackend(backend);
+}
+
 bool QmlSettings::rtxVsrSupported() const
 {
     return RtxVsr::compiledIn();
