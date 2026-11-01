@@ -131,6 +131,7 @@ dependencies {
     ksp libs.moshi.kotlin.codegen
 
     implementation libs.oboe
+    implementation libs.hiddenapibypass
 
     testImplementation 'junit:junit:4.13.2'
 }
