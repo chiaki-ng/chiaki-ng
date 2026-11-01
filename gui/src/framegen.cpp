@@ -41,6 +41,7 @@ Q_DECLARE_LOGGING_CATEGORY(chiakiGui);
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <string>
 
 namespace {
@@ -153,11 +154,11 @@ struct FrameGen::Impl
     void destroyBackend();
     bool loadFunctions();
     bool waitDone(uint64_t value);
-    bool ensureImage(FgImage &img, int w, int h, pl_fmt fmt, bool renderable, bool host_writable);
+    bool ensureImage(FgImage &img, int w, int h, pl_fmt fmt, bool renderable, bool clearable);
     void destroyImage(FgImage &img);
     void destroyImages();
-    bool ensureSize(int w, int h);
-    bool fillConstant(FgImage &img, const void *texel, size_t texel_size);
+    bool ensureSize(int w, int h, const std::function<void(const char *)> &trace);
+    bool fillConstant(FgImage &img, const float value[4], const void *texel, size_t texel_size);
     bool hold(FgImage &img);
     void release(FgImage &img, VkSemaphore sem, uint64_t value);
     bool submit(VkCommandBuffer cmd, FgImage *const *waits, size_t num_waits);
@@ -271,7 +272,7 @@ bool FrameGen::Impl::waitDone(uint64_t value)
     return true;
 }
 
-bool FrameGen::Impl::ensureImage(FgImage &img, int w, int h, pl_fmt fmt, bool renderable, bool host_writable)
+bool FrameGen::Impl::ensureImage(FgImage &img, int w, int h, pl_fmt fmt, bool renderable, bool clearable)
 {
     if (img.tex && img.w == w && img.h == h)
         return true;
@@ -284,7 +285,10 @@ bool FrameGen::Impl::ensureImage(FgImage &img, int w, int h, pl_fmt fmt, bool re
     tex_params.sampleable = true;
     tex_params.storable = true;
     tex_params.renderable = renderable;
-    tex_params.host_writable = host_writable;
+    // Constant inputs are filled on the GPU (clear or buffer copy) instead of a
+    // host upload: host image copies of large float images stalled the render
+    // thread on some drivers.
+    tex_params.blit_dst = clearable && (fmt->caps & PL_FMT_CAP_BLITTABLE);
     img.tex = pl_tex_create(gpu, &tex_params);
     if (!img.tex)
         return false;
@@ -344,18 +348,34 @@ void FrameGen::Impl::destroyImages()
     width = height = 0;
 }
 
-bool FrameGen::Impl::fillConstant(FgImage &img, const void *texel, size_t texel_size)
+bool FrameGen::Impl::fillConstant(FgImage &img, const float value[4], const void *texel, size_t texel_size)
 {
+    if (img.tex->params.blit_dst) {
+        union pl_clear_color color = {};
+        for (int i = 0; i < 4; i++)
+            color.f[i] = value[i];
+        pl_tex_clear_ex(gpu, img.tex, color);
+        return true;
+    }
+    // Fallback: copy from a device buffer through the command queue.
     std::vector<uint8_t> data(static_cast<size_t>(img.w) * img.h * texel_size);
     for (size_t off = 0; off < data.size(); off += texel_size)
         std::copy_n(static_cast<const uint8_t *>(texel), texel_size, data.begin() + off);
+    struct pl_buf_params buf_params = {};
+    buf_params.size = data.size();
+    buf_params.initial_data = data.data();
+    pl_buf buf = pl_buf_create(gpu, &buf_params);
+    if (!buf)
+        return false;
     struct pl_tex_transfer_params transfer = {};
     transfer.tex = img.tex;
-    transfer.ptr = data.data();
-    return pl_tex_upload(gpu, &transfer);
+    transfer.buf = buf;
+    const bool ok = pl_tex_upload(gpu, &transfer);
+    pl_buf_destroy(gpu, &buf);
+    return ok;
 }
 
-bool FrameGen::Impl::ensureSize(int w, int h)
+bool FrameGen::Impl::ensureSize(int w, int h, const std::function<void(const char *)> &trace)
 {
     if (w == width && h == height && mvec.tex)
         return true;
@@ -373,12 +393,22 @@ bool FrameGen::Impl::ensureSize(int w, int h)
                 return false;
         }
     }
+    trace("color textures created");
     if (!ensureImage(mvec, w, h, fmt_mvec, false, true) || !ensureImage(depth, w, h, fmt_depth, false, true))
         return false;
+    trace(mvec.tex->params.blit_dst && depth.tex->params.blit_dst
+              ? "motion/depth textures created (gpu clear)"
+              : "motion/depth textures created (buffer copy)");
+    const float zero_value[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    const float depth_clear[4] = { kConstantDepth, 0.0f, 0.0f, 0.0f };
     const uint16_t zero_mvec[2] = { 0, 0 };
     const float depth_value = kConstantDepth;
-    if (!fillConstant(mvec, zero_mvec, sizeof(zero_mvec)) || !fillConstant(depth, &depth_value, sizeof(depth_value)))
+    if (!fillConstant(mvec, zero_value, zero_mvec, sizeof(zero_mvec)))
         return false;
+    trace("motion vectors filled");
+    if (!fillConstant(depth, depth_clear, &depth_value, sizeof(depth_value)))
+        return false;
+    trace("depth filled");
 
     width = w;
     height = h;
@@ -1068,7 +1098,7 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
             qCInfo(chiakiGui).nospace() << "[framegen] frame " << d.trace_frames << ": " << step
                                         << " (" << trace_timer.elapsed() << " ms)";
     };
-    if (!d.ensureSize(out_w, out_h)) {
+    if (!d.ensureSize(out_w, out_h, trace_step)) {
         qCWarning(chiakiGui) << "[framegen] Could not allocate frame generation textures";
         return false;
     }
