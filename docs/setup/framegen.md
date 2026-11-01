@@ -41,6 +41,17 @@ The stream carries no motion vectors or depth, so both backends get zero
 motion vectors and a constant depth and rely on their own optical flow. Fast
 motion and on-screen UI can show artifacts.
 
+## If it crashes
+
+Frame generation calls into the NVIDIA and AMD runtimes. A crash inside them is
+caught where possible and only turns frame generation off for the session. If
+chiaki-ng still closes while frame generation starts, it is switched off
+automatically on the next launch (the log says so); turn it back on in the
+settings once you want to retry.
+
+The first frames log each step (`[framegen] frame N: ...`), which shows where
+it stopped.
+
 ## Log messages
 
 - `[framegen] ... initialized` and `Frame generation active: ... Nx` → working.

@@ -1,6 +1,7 @@
 #include "framegen.h"
 #include "ngxcore.h"
 #include "gputimer.h"
+#include "vkguard.h"
 
 #include <QLoggingCategory>
 
@@ -14,6 +15,7 @@ Q_DECLARE_LOGGING_CATEGORY(chiakiGui);
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 
 #include <vulkan/vulkan.h>
 
@@ -130,6 +132,8 @@ struct FrameGen::Impl
     int height = 0;
     bool have_history = false;
     bool reset_pending = true;
+    // The first calls after a backend starts are logged step by step.
+    int trace_frames = 0;
 
     PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr = nullptr;
     PFN_vkGetDeviceQueue vkGetDeviceQueue = nullptr;
@@ -981,7 +985,14 @@ bool FrameGen::ensureInitialized(pl_vulkan vk, Backend backend)
 #endif
     default: break;
     }
-    if (!impl_backend || !impl_backend->init(d)) {
+    unsigned long exception_code = 0;
+    const bool init_ok = impl_backend && guardedCall([&]() { return impl_backend->init(d); }, &exception_code);
+    if (exception_code) {
+        qCCritical(chiakiGui).nospace() << "[framegen] " << backendName(backend)
+            << " crashed while starting (exception 0x" << Qt::hex << exception_code << ")";
+        (void)impl_backend.release();
+    }
+    if (!init_ok) {
         if (impl_backend)
             impl_backend->shutdown();
         qCWarning(chiakiGui) << "[framegen]" << backendName(backend) << "is unavailable";
@@ -992,6 +1003,7 @@ bool FrameGen::ensureInitialized(pl_vulkan vk, Backend backend)
     d.backend = backend;
     d.consecutive_failures = 0;
     d.reset_pending = true;
+    d.trace_frames = 0;
     qCInfo(chiakiGui) << "[framegen]" << backendName(backend) << "initialized";
     return true;
 }
@@ -999,6 +1011,12 @@ bool FrameGen::ensureInitialized(pl_vulkan vk, Backend backend)
 FrameGen::Backend FrameGen::backend() const
 {
     return impl->backend;
+}
+
+bool FrameGen::backendFailed(Backend backend) const
+{
+    const size_t index = static_cast<size_t>(backend);
+    return index < impl->backend_failed.size() && impl->backend_failed[index];
 }
 
 float FrameGen::gpuTimeMs() const
@@ -1037,10 +1055,24 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
         return false;
     }
     const int count = std::clamp(multiplier - 1, 1, d.backend_impl->maxGenerated());
+    const bool trace = d.trace_frames < 4;
+    QElapsedTimer trace_timer;
+    if (trace) {
+        d.trace_frames++;
+        trace_timer.start();
+        qCInfo(chiakiGui).nospace() << "[framegen] frame " << d.trace_frames << ": " << out_w << "x" << out_h
+                                    << " generating " << count << ", preparing textures";
+    }
+    auto trace_step = [&](const char *step) {
+        if (trace)
+            qCInfo(chiakiGui).nospace() << "[framegen] frame " << d.trace_frames << ": " << step
+                                        << " (" << trace_timer.elapsed() << " ms)";
+    };
     if (!d.ensureSize(out_w, out_h)) {
         qCWarning(chiakiGui) << "[framegen] Could not allocate frame generation textures";
         return false;
     }
+    trace_step("textures ready");
 
     Impl::FrameSet &set = d.sets[d.next_set];
     d.next_set = (d.next_set + 1) % d.sets.size();
@@ -1059,6 +1091,7 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
         qCWarning(chiakiGui) << "[framegen] Failed to prepare the frame generation input";
         return false;
     }
+    trace_step("input rendered");
 
     const uint32_t slot_index = static_cast<uint32_t>(d.next_slot);
     Impl::CommandSlot &slot = d.cmd_slots[d.next_slot];
@@ -1085,7 +1118,9 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
         hold(*generated[i]);
     }
 
+    trace_step(ok ? "images held" : "holding images failed");
     const bool reset = d.reset_pending || !d.have_history;
+    bool backend_crashed = false;
     if (ok)
         ok = d.vkResetCommandBuffer(slot.cmd, 0) == VK_SUCCESS;
     if (ok) {
@@ -1095,7 +1130,21 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
         ok = d.vkBeginCommandBuffer(slot.cmd, &begin_info) == VK_SUCCESS;
         if (ok) {
             d.timer.begin(slot.cmd, slot_index);
-            ok = d.backend_impl->record(d, slot.cmd, set.real, generated, count, reset, frame_interval_ms);
+            unsigned long exception_code = 0;
+            {
+                // The runtimes may submit to libplacebo's queues themselves.
+                VkQueuesLock queues_lock(d.vk);
+                ok = guardedCall([&]() {
+                    return d.backend_impl->record(d, slot.cmd, set.real, generated, count, reset, frame_interval_ms);
+                }, &exception_code);
+            }
+            if (exception_code) {
+                qCCritical(chiakiGui).nospace() << "[framegen] " << backendName(d.backend)
+                    << " crashed inside its runtime (exception 0x" << Qt::hex << exception_code << ")";
+                backend_crashed = true;
+                ok = false;
+            }
+            trace_step(ok ? "backend recorded" : "backend failed");
             d.timer.end(slot.cmd, slot_index);
             ok = d.vkEndCommandBuffer(slot.cmd) == VK_SUCCESS && ok;
         }
@@ -1103,6 +1152,7 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
     ok = ok && d.submit(slot.cmd, held.data(), num_held);
     if (ok)
         slot.done_value = d.done_value;
+    trace_step(ok ? "submitted" : "not submitted");
     // Hand every image back to libplacebo; after a failure only libplacebo's
     // own hold signal has to be waited for.
     for (size_t i = 0; i < num_held; i++) {
@@ -1114,7 +1164,14 @@ bool FrameGen::process(const struct pl_frame *src, int out_w, int out_h, int mul
 
     if (!ok) {
         d.have_history = false;
-        if (++d.consecutive_failures >= kMaxConsecutiveFailures) {
+        if (backend_crashed) {
+            // Its state is unknown: never call into this runtime again, and
+            // leak it rather than risk a second crash while shutting it down.
+            qCWarning(chiakiGui) << "[framegen] Disabling" << backendName(d.backend) << "for this session";
+            d.backend_failed[static_cast<size_t>(d.backend)] = true;
+            (void)d.backend_impl.release();
+            d.backend = FrameGen::Backend::None;
+        } else if (++d.consecutive_failures >= kMaxConsecutiveFailures) {
             qCWarning(chiakiGui) << "[framegen] Disabling" << backendName(d.backend) << "after repeated failures";
             d.backend_failed[static_cast<size_t>(d.backend)] = true;
             d.destroyBackend();
@@ -1147,6 +1204,7 @@ FrameGen::FrameGen(pl_log) {}
 FrameGen::~FrameGen() = default;
 bool FrameGen::ensureInitialized(pl_vulkan, Backend) { return false; }
 FrameGen::Backend FrameGen::backend() const { return Backend::None; }
+bool FrameGen::backendFailed(Backend) const { return true; }
 int FrameGen::maxMultiplier() const { return 1; }
 float FrameGen::gpuTimeMs() const { return 0.0f; }
 void FrameGen::reset() {}

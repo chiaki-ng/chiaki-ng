@@ -41,6 +41,8 @@ public:
     // returning false without retrying, so it is cheap to call every frame.
     bool ensureInitialized(pl_vulkan vk);
     bool failed() const;
+    // Whether `quality` cannot be used (rejected by the installed DLL or GPU).
+    bool modeFailed(int quality) const;
     // Average GPU time of the VSR evaluation in milliseconds (0 if unknown).
     float gpuTimeMs() const;
 

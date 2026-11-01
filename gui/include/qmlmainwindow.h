@@ -316,9 +316,18 @@ private:
     bool is_stream_window_adjustable = false;
     QAtomicInteger<int> dropped_frames_current = 0;
     // Written by the render thread, shown in the stats overlay.
+    // Configured RTX VSR mode (0 = off) and its state: 1 active, 2 idle, 3 mode unsupported.
     QAtomicInteger<int> vsr_status_quality = 0;
+    QAtomicInteger<int> vsr_status_state = 0;
+    // Configured frame generation backend (0 = off), active multiplier (0 =
+    // inactive) and why it is inactive: 1 needs Direct Mapping, 2 unavailable.
     QAtomicInteger<int> fg_status_backend = 0;
     QAtomicInteger<int> fg_status_multiplier = 0;
+    QAtomicInteger<int> fg_status_reason = 0;
+    // Marker file present while frame generation starts; found at startup it
+    // means the last start crashed, and frame generation is switched off.
+    bool fg_crash_guard_armed = false;
+    int fg_crash_guard_good_frames = 0;
     QString video_enhancement_status;
     bool going_full = false;
     VideoMode video_mode = VideoMode::Normal;

@@ -41,6 +41,8 @@ public:
     // previous one down first. After a failure the same backend is not retried.
     bool ensureInitialized(pl_vulkan vk, Backend backend);
     Backend backend() const;
+    // Whether `backend` failed to start or crashed and is not retried.
+    bool backendFailed(Backend backend) const;
 
     // Highest output multiplier the active backend supports (2 = one
     // generated frame per real frame).

@@ -2418,6 +2418,11 @@ static AVFrame *make_startup_warmup_frame(unsigned width, unsigned height, bool 
     return frame;
 }
 
+static QString frameGenCrashGuardPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/framegen-starting";
+}
+
 static QString shader_cache_path()
 {
     static QString path = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/pl_shader.cache";
@@ -2683,6 +2688,7 @@ QmlMainWindow::~QmlMainWindow()
     pl_queue_destroy(&placebo_queue);
     delete frame_gen;
     frame_gen = nullptr;
+    QFile::remove(frameGenCrashGuardPath());
     delete rtx_vsr;
     rtx_vsr = nullptr;
     pl_renderer_destroy(&placebo_renderer);
@@ -5080,6 +5086,20 @@ renderer_backend_ready:
         rtx_vsr = new RtxVsr(placebo_log);
     if (render_backend == RenderBackend::Vulkan && FrameGen::compiledIn())
         frame_gen = new FrameGen(placebo_log);
+    if (QFile::exists(frameGenCrashGuardPath())) {
+        // The last start of frame generation never completed: chiaki-ng most
+        // likely crashed in it. Turn it off instead of crashing again.
+        QFile marker(frameGenCrashGuardPath());
+        QString backend_name;
+        if (marker.open(QIODevice::ReadOnly))
+            backend_name = QString::fromUtf8(marker.readAll());
+        marker.close();
+        QFile::remove(frameGenCrashGuardPath());
+        qCWarning(chiakiGui) << "Frame generation" << backend_name
+                             << "did not finish starting last time (crash?); it has been turned off";
+        if (settings)
+            settings->SetFrameGenBackend(0);
+    }
 
     placebo_queue = pl_queue_create(placeboGpu());
 
@@ -5129,9 +5149,14 @@ renderer_backend_ready:
         startup_warmup_preserve_next_session_change = false;
         session = s;
         stream_session_active.storeRelease(s ? 1 : 0);
+        // A session that ended normally did not crash in frame generation.
+        if (!s)
+            QFile::remove(frameGenCrashGuardPath());
         vsr_status_quality.storeRelaxed(0);
+        vsr_status_state.storeRelaxed(0);
         fg_status_backend.storeRelaxed(0);
         fg_status_multiplier.storeRelaxed(0);
+        fg_status_reason.storeRelaxed(0);
         startup_video_visible_generation.fetchAndAddRelaxed(1);
         grab_input = 0;
         if (session)
@@ -5286,17 +5311,36 @@ renderer_backend_ready:
         const int vsr_quality = vsr_status_quality.loadRelaxed();
         if (RtxVsr::isValidQuality(vsr_quality) && rtx_vsr) {
             QString part = QStringLiteral("RTX VSR %1").arg(QLatin1String(RtxVsr::qualityName(vsr_quality)));
-            if (rtx_vsr->gpuTimeMs() > 0.0f)
-                part += QStringLiteral(" %1 ms").arg(rtx_vsr->gpuTimeMs(), 0, 'f', 1);
+            switch (vsr_status_state.loadRelaxed()) {
+            case 1:
+                if (rtx_vsr->gpuTimeMs() > 0.0f)
+                    part += QStringLiteral(" %1 ms").arg(rtx_vsr->gpuTimeMs(), 0, 'f', 1);
+                break;
+            case 3:
+                part += tr(": not supported (DLL/GPU)");
+                break;
+            default:
+                part += tr(": idle");
+                break;
+            }
             parts << part;
         }
         const int fg_backend_status = fg_status_backend.loadRelaxed();
         if (fg_backend_status > 0 && frame_gen) {
-            QString part = QStringLiteral("%1 FG %2x")
-                .arg(fg_backend_status == static_cast<int>(FrameGen::Backend::Dlss) ? QStringLiteral("DLSS") : QStringLiteral("FSR"))
-                .arg(fg_status_multiplier.loadRelaxed());
-            if (frame_gen->gpuTimeMs() > 0.0f)
-                part += QStringLiteral(" %1 ms").arg(frame_gen->gpuTimeMs(), 0, 'f', 1);
+            QString part = fg_backend_status == static_cast<int>(FrameGen::Backend::Dlss)
+                ? QStringLiteral("DLSS FG") : QStringLiteral("FSR FG");
+            const int multiplier = fg_status_multiplier.loadRelaxed();
+            if (multiplier > 1) {
+                part += QStringLiteral(" %1x").arg(multiplier);
+                if (frame_gen->gpuTimeMs() > 0.0f)
+                    part += QStringLiteral(" %1 ms").arg(frame_gen->gpuTimeMs(), 0, 'f', 1);
+            } else {
+                switch (fg_status_reason.loadRelaxed()) {
+                case 1: part += tr(": needs Direct Mapping"); break;
+                case 2: part += tr(": unavailable (see log)"); break;
+                default: part += tr(": idle"); break;
+                }
+            }
             parts << part;
         }
         const QString status = parts.join(QStringLiteral(" · "));
@@ -7575,6 +7619,10 @@ void QmlMainWindow::render()
             }
         }
     }
+    if (!fg_override && vsr_applied != rtx_vsr_active) {
+        rtx_vsr_active = vsr_applied;
+        qCInfo(chiakiGui) << "RTX Video Super Resolution" << (vsr_applied ? "active" : "inactive");
+    }
 
     // Frame generation (Direct Mapping only): turn each new stream frame into
     // `multiplier` frames. The first one is presented now, the rest by the
@@ -7602,10 +7650,25 @@ void QmlMainWindow::render()
             const int fg_out_w = static_cast<int>(lroundf(fabsf(pl_rect_w(target_frame.crop))));
             const int fg_out_h = static_cast<int>(lroundf(fabsf(pl_rect_h(target_frame.crop))));
             std::vector<struct pl_frame> fg_outputs;
+            if (!fg_crash_guard_armed && fg_crash_guard_good_frames == 0) {
+                // Cleared once generated frames have been shown for a while.
+                QDir().mkpath(QFileInfo(frameGenCrashGuardPath()).absolutePath());
+                QFile marker(frameGenCrashGuardPath());
+                if (marker.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                    marker.write(FrameGen::backendName(backend_choice));
+                    marker.flush();
+                    marker.close();
+                    fg_crash_guard_armed = true;
+                }
+            }
             if (multiplier >= 2 &&
                 frame_gen->process(&direct_render_frame, fg_out_w, fg_out_h, multiplier,
                                    static_cast<float>(stream_interval_s * 1000.0), fg_outputs) &&
                 !fg_outputs.empty()) {
+                if (fg_outputs.size() > 1 && fg_crash_guard_armed && ++fg_crash_guard_good_frames >= 120) {
+                    QFile::remove(frameGenCrashGuardPath());
+                    fg_crash_guard_armed = false;
+                }
                 direct_render_frame = fg_outputs.front();
                 fg_pending_frames.assign(fg_outputs.begin() + 1, fg_outputs.end());
                 if (fg_active_multiplier != multiplier)
@@ -7622,8 +7685,14 @@ void QmlMainWindow::render()
         fg_pending_frames.clear();
     }
     if (direct_frame_fresh || !bypass_frame_queue) {
-        fg_status_backend.storeRelaxed(fg_applied ? fg_backend : 0);
+        fg_status_backend.storeRelaxed(stream_active ? fg_backend : 0);
         fg_status_multiplier.storeRelaxed(fg_applied ? fg_active_multiplier : 0);
+        int reason = 0;
+        if (!bypass_frame_queue)
+            reason = 1;
+        else if (fg_backend > 0 && frame_gen->backendFailed(static_cast<FrameGen::Backend>(fg_backend)))
+            reason = 2;
+        fg_status_reason.storeRelaxed(reason);
     }
 
     if ((vsr_applied && !RtxVsr::keepsResolution(rtx_vsr_quality)) || fg_applied) {
@@ -7631,13 +7700,12 @@ void QmlMainWindow::render()
         params.hooks = nullptr;
         params.num_hooks = 0;
     }
-    if (vsr_applied != rtx_vsr_active) {
-        rtx_vsr_active = vsr_applied;
-        qCInfo(chiakiGui) << "RTX Video Super Resolution" << (vsr_applied ? "active" : "inactive");
-    }
     // Generated frames reuse the last stream frame's VSR state.
-    if (!fg_override)
-        vsr_status_quality.storeRelaxed(vsr_applied ? rtx_vsr_quality : 0);
+    if (!fg_override) {
+        const bool vsr_wanted = rtx_vsr && rtx_vsr_quality > 0 && nvidia_card && stream_active;
+        vsr_status_quality.storeRelaxed(vsr_wanted ? rtx_vsr_quality : 0);
+        vsr_status_state.storeRelaxed(vsr_applied ? 1 : (vsr_wanted && rtx_vsr->modeFailed(rtx_vsr_quality) ? 3 : 2));
+    }
     const struct pl_frame_mix *render_frame_mix = vsr_applied ? &vsr_frame_mix : &frame_mix;
 
     const qint64 render_setup_ready_us = static_cast<qint64>(chiaki_time_now_monotonic_us());

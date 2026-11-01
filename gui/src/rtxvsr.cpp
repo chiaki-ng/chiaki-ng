@@ -1,6 +1,7 @@
 #include "rtxvsr.h"
 #include "ngxcore.h"
 #include "gputimer.h"
+#include "vkguard.h"
 
 #include <QLoggingCategory>
 
@@ -94,6 +95,9 @@ struct RtxVsr::Impl
     bool ngx_initialized = false;
     bool hdr_warned = false;
     int eval_failures = 0;
+    bool crashed = false;
+    // Modes the installed nvngx_vsr.dll / GPU rejected; the others keep working.
+    std::array<bool, 32> mode_failed = {};
 
     VkQueue queue = VK_NULL_HANDLE;
     uint32_t queue_family = 0;
@@ -227,7 +231,22 @@ bool RtxVsr::Impl::init(pl_vulkan vk_)
     begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (vkBeginCommandBuffer(cmd, &begin_info) != VK_SUCCESS)
         return false;
-    const bool ngx_ok = initNgx(cmd);
+    unsigned long exception_code = 0;
+    bool ngx_ok;
+    {
+        // NGX may submit to libplacebo's queues itself.
+        VkQueuesLock queues_lock(vk);
+        ngx_ok = guardedCall([&]() { return initNgx(cmd); }, &exception_code);
+    }
+    if (exception_code) {
+        qCCritical(chiakiGui).nospace() << "[rtx-vsr] NGX crashed while creating VSR (exception 0x"
+                                        << Qt::hex << exception_code << ")";
+        // Never call into NGX again for VSR; leave its objects alone.
+        feature = nullptr;
+        params = nullptr;
+        ngx_initialized = false;
+        return false;
+    }
     if (vkEndCommandBuffer(cmd) != VK_SUCCESS || !ngx_ok)
         return false;
     if (!submit(cmd, false))
@@ -457,8 +476,21 @@ bool RtxVsr::Impl::evaluate(Image &out, int in_w, int in_h, int quality)
     }
     if (ok) {
         timer.begin(slot.cmd, slot_index);
-        const NVSDK_NGX_Result result = NVSDK_NGX_VULKAN_EvaluateFeature_C(slot.cmd, feature, params, nullptr);
-        if (NVSDK_NGX_FAILED(result)) {
+        NVSDK_NGX_Result result = NVSDK_NGX_Result_Fail;
+        unsigned long exception_code = 0;
+        {
+            VkQueuesLock queues_lock(vk);
+            guardedCall([&]() {
+                result = NVSDK_NGX_VULKAN_EvaluateFeature_C(slot.cmd, feature, params, nullptr);
+                return true;
+            }, &exception_code);
+        }
+        if (exception_code) {
+            qCCritical(chiakiGui).nospace() << "[rtx-vsr] NGX crashed while evaluating VSR (exception 0x"
+                                            << Qt::hex << exception_code << ")";
+            crashed = true;
+            ok = false;
+        } else if (NVSDK_NGX_FAILED(result)) {
             qCWarning(chiakiGui).nospace() << "[rtx-vsr] Evaluating VSR failed: " << NgxCore::resultString(result)
                 << " (0x" << Qt::hex << static_cast<unsigned>(result) << ")";
             ok = false;
@@ -492,13 +524,14 @@ void RtxVsr::Impl::shutdown()
 {
     if (vk && vkWaitSemaphores)
         waitDone(done_value);
-    if (feature)
+    // After NGX crashed, its objects are left alone rather than released.
+    if (feature && !crashed)
         NVSDK_NGX_VULKAN_ReleaseFeature(feature);
     feature = nullptr;
-    if (params)
+    if (params && !crashed)
         NVSDK_NGX_VULKAN_DestroyParameters(params);
     params = nullptr;
-    if (ngx_initialized)
+    if (ngx_initialized && !crashed)
         NgxCore::release();
     ngx_initialized = false;
 
@@ -588,6 +621,12 @@ bool RtxVsr::failed() const
     return impl->init_failed;
 }
 
+bool RtxVsr::modeFailed(int quality) const
+{
+    return impl->init_failed
+        || (isValidQuality(quality) && impl->mode_failed[static_cast<size_t>(quality)]);
+}
+
 float RtxVsr::gpuTimeMs() const
 {
     return impl->timer.averageMs();
@@ -618,7 +657,7 @@ bool RtxVsr::process(const struct pl_frame *src, uint64_t signature,
     const int in_h = static_cast<int>(std::lround(std::fabs(pl_rect_h(src->crop))));
     if (in_w <= 0 || in_h <= 0)
         return false;
-    if (!isValidQuality(quality))
+    if (!isValidQuality(quality) || d.mode_failed[static_cast<size_t>(quality)])
         return false;
     if (keepsResolution(quality)) {
         out_w = in_w;
@@ -687,14 +726,17 @@ bool RtxVsr::process(const struct pl_frame *src, uint64_t signature,
     }
     if (!d.evaluate(entry.image, in_w, in_h, quality)) {
         entry.key = 0;
-        // Don't retry (and log) every frame if the feature keeps failing.
-        if (++d.eval_failures >= 3) {
-            qCWarning(chiakiGui) << "[rtx-vsr] Disabling RTX Video Super Resolution after repeated failures";
-            if (quality > 4)
-                qCWarning(chiakiGui) << "[rtx-vsr] The" << qualityName(quality)
-                                     << "mode needs nvngx_vsr.dll 1.8.2 or newer (NVIDIA VFX SDK 1.2/1.3); streaming modes also need an RTX 30 series or newer GPU";
+        if (d.crashed) {
+            qCWarning(chiakiGui) << "[rtx-vsr] Disabling RTX Video Super Resolution for this session";
             d.initialized = false;
             d.init_failed = true;
+        } else if (++d.eval_failures >= 3) {
+            // Don't retry (and log) every frame; other modes stay available.
+            d.eval_failures = 0;
+            d.mode_failed[static_cast<size_t>(quality)] = true;
+            qCWarning(chiakiGui) << "[rtx-vsr] The" << qualityName(quality) << "mode does not work here and is skipped; pick another mode";
+            if (quality > 4)
+                qCWarning(chiakiGui) << "[rtx-vsr] Artifact Reduction and Streaming modes need nvngx_vsr.dll 1.8.2 or newer (NVIDIA VFX SDK 1.2/1.3); streaming modes also need an RTX 30 series or newer GPU";
         }
         return false;
     }
@@ -714,6 +756,7 @@ RtxVsr::RtxVsr(pl_log) {}
 RtxVsr::~RtxVsr() = default;
 bool RtxVsr::ensureInitialized(pl_vulkan) { return false; }
 bool RtxVsr::failed() const { return true; }
+bool RtxVsr::modeFailed(int) const { return true; }
 float RtxVsr::gpuTimeMs() const { return 0.0f; }
 void RtxVsr::destroy() {}
 bool RtxVsr::process(const struct pl_frame *, uint64_t, int, int, int, struct pl_frame *, uint64_t *) { return false; }
