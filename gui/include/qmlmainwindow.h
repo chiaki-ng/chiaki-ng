@@ -328,6 +328,9 @@ private:
     // means the last start crashed, and frame generation is switched off.
     bool fg_crash_guard_armed = false;
     int fg_crash_guard_good_frames = 0;
+    // Set when the crash guard turned frame generation off at startup; logged
+    // again when the next stream starts, since only its log is kept.
+    QString fg_crash_guard_notice;
     QString video_enhancement_status;
     bool going_full = false;
     VideoMode video_mode = VideoMode::Normal;

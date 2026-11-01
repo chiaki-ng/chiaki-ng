@@ -5095,8 +5095,10 @@ renderer_backend_ready:
             backend_name = QString::fromUtf8(marker.readAll());
         marker.close();
         QFile::remove(frameGenCrashGuardPath());
-        qCWarning(chiakiGui) << "Frame generation" << backend_name
-                             << "did not finish starting last time (crash?); it has been turned off";
+        fg_crash_guard_notice = QStringLiteral("Frame generation %1 did not finish starting last time (crash?); "
+                                               "it has been turned off. Turn it back on in Settings > Video to retry.")
+                                    .arg(backend_name);
+        qCWarning(chiakiGui).noquote() << fg_crash_guard_notice;
         if (settings)
             settings->SetFrameGenBackend(0);
     }
@@ -5152,6 +5154,10 @@ renderer_backend_ready:
         // A session that ended normally did not crash in frame generation.
         if (!s)
             QFile::remove(frameGenCrashGuardPath());
+        else if (!fg_crash_guard_notice.isEmpty()) {
+            qCWarning(chiakiGui).noquote() << fg_crash_guard_notice;
+            fg_crash_guard_notice.clear();
+        }
         vsr_status_quality.storeRelaxed(0);
         vsr_status_state.storeRelaxed(0);
         fg_status_backend.storeRelaxed(0);
