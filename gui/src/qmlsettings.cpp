@@ -1864,6 +1864,7 @@ QString QmlSettings::changeControllerKey(int button, int key)
 {
     Qt::Key qt_key = Qt::Key(key);
     settings->SetControllerButtonMapping(button, qt_key);
+    emit controllerMappingChanged(); // Refresh the list, otherwise it still holds the old mapping and "Reset All Keys" may not update it
     return Settings::GetKeyDisplayName(qt_key);
 }
 
@@ -1874,6 +1875,7 @@ QString QmlSettings::changeControllerMouseInput(int button, const QString &mouse
     if (!Settings::IsMouseKey(qt_key))
         return QString();
     settings->SetControllerButtonMapping(button, qt_key);
+    emit controllerMappingChanged();
     return Settings::GetKeyDisplayName(qt_key);
 }
 
