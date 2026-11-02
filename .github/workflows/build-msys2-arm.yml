@@ -71,11 +71,11 @@ jobs:
 
       - name: Setup ffmpeg
         run: |
-          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip
-          unzip ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/bin/." /clangarm64/bin
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/include/." /clangarm64/include
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/lib/." /clangarm64/lib
+          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip
+          unzip ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/bin/." /clangarm64/bin
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/include/." /clangarm64/include
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/lib/." /clangarm64/lib
 
       - name: Build sdl2-compat
         run: |

@@ -69,9 +69,9 @@ jobs:
       - name: Setup ffmpeg
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -OutFile ".\ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip"
-          Expand-Archive -LiteralPath "ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip" -DestinationPath "."
-          Rename-Item "ffmpeg-n7.1-latest-win64-gpl-shared-7.1" "${{ env.dep_folder }}"
+          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip" -OutFile ".\ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip"
+          Expand-Archive -LiteralPath "ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip" -DestinationPath "."
+          Rename-Item "ffmpeg-n9.0-latest-win64-gpl-shared-9.0" "${{ env.dep_folder }}"
 
       - name: Setup sdl2-compat
         run: |
