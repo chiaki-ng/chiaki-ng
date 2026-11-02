@@ -3,6 +3,9 @@ name: Build chiaki-ng Windows arm64 portable (VC)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-win_arm64:
     name: Build chiaki-ng win_arm64 (VC)

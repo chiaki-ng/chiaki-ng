@@ -3,6 +3,9 @@ name: Build chiaki-ng msys2 x86 Windows SDL2
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-windows_x64-msys2-sdl2:
     name: Build windows msys2 version with SDL2

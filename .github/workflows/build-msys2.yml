@@ -8,6 +8,9 @@ on:
         required: false
         default: "3be579e6c7f6b421d9ac3ab4860edc437c50b3eb"
 
+permissions:
+  contents: read
+
 jobs:
   build-windows_x64-msys2:
     name: Build windows msys2 version

@@ -3,6 +3,9 @@ name: Build chiaki-ng Appimage x86_64
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-appimage_x64:
     name: Build chiaki-ng appimage_x64

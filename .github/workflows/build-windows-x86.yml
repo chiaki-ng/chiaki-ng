@@ -3,6 +3,9 @@ name: Build chiaki-ng Windows x86_64 (VC)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-win_x64:
     name: Build chiaki-ng win_x64 (VC)

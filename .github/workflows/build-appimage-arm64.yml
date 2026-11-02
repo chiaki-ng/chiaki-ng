@@ -3,6 +3,9 @@ name: Build chiaki-ng Appimage arm64
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-appimage_arm64:
     name: Build chiaki-ng appimage_arm64

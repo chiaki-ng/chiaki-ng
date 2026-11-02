@@ -3,6 +3,9 @@ name: Build chiaki-ng msys2 arm64 Windows
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-windows_arm64-msys2:
     name: Build windows msys2 arm version

@@ -3,6 +3,9 @@ name: Build chiaki-ng macOSX
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-mac_arm64:
     name: Build macOSX arm64 version
