@@ -747,7 +747,7 @@ static ChiakiErrorCode regist_recv_response(ChiakiRegist *regist, ChiakiRegister
 		return CHIAKI_ERR_INVALID_RESPONSE;
 	}
 
-	if(content_size + header_size > sizeof(buf))
+	if(content_size > sizeof(buf) - header_size)
 	{
 		CHIAKI_LOGE(regist->log, "Regist response content too big");
 		return CHIAKI_ERR_BUF_TOO_SMALL;
