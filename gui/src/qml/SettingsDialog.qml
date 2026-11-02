@@ -3182,17 +3182,92 @@ DialogView {
                 buttonValue = opts.value;
                 buttonCallback = opts.callback;
                 keysIndex = opts.mappingIndex;
+                keyLabel.escDown = false;
+                keyLabel.shiftDown = false;
                 open();
             }
 
-            Label {
-                id: keyLabel
-                focus: true
-                text: qsTr("Press any key to configure button or click close")
-                Keys.onReleased: (event) => {
-                    var name = Chiaki.settings.changeControllerKey(keyDialog.buttonValue, event.key);
-                    keyDialog.buttonCallback(name);
-                    keyDialog.close();
+            // The dialog keeps the keyboard focus while it fades out: ignore everything once it is closing,
+            // otherwise the release of Esc (or Shift) after Shift+Esc would be captured as a new key
+            function captureKey(key) {
+                if (!opened)
+                    return;
+                var name = Chiaki.settings.changeControllerKey(buttonValue, key);
+                buttonCallback(name);
+                close();
+            }
+
+            // mouseInput: "MouseLeft", "MouseRight", "MouseMiddle", "MouseWheelUp" or "MouseWheelDown"
+            function captureMouse(mouseInput) {
+                if (!opened)
+                    return;
+                var name = Chiaki.settings.changeControllerMouseInput(buttonValue, mouseInput);
+                if (name === "")
+                    return;
+                buttonCallback(name);
+                close();
+            }
+
+            // Label.implicitWidth/Height are read-only, so the size comes from this wrapper
+            Item {
+                implicitWidth: 400
+                implicitHeight: 120
+
+                Label {
+                    id: keyLabel
+                    focus: true
+                    anchors.fill: parent
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: qsTr("Press any key, or click / scroll the mouse wheel in this box, to configure the button.\nShift+Esc or Close to cancel.")
+                    background: Rectangle {
+                        color: "transparent"
+                        radius: 6
+                        border.color: Material.hintTextColor
+                    }
+                    // Esc and Shift held together (in either order) leave without changing anything.
+                    // Esc alone is a key that can be mapped.
+                    property bool escDown: false
+                    property bool shiftDown: false
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Escape)
+                            escDown = true;
+                        else if (event.key === Qt.Key_Shift)
+                            shiftDown = true;
+                        if (escDown && shiftDown) {
+                            event.accepted = true;
+                            keyDialog.close();
+                        }
+                    }
+                    Keys.onReleased: (event) => {
+                        if (event.key === Qt.Key_Escape)
+                            escDown = false;
+                        else if (event.key === Qt.Key_Shift)
+                            shiftDown = false;
+                        keyDialog.captureKey(event.key);
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                        onPressed: (mouse) => {
+                            switch (mouse.button) {
+                            case Qt.LeftButton: keyDialog.captureMouse("MouseLeft"); break;
+                            case Qt.RightButton: keyDialog.captureMouse("MouseRight"); break;
+                            case Qt.MiddleButton: keyDialog.captureMouse("MouseMiddle"); break;
+                            }
+                        }
+                        onWheel: (wheel) => {
+                            // physical direction, whatever the "natural scrolling" system setting is
+                            var delta = wheel.inverted ? -wheel.angleDelta.y : wheel.angleDelta.y;
+                            if (delta > 0)
+                                keyDialog.captureMouse("MouseWheelUp");
+                            else if (delta < 0)
+                                keyDialog.captureMouse("MouseWheelDown");
+                            wheel.accepted = true;
+                        }
+                    }
                 }
             }
         }
