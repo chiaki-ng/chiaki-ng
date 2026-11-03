@@ -25,6 +25,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #endif
 
 #define SESSION_OSTYPE "Win10.0.0"
@@ -366,6 +367,19 @@ static ChiakiErrorCode ctrl_connect_tcp(ChiakiCtrl *ctrl)
 		ctrl_failed(ctrl, CHIAKI_QUIT_REASON_CTRL_UNKNOWN);
 		return err;
 	}
+
+	// Disable Nagle's algorithm for immediate control packet delivery
+	int nodelay_val = 1;
+	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (const void *)&nodelay_val, sizeof(nodelay_val));
+
+	// Mark control traffic with DSCP AF41 for Wi-Fi WMM Video priority
+#if defined(__APPLE__) && defined(SO_NET_SERVICE_TYPE) && defined(NET_SERVICE_TYPE_RV)
+	int svc = NET_SERVICE_TYPE_RV;
+	setsockopt(sock, SOL_SOCKET, SO_NET_SERVICE_TYPE, &svc, sizeof(svc));
+#elif defined(IP_TOS)
+	int tos = 0x88; // DSCP AF41 (high-priority interactive)
+	setsockopt(sock, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
+#endif
 
 	chiaki_mutex_unlock(&ctrl->notif_mutex);
 	err = chiaki_stop_pipe_connect(&ctrl->stop_pipe, sock, sa, addr->ai_addrlen, 5000);
