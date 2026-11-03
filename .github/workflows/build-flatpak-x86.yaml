@@ -13,7 +13,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
@@ -48,14 +48,14 @@ jobs:
           flatpak build-bundle chiaki-ng chiaki-ng-x64.flatpak io.github.streetpea.Chiaki4deck --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
           flatpak build-bundle chiaki-ng --runtime chiaki-ng-x64-debug.flatpak io.github.streetpea.Chiaki4deck.Debug --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-x64.flatpak
           path: chiaki-ng/chiaki-ng-x64.flatpak
           if-no-files-found: error
           retention-days: 1
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-x64-debug.flatpak
           path: chiaki-ng/chiaki-ng-x64-debug.flatpak

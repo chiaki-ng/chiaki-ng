@@ -11,14 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Sleep for 1 hour to wait for release artifacts to be published before putting out Discord notification
         run: |
           echo "GITHUB_TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
           sleep 3600s
         shell: bash
       - name: Github Releases To Discord
-        uses: SethCohen/github-releases-to-discord@v1.16.2
+        uses: SethCohen/github-releases-to-discord@v1.20.0
         with:
           webhook_url: ${{ secrets.WEBHOOK_URL }}
           color: "2105893"

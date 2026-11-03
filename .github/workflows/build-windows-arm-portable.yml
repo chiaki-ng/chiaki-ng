@@ -26,7 +26,7 @@ jobs:
         shell: powershell
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
 
@@ -63,7 +63,7 @@ jobs:
             echo "CFLAGS=-fuse-ld=lld-link" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           architecture: "arm64"
@@ -201,7 +201,7 @@ jobs:
           echo "RELEASE_PACKAGE_PATH=$release_filepath" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-win_arm64-VC-Release
           path: ${{ env.RELEASE_PACKAGE_PATH }}

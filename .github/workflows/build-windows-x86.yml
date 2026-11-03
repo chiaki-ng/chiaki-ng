@@ -25,7 +25,7 @@ jobs:
         shell: powershell
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: 'recursive'
 
@@ -46,7 +46,7 @@ jobs:
         run: choco install ninja
 
       - name: Set up Clang
-        uses: egor-tensin/setup-clang@v1
+        uses: egor-tensin/setup-clang@v2
         with:
           version: 18
 
@@ -196,7 +196,7 @@ jobs:
           echo "RELEASE_PACKAGE_PATH=$release_filepath" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-win_x64-VC-Release
           path: ${{ env.RELEASE_PACKAGE_PATH }}
@@ -204,13 +204,13 @@ jobs:
           retention-days: 7
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-win_x64-VC-installer.zip
           path: chiaki-ng-windows-installer.exe

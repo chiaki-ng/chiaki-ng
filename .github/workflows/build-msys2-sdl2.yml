@@ -19,7 +19,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
@@ -105,7 +105,7 @@ jobs:
           echo "RELEASE_PACKAGE_PATH=${RELEASE_PACKAGE_FILE}" >> $GITHUB_ENV
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-win_x64-MSYS2-SDL2-Release-portable.zip
           path: ${{ env.RELEASE_PACKAGE_PATH }}
@@ -113,7 +113,7 @@ jobs:
           retention-days: 7
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
@@ -123,7 +123,7 @@ jobs:
           cp chiaki-ng-windows-installer.exe chiaki-ng-win_x64-MSYS2-SDL2-installer.exe
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-win_x64-MSYS2-SDL2-Release-installer.exe
           path: chiaki-ng-win_x64-MSYS2-SDL2-installer.exe
