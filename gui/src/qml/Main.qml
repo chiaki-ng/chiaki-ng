@@ -589,7 +589,9 @@ Item {
 
     Component {
         id: settingsDialogComponent
-        SettingsDialog { }
+        SettingsDialog {
+            onShowGyroSteerSettingsDialog: stack.push(gyroSteerSettingsDialogComponent)
+        }
     }
 
     Component {
@@ -610,6 +612,11 @@ Item {
     Component {
         id: profileDialogComponent
         ProfileDialog { }
+    }
+
+    Component {
+        id: gyroSteerSettingsDialogComponent
+        GyroSteerSettingsDialog { }
     }
 
     Component {

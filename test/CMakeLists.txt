@@ -22,7 +22,8 @@ set(CHIAKI_UNIT_SOURCES
 				test_log.c
 				test_log.h
 				bitstream.c
-				regist.c)
+				regist.c
+				gyrosteer.c)
 
 if(NOT CHIAKI_LIB_ENABLE_MBEDTLS)
 	list(APPEND CHIAKI_UNIT_SOURCES aia.c)

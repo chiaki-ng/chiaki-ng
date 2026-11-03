@@ -33,6 +33,9 @@ class QmlSettings : public QObject
     Q_PROPERTY(bool showStreamStats READ showStreamStats WRITE setShowStreamStats NOTIFY showStreamStatsChanged)
     Q_PROPERTY(bool streamerMode READ streamerMode WRITE setStreamerMode NOTIFY streamerModeChanged)
     Q_PROPERTY(float hapticOverride READ hapticOverride WRITE setHapticOverride NOTIFY hapticOverrideChanged)
+    Q_PROPERTY(bool ds5GyroFix READ ds5GyroFix WRITE setDS5GyroFix NOTIFY ds5GyroFixChanged)
+    Q_PROPERTY(bool hapticsAntiLatency READ hapticsAntiLatency WRITE setHapticsAntiLatency NOTIFY hapticsAntiLatencyChanged)
+    Q_PROPERTY(int hapticsAntiLatencyMs READ hapticsAntiLatencyMs WRITE setHapticsAntiLatencyMs NOTIFY hapticsAntiLatencyMsChanged)
     Q_PROPERTY(int displayTargetContrast READ displayTargetContrast WRITE setDisplayTargetContrast NOTIFY displayTargetContrastChanged)
     Q_PROPERTY(int displayTargetPeak READ displayTargetPeak WRITE setDisplayTargetPeak NOTIFY displayTargetPeakChanged)
     Q_PROPERTY(int displayTargetPrim READ displayTargetPrim WRITE setDisplayTargetPrim NOTIFY displayTargetPrimChanged)
@@ -161,6 +164,10 @@ class QmlSettings : public QObject
     Q_PROPERTY(int placeboToneMappingToneLutSize READ placeboToneMappingToneLutSize WRITE setPlaceboToneMappingToneLutSize NOTIFY placeboToneMappingToneLutSizeChanged)
     Q_PROPERTY(float placeboToneMappingContrastRecovery READ placeboToneMappingContrastRecovery WRITE setPlaceboToneMappingContrastRecovery NOTIFY placeboToneMappingContrastRecoveryChanged)
     Q_PROPERTY(float placeboToneMappingContrastSmoothness READ placeboToneMappingContrastSmoothness WRITE setPlaceboToneMappingContrastSmoothness NOTIFY placeboToneMappingContrastSmoothnessChanged)
+    Q_PROPERTY(bool gyroSteering READ gyroSteering WRITE setGyroSteering NOTIFY gyroSteeringChanged)
+    Q_PROPERTY(qreal gyroSteeringSensitivity READ gyroSteeringSensitivity WRITE setGyroSteeringSensitivity NOTIFY gyroSteeringChanged)
+    Q_PROPERTY(qreal gyroSteeringDeadzone READ gyroSteeringDeadzone WRITE setGyroSteeringDeadzone NOTIFY gyroSteeringChanged)
+    Q_PROPERTY(bool gyroSteeringInvert READ gyroSteeringInvert WRITE setGyroSteeringInvert NOTIFY gyroSteeringChanged)
 
 public:
     QmlSettings(Settings *settings, QObject *parent = nullptr);
@@ -255,6 +262,15 @@ public:
 
     float hapticOverride() const;
     void setHapticOverride(float override);
+
+    bool ds5GyroFix() const;
+    void setDS5GyroFix(bool enabled);
+
+    bool hapticsAntiLatency() const;
+    void setHapticsAntiLatency(bool enabled);
+
+    int hapticsAntiLatencyMs() const;
+    void setHapticsAntiLatencyMs(int ms);
 
     int fpsLocalPS4() const;
     void setFpsLocalPS4(int fps);
@@ -532,6 +548,15 @@ public:
     float placeboToneMappingContrastSmoothness() const;
     void setPlaceboToneMappingContrastSmoothness(float smoothness);
 
+    bool gyroSteering() const;
+    void setGyroSteering(bool enabled);
+    qreal gyroSteeringSensitivity() const;
+    void setGyroSteeringSensitivity(qreal value);
+    qreal gyroSteeringDeadzone() const;
+    void setGyroSteeringDeadzone(qreal value);
+    bool gyroSteeringInvert() const;
+    void setGyroSteeringInvert(bool invert);
+
     QString psnAuthToken() const;
     void setPsnAuthToken(const QString &auth_token);
 
@@ -610,6 +635,10 @@ public:
     Q_INVOKABLE void deleteProfile(QString profile);
     Q_INVOKABLE QString stringForDpadShortcut() const;
     Q_INVOKABLE QString stringForStreamMenuShortcut() const;
+    Q_INVOKABLE float gyroSteerAngle();
+    Q_INVOKABLE float gyroSteerLeftX();
+    Q_INVOKABLE void setGyroSteerRestPoint();
+    Q_INVOKABLE void applyGyroSteerConfig();
 
 signals:
     void resolutionLocalPS4Changed();
@@ -639,6 +668,9 @@ signals:
     void addSteamShortcutAskChanged();
     void hideCursorChanged();
     void hapticOverrideChanged();
+    void ds5GyroFixChanged();
+    void hapticsAntiLatencyChanged();
+    void hapticsAntiLatencyMsChanged();
     void audioVideoDisabledChanged();
     void showStreamStatsChanged();
     void streamerModeChanged();
@@ -766,6 +798,7 @@ signals:
     void placeboToneMappingContrastRecoveryChanged();
     void placeboToneMappingContrastSmoothnessChanged();
     void placeboChanged();
+    void gyroSteeringChanged();
 
 private:
     Settings *settings = {};

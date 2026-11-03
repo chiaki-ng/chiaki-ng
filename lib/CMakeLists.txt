@@ -84,6 +84,7 @@ set(SOURCE_FILES
 		src/opusdecoder.c
 		src/opusencoder.c
 		src/orientation.c
+		src/gyrosteer.c
 		src/bitstream.c
 		src/aia.c
 		src/aia.h
