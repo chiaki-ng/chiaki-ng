@@ -82,6 +82,15 @@ int real_main(int argc, char *argv[])
 	// live resize, but our swapchain presents from the render thread, so every resize step
 	// stalled and resizing the window became very slow.
 	qputenv("QT_MTL_NO_TRANSACTION", "1");
+	// The Vulkan loader also reads Homebrew's driver folder, so with Homebrew's molten-vk installed
+	// the app loaded a second MoltenVK beside its own and listed every GPU twice. Use only the
+	// bundled one. Setting any of these variables yourself keeps your choice.
+	const QString moltenvk_icd = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath()
+		+ "/../Resources/vulkan/icd.d/MoltenVK_icd.json";
+	if(QFileInfo::exists(moltenvk_icd) && !qEnvironmentVariableIsSet("VK_DRIVER_FILES")
+		&& !qEnvironmentVariableIsSet("VK_ICD_FILENAMES") && !qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_SELECT")
+		&& !qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_DISABLE"))
+		qputenv("VK_DRIVER_FILES", QFileInfo(moltenvk_icd).canonicalFilePath().toUtf8());
 #endif
 #if defined(Q_OS_LINUX)
 	if(qEnvironmentVariableIsSet("FLATPAK_ID"))
