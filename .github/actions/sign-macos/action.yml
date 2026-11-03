@@ -1,0 +1,82 @@
+name: Sign and notarize chiaki-ng for macOS
+description: Sign chiaki-ng.app with a Developer ID certificate, build and sign the DMG, then notarize and staple it
+
+inputs:
+  certificate-p12:
+    description: The Developer ID Application certificate and key as a base64 .p12
+    required: true
+  certificate-password:
+    description: The .p12 export password
+    required: true
+  notary-key-p8:
+    description: The App Store Connect API key as a base64 .p8
+    required: true
+  notary-key-id:
+    description: The API key ID
+    required: true
+  notary-issuer-id:
+    description: The API key issuer ID
+    required: true
+  dmg:
+    description: The DMG to write
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Import the Developer ID certificate
+      shell: bash
+      env:
+        MACOS_CERT_P12: ${{ inputs.certificate-p12 }}
+        MACOS_CERT_PASSWORD: ${{ inputs.certificate-password }}
+      run: |
+        keychain="$RUNNER_TEMP/signing.keychain-db"
+        keychain_password="$(uuidgen)"
+        echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+        security create-keychain -p "$keychain_password" "$keychain"
+        security set-keychain-settings -lut 3600 "$keychain"
+        security unlock-keychain -p "$keychain_password" "$keychain"
+        security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+        rm -f "$RUNNER_TEMP/cert.p12"
+        security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+        security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+        identity="$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ { print $2; exit }')"
+        test -n "$identity"
+        echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+        echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
+    - name: Sign chiaki-ng
+      shell: bash
+      run: |
+        scripts/macos-sign.sh chiaki-ng.app "$SIGNING_IDENTITY"
+        hdiutil create -volname chiaki-ng -srcfolder chiaki-ng.app -format UDZO "${{ inputs.dmg }}"
+        codesign --force --timestamp --sign "$SIGNING_IDENTITY" "${{ inputs.dmg }}"
+
+    - name: Notarize and staple
+      shell: bash
+      env:
+        NOTARY_KEY_P8: ${{ inputs.notary-key-p8 }}
+        NOTARY_KEY_ID: ${{ inputs.notary-key-id }}
+        NOTARY_ISSUER_ID: ${{ inputs.notary-issuer-id }}
+      run: |
+        key="$RUNNER_TEMP/notary.p8"
+        echo "$NOTARY_KEY_P8" | base64 --decode > "$key"
+        xcrun notarytool submit "${{ inputs.dmg }}" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait --timeout 1h --output-format json > "$RUNNER_TEMP/notary.json" || true
+        cat "$RUNNER_TEMP/notary.json"
+        id="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("id", ""))' "$RUNNER_TEMP/notary.json")"
+        status="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("status", ""))' "$RUNNER_TEMP/notary.json")"
+        if [ "$status" != "Accepted" ]; then
+          [ -n "$id" ] && xcrun notarytool log "$id" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+          rm -f "$key"
+          exit 1
+        fi
+        rm -f "$key"
+        xcrun stapler staple "${{ inputs.dmg }}"
+        spctl --assess --type open --context context:primary-signature -vv "${{ inputs.dmg }}"
+
+    - name: Remove the signing keychain
+      if: always()
+      shell: bash
+      run: |
+        [ -n "$SIGNING_KEYCHAIN" ] && security delete-keychain "$SIGNING_KEYCHAIN" || true
+        rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
