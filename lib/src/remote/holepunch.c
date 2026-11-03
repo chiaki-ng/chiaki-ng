@@ -5754,7 +5754,7 @@ static ChiakiErrorCode session_message_serialize(
 {
     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
 
-    // Since the official remote play app doesn't send valid JSON half the time,
+    // Since the console expects this message in a format that is not always valid JSON,
     // we can't use a proper JSON library to serialize the message. Instead, we
     // use snprintf to build the JSON string manually.
     char localpeeraddr_json[128] = {0};
@@ -5914,7 +5914,7 @@ static ChiakiErrorCode short_message_serialize(
 {
     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
 
-    // Since the official remote play app doesn't send valid JSON half the time,
+    // Since the console expects this message in a format that is not always valid JSON,
     // we can't use a proper JSON library to serialize the message. Instead, we
     // use snprintf to build the JSON string manually.
 
