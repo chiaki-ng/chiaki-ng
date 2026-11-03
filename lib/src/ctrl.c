@@ -687,7 +687,8 @@ static ChiakiErrorCode ctrl_message_send(ChiakiCtrl *ctrl, uint16_t type, const 
 
 	CHIAKI_LOGV(ctrl->session->log, "Ctrl sending message type %x, size %llx\n",
 			(unsigned int)type, (unsigned long long)payload_size);
-	if(payload)
+	// The login PIN reply carries the PIN in plain text, so keep it out of even verbose logs
+	if(payload && type != CTRL_MESSAGE_TYPE_LOGIN_PIN_REP)
 		chiaki_log_hexdump(ctrl->session->log, CHIAKI_LOG_VERBOSE, payload, payload_size);
 
 	uint8_t *enc = NULL;
