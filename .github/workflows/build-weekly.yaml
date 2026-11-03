@@ -426,7 +426,7 @@ jobs:
           else
             codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.app
             rm -f chiaki-ng.dmg
-            hdiutil create -srcfolder chiaki-ng.app chiaki-ng.dmg
+            ./scripts/macos-dmg.sh chiaki-ng.app chiaki-ng.dmg weekly
             codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.dmg
             cp chiaki-ng.dmg chiaki-ng-macos_arm64-Release.dmg
           fi
@@ -479,6 +479,7 @@ jobs:
           notary-key-id: ${{ secrets.NOTARY_KEY_ID }}
           notary-issuer-id: ${{ secrets.NOTARY_ISSUER_ID }}
           dmg: chiaki-ng-macos_arm64-Release.dmg
+          label: weekly
 
       - name: Upload chiaki-ng Artifact
         uses: nanoufo/action-upload-artifacts-and-release-assets@v2

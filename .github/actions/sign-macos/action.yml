@@ -20,37 +20,51 @@ inputs:
   dmg:
     description: The DMG to write
     required: true
+  label:
+    description: A label to draw on the DMG background, such as weekly, or empty for a release
+    required: false
+    default: ""
 
 runs:
   using: composite
   steps:
-    - name: Import the Developer ID certificate
+    # Installed before any certificate is loaded, and pinned by hash, so no download happens and no
+    # unreviewed code runs while the signing identity is in a keychain
+    - name: Install dmgbuild
+      shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/dmgbuild"
+        "$RUNNER_TEMP/dmgbuild/bin/pip" install --quiet --disable-pip-version-check --require-hashes \
+          --only-binary :all: -r scripts/macos/dmgbuild-requirements.txt
+        echo "DMGBUILD=$RUNNER_TEMP/dmgbuild/bin/dmgbuild" >> "$GITHUB_ENV"
+
+    - name: Sign chiaki-ng
       shell: bash
       env:
         MACOS_CERT_P12: ${{ inputs.certificate-p12 }}
         MACOS_CERT_PASSWORD: ${{ inputs.certificate-password }}
       run: |
-        keychain="$RUNNER_TEMP/signing.keychain-db"
-        keychain_password="$(uuidgen)"
-        echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-        security create-keychain -p "$keychain_password" "$keychain"
-        security set-keychain-settings -lut 3600 "$keychain"
-        security unlock-keychain -p "$keychain_password" "$keychain"
-        security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
-        rm -f "$RUNNER_TEMP/cert.p12"
-        security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
-        security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-        identity="$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ { print $2; exit }')"
+        { read -r keychain; read -r identity; } < <(scripts/macos-keychain.sh import)
+        trap 'scripts/macos-keychain.sh delete "$keychain"' EXIT
         test -n "$identity"
-        echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
-        echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+        scripts/macos-sign.sh chiaki-ng.app "$identity"
 
-    - name: Sign chiaki-ng
+    # Built with no keychain present, since dmgbuild and its dependencies are third-party code
+    - name: Build the DMG
       shell: bash
       run: |
-        scripts/macos-sign.sh chiaki-ng.app "$SIGNING_IDENTITY"
-        hdiutil create -volname chiaki-ng -srcfolder chiaki-ng.app -format UDZO "${{ inputs.dmg }}"
-        codesign --force --timestamp --sign "$SIGNING_IDENTITY" "${{ inputs.dmg }}"
+        scripts/macos-dmg.sh chiaki-ng.app "${{ inputs.dmg }}" "${{ inputs.label }}"
+
+    - name: Sign the DMG
+      shell: bash
+      env:
+        MACOS_CERT_P12: ${{ inputs.certificate-p12 }}
+        MACOS_CERT_PASSWORD: ${{ inputs.certificate-password }}
+      run: |
+        { read -r keychain; read -r identity; } < <(scripts/macos-keychain.sh import)
+        trap 'scripts/macos-keychain.sh delete "$keychain"' EXIT
+        test -n "$identity"
+        codesign --force --timestamp --sign "$identity" "${{ inputs.dmg }}"
 
     - name: Notarize and staple
       shell: bash
@@ -78,5 +92,5 @@ runs:
       if: always()
       shell: bash
       run: |
-        [ -n "$SIGNING_KEYCHAIN" ] && security delete-keychain "$SIGNING_KEYCHAIN" || true
+        scripts/macos-keychain.sh delete "$RUNNER_TEMP/signing.keychain-db" || true
         rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
