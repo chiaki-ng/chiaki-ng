@@ -31,51 +31,53 @@ DialogView {
     }
 
     Item {
-        TabBar {
+        C.TabBar {
             id: bar
             anchors {
                 top: parent.top
                 left: parent.left
                 right: parent.right
-                topMargin: 5
+                topMargin: 16
+                leftMargin: 24
+                rightMargin: 24
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Config")
                 focusPolicy: Qt.NoFocus
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Scaling")
                 focusPolicy: Qt.NoFocus
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Deinterlace")
                 focusPolicy: Qt.NoFocus
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Debanding")
                 focusPolicy: Qt.NoFocus
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Sigmoidization")
                 focusPolicy: Qt.NoFocus
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Color")
                 focusPolicy: Qt.NoFocus
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Peak Detection")
                 focusPolicy: Qt.NoFocus
             }
 
-            TabButton {
+            C.TabButton {
                 text: qsTr("Color Mapping")
                 focusPolicy: Qt.NoFocus
             }

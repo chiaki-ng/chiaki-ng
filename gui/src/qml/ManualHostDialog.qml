@@ -17,11 +17,21 @@ DialogView {
     }
 
     Item {
+        Rectangle {
+            anchors.fill: formGrid
+            anchors.margins: -36
+            radius: C.Theme.radiusXL
+            color: C.Theme.surface
+            border.width: 1
+            border.color: C.Theme.stroke
+        }
+
         GridLayout {
+            id: formGrid
             anchors {
                 top: parent.top
                 horizontalCenter: parent.horizontalCenter
-                topMargin: 20
+                topMargin: 64
             }
             columns: 2
             rowSpacing: 20

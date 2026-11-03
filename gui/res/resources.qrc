@@ -30,4 +30,39 @@
     <file alias="FSRCNNX_x2_8-0-4-1.glsl">shaders/FSRCNNX_x2_8-0-4-1.glsl</file>
     <file alias="FSRCNNX_x2_16-0-4-1.glsl">shaders/FSRCNNX_x2_16-0-4-1.glsl</file>
   </qresource>
+  <qresource prefix="/ui">
+    <file alias="alert.svg">ui/alert.svg</file>
+    <file alias="back.svg">ui/back.svg</file>
+    <file alias="check.svg">ui/check.svg</file>
+    <file alias="close.svg">ui/close.svg</file>
+    <file alias="eye-off.svg">ui/eye-off.svg</file>
+    <file alias="gamepad.svg">ui/gamepad.svg</file>
+    <file alias="globe.svg">ui/globe.svg</file>
+    <file alias="logo-mark.svg">ui/logo-mark.svg</file>
+    <file alias="mic-off.svg">ui/mic-off.svg</file>
+    <file alias="mic.svg">ui/mic.svg</file>
+    <file alias="monitor.svg">ui/monitor.svg</file>
+    <file alias="moon.svg">ui/moon.svg</file>
+    <file alias="pin.svg">ui/pin.svg</file>
+    <file alias="play.svg">ui/play.svg</file>
+    <file alias="plus.svg">ui/plus.svg</file>
+    <file alias="power.svg">ui/power.svg</file>
+    <file alias="radar-off.svg">ui/radar-off.svg</file>
+    <file alias="radar.svg">ui/radar.svg</file>
+    <file alias="refresh.svg">ui/refresh.svg</file>
+    <file alias="settings.svg">ui/settings.svg</file>
+    <file alias="sliders.svg">ui/sliders.svg</file>
+    <file alias="sparkles.svg">ui/sparkles.svg</file>
+    <file alias="stretch.svg">ui/stretch.svg</file>
+    <file alias="sun.svg">ui/sun.svg</file>
+    <file alias="trash.svg">ui/trash.svg</file>
+    <file alias="volume.svg">ui/volume.svg</file>
+    <file alias="zoom.svg">ui/zoom.svg</file>
+  </qresource>
+  <qresource prefix="/fonts">
+    <file alias="Inter-Regular.ttf">fonts/Inter-Regular.ttf</file>
+    <file alias="Inter-Medium.ttf">fonts/Inter-Medium.ttf</file>
+    <file alias="Inter-SemiBold.ttf">fonts/Inter-SemiBold.ttf</file>
+    <file alias="Inter-Bold.ttf">fonts/Inter-Bold.ttf</file>
+  </qresource>
 </RCC>

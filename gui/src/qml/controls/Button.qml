@@ -7,7 +7,10 @@ Button {
     property bool lastInFocusChain: false
     property bool sendOutput: false
 
-    Material.background: visualFocus ? Material.accent : undefined
+    Material.background: visualFocus ? Material.accent : Theme.surfaceRaised
+    Material.foreground: Theme.text
+    Material.elevation: 0
+    font.weight: Font.DemiBold
 
     Component.onDestruction: {
         if (visualFocus) {

@@ -5,6 +5,7 @@
     <file>MainView.qml</file>
     <file>StreamView.qml</file>
     <file>StreamMenuWindow.qml</file>
+    <file>StreamMenuBar.qml</file>
     <file>ConfirmDialog.qml</file>
     <file>RemindDialog.qml</file>
     <file>DialogView.qml</file>
@@ -28,5 +29,16 @@
     <file>controls/RadioButton.qml</file>
     <file>controls/Slider.qml</file>
     <file>controls/TextField.qml</file>
+    <file>controls/qmldir</file>
+    <file>controls/Theme.qml</file>
+    <file>controls/AppBackground.qml</file>
+    <file>controls/Chip.qml</file>
+    <file>controls/DockTile.qml</file>
+    <file>controls/IconButton.qml</file>
+    <file>controls/KeyHint.qml</file>
+    <file>controls/ModalDialog.qml</file>
+    <file>controls/PillButton.qml</file>
+    <file>controls/TabBar.qml</file>
+    <file>controls/TabButton.qml</file>
   </qresource>
 </RCC>

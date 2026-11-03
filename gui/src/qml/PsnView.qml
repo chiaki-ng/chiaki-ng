@@ -4,6 +4,8 @@ import QtQuick.Controls.Material
 
 import org.streetpea.chiaking
 
+import "controls" as C
+
 Rectangle {
     id: view
     property bool allowClose: false
@@ -12,6 +14,10 @@ Rectangle {
     property bool registOnly: false
     property list<Item> restoreFocusItems
     color: "black"
+
+    C.AppBackground {
+        anchors.fill: parent
+    }
 
     StackView.onActivated: infoLabel.visible = false
 
@@ -55,6 +61,9 @@ Rectangle {
     Label {
         id: infoLabel
         anchors.centerIn: parent
+        font.pixelSize: C.Theme.fontHeadline
+        font.weight: Font.Bold
+        color: C.Theme.text
         opacity: textVisible ? 1.0: 0.0
         visible: opacity
         text: qsTr("Establishing connection with console over PSN ...")
@@ -78,6 +87,8 @@ Rectangle {
 
         Label {
             id: closeMessageLabel
+            color: C.Theme.textSecondary
+            font.pixelSize: C.Theme.fontLabel
             anchors {
                 top: spinner.bottom
                 horizontalCenter: spinner.horizontalCenter
@@ -137,13 +148,18 @@ Rectangle {
         onTriggered: root.showMainView()
     }
 
-    Dialog {
+    Rectangle {
+        anchors.fill: parent
+        color: C.Theme.scrim
+        opacity: sessionPinDialog.visible ? 1.0 : 0.0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: C.Theme.durMed } }
+    }
+
+    C.ModalDialog {
         id: sessionPinDialog
-        parent: Overlay.overlay
-        x: Math.round((root.width - width) / 2)
-        y: Math.round((root.height - height) / 2)
         title: qsTr("Console Login PIN")
-        modal: true
+        iconSource: C.Theme.icon("pin")
         closePolicy: Popup.NoAutoClose
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAboutToShow: {
@@ -159,12 +175,15 @@ Rectangle {
         }
         onAccepted: Chiaki.enterPin(pinField.text)
         onRejected: Chiaki.stopSession(false)
-        Material.roundedScale: Material.MediumScale
 
         TextField {
             id: pinField
             echoMode: Chiaki.settings.streamerMode ? TextInput.Password : TextInput.Normal
-            implicitWidth: 200
+            implicitWidth: 320
+            horizontalAlignment: Text.AlignHCenter
+            font.pixelSize: C.Theme.fontTitle
+            font.weight: Font.Bold
+            font.letterSpacing: 12
             validator: RegularExpressionValidator { regularExpression: /[0-9]{4}/ }
             Keys.onReturnPressed: {
                 if(sessionPinDialog.standardButton(Dialog.Ok).enabled)

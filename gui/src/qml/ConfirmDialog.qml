@@ -4,18 +4,14 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import "controls" as C
 
-Dialog {
+C.ModalDialog {
     id: dialog
     property alias text: label.text
     property var callback
     property var rejectCallback
     property bool newDialogOpen: false
     property Item restoreFocusItem
-    parent: Overlay.overlay
-    x: Math.round((root.width - width) / 2)
-    y: Math.round((root.height - height) / 2)
-    modal: true
-    Material.roundedScale: Material.MediumScale
+    iconSource: C.Theme.icon("alert")
     onOpened: label.forceActiveFocus(Qt.TabFocusReason)
     onAccepted: {
         newDialogOpen = true;
@@ -39,65 +35,37 @@ Dialog {
         label.focus = false;
     }
 
-    Component.onCompleted: {
-        header.horizontalAlignment = Text.AlignHCenter;
-        // Qt 6.6: Workaround dialog background becoming immediately transparent during close animation
-        header.background = null;
-    }
-
     ColumnLayout {
-        spacing: 20
+        spacing: 28
 
         Label {
             id: label
+            Layout.maximumWidth: Math.min(680, root.width - 160)
+            wrapMode: Text.WordWrap
+            color: C.Theme.textSecondary
+            font.pixelSize: C.Theme.fontBody
+            lineHeight: 1.15
             Keys.onEscapePressed: dialog.reject()
             Keys.onReturnPressed: dialog.accept()
         }
 
         RowLayout {
-            Layout.alignment: Qt.AlignCenter
-            spacing: 20
+            Layout.alignment: Qt.AlignRight
+            spacing: 12
 
-            Button {
-                text: qsTr("Yes")
-                Material.background: Material.accent
-                flat: true
-                leftPadding: 50
-                onClicked: dialog.accept()
-                Material.roundedScale: Material.SmallScale
-
-                Image {
-                    anchors {
-                        left: parent.left
-                        verticalCenter: parent.verticalCenter
-                        leftMargin: 12
-                    }
-                    width: 28
-                    height: 28
-                    sourceSize: Qt.size(width, height)
-                    source: root.controllerButton("cross")
-                }
+            C.PillButton {
+                text: qsTr("No")
+                hint: root.controllerButton("moon")
+                focusPolicy: Qt.NoFocus
+                onClicked: dialog.reject()
             }
 
-            Button {
-                Material.background: Material.accent
-                text: qsTr("No")
-                flat: true
-                leftPadding: 50
-                onClicked: dialog.reject()
-                Material.roundedScale: Material.SmallScale
-
-                Image {
-                    anchors {
-                        left: parent.left
-                        verticalCenter: parent.verticalCenter
-                        leftMargin: 12
-                    }
-                    width: 28
-                    height: 28
-                    sourceSize: Qt.size(width, height)
-                    source: root.controllerButton("moon")
-                }
+            C.PillButton {
+                text: qsTr("Yes")
+                kind: "primary"
+                hint: root.controllerButton("cross")
+                focusPolicy: Qt.NoFocus
+                onClicked: dialog.accept()
             }
         }
     }
