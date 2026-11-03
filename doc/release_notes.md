@@ -54,6 +54,7 @@ This release provides the following improvements:
 - add direct frame mapping (on by default) along with frame pacing and renderer fixes, and fix crashes when a session ends or the video queue resets and a VRAM leak while the session is locked
 - bring back Vulkan as the default renderer on macOS, which brings back HDR, with MoltenVK 1.4.2; the macOS app is now signed and notarized, so it opens without a security exception, and it no longer freezes when you quit during a stream
 - keep DualSense rumble working after switching between Bluetooth and USB, start wired haptics as soon as the controller's audio device appears, and keep haptics in step after network stalls
+- fix the microphone cutting out, mostly with quieter mics, and resend each mic frame in the next two packets
 - fix the AppImage crashing at PSN login on distros with a different NSS version and make it use its own SDL3
 - resend the wakeup while the console wakes, fix UPnP discovery, connecting by ports and renaming consoles, and recover incomplete certificate chains for PSN
 - stop writing the login PIN to the session log
