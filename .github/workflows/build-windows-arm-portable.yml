@@ -3,6 +3,9 @@ name: Build chiaki-ng Windows arm64 portable (VC)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-win_arm64:
     name: Build chiaki-ng win_arm64 (VC)
@@ -15,8 +18,8 @@ jobs:
       vcpkg_baseline: 42bb0d9e8d4cf33485afb9ee2229150f79f61a1f
       VCPKG_INSTALLED_DIR: ./vcpkg_installed/
       dep_folder: deps
-      libplacebo_tag: v7.360.1
-      QT_VERSION: "6.9.*"
+      libplacebo_tag: v7.387.0
+      QT_VERSION: "6.12.*"
 
     defaults:
       run:
@@ -85,9 +88,9 @@ jobs:
       - name: Setup ffmpeg
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip" -OutFile ".\ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip"
-          Expand-Archive -LiteralPath "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip" -DestinationPath "."
-          Rename-Item "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip" "${{ env.dep_folder }}"
+          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip" -OutFile ".\ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip"
+          Expand-Archive -LiteralPath "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip" -DestinationPath "."
+          Rename-Item "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0" "${{ env.dep_folder }}"
 
       - name: Build SPIRV-Cross
         run: |

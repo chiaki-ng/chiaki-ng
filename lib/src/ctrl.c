@@ -33,6 +33,17 @@
 
 #define CTRL_EXPECT_TIMEOUT 5000
 
+// How long receiving over PSN may keep failing, with no packet read cleanly in between,
+// before the ctrl channel is given up. A single bad packet must not end it: without ctrl
+// the console stops hearing heartbeat replies and ends the session.
+#define CTRL_RUDP_ERROR_LIMIT_MS 10000
+#define CTRL_RUDP_ERROR_RETRY_MS 50
+
+// The console ends the session when no heartbeat reply reaches it for 30 seconds. Over PSN a
+// reply can be lost after its retries run out, so once the console has asked for one, a reply
+// is also sent on this interval without being asked.
+#define CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS 4950
+
 typedef enum ctrl_message_type_t {
 	CTRL_MESSAGE_TYPE_SESSION_ID = 0x33,
 	CTRL_MESSAGE_TYPE_HEARTBEAT_REQ = 0xfe,
@@ -147,6 +158,7 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_ctrl_init(ChiakiCtrl *ctrl, ChiakiSession *
 	ctrl->cant_displayb = false;
 	ctrl->msg_queue = NULL;
 	ctrl->keyboard_text_counter = 0;
+	ctrl->heartbeat_rep_last_ms = 0;
 	ctrl->sock = CHIAKI_INVALID_SOCKET;
 
 	err = chiaki_stop_pipe_init(&ctrl->stop_pipe);
@@ -422,6 +434,7 @@ static void *ctrl_thread_func(void *user)
 
 	CHIAKI_LOGI(ctrl->session->log, "Ctrl connected");
 
+	uint64_t rudp_error_since_ms = 0; // 0 while receiving cleanly
 	while(true)
 	{
 		bool overflow = false;
@@ -461,14 +474,32 @@ static void *ctrl_thread_func(void *user)
 		}
 		else
 		{
+			uint64_t timeout_ms = UINT64_MAX;
+			if(ctrl->session->rudp && ctrl->heartbeat_rep_last_ms)
+			{
+				uint64_t since_ms = chiaki_time_now_monotonic_ms() - ctrl->heartbeat_rep_last_ms;
+				timeout_ms = since_ms < CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS ? CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS - since_ms : 0;
+			}
 			chiaki_stop_pipe_reset(&ctrl->notif_pipe);
 			chiaki_mutex_unlock(&ctrl->notif_mutex);
 			if(ctrl->session->rudp)
-				err = chiaki_rudp_stop_pipe_select_single(ctrl->session->rudp, &ctrl->notif_pipe, UINT64_MAX);
+				err = chiaki_rudp_stop_pipe_select_single(ctrl->session->rudp, &ctrl->notif_pipe, timeout_ms);
 			else
-				err = chiaki_stop_pipe_select_single(&ctrl->notif_pipe, ctrl->sock, false, UINT64_MAX);
+				err = chiaki_stop_pipe_select_single(&ctrl->notif_pipe, ctrl->sock, false, timeout_ms);
 			chiaki_mutex_lock(&ctrl->notif_mutex);
 		}
+
+		if(ctrl->session->rudp && ctrl->heartbeat_rep_last_ms && !ctrl->should_stop
+			&& chiaki_time_now_monotonic_ms() - ctrl->heartbeat_rep_last_ms >= CTRL_RUDP_HEARTBEAT_REP_INTERVAL_MS)
+		{
+			chiaki_mutex_unlock(&ctrl->notif_mutex);
+			ctrl_message_send(ctrl, CTRL_MESSAGE_TYPE_HEARTBEAT_REP, NULL, 0);
+			chiaki_mutex_lock(&ctrl->notif_mutex);
+			ctrl->heartbeat_rep_last_ms = chiaki_time_now_monotonic_ms();
+		}
+
+		if(err == CHIAKI_ERR_TIMEOUT)
+			continue;
 
 		if(err == CHIAKI_ERR_CANCELED)
 		{
@@ -514,27 +545,46 @@ static void *ctrl_thread_func(void *user)
 		CHIAKI_SSIZET_TYPE received = 0;
 		if(ctrl->session->rudp)
 		{
-			RudpMessage message;
+			RudpMessage message = { 0 };
 			uint16_t remote_counter = 0;
 			uint16_t ack_counter = 0;
 			err = chiaki_rudp_recv_only(ctrl->session->rudp, sizeof(ctrl->rudp_recv_buf) - ctrl->recv_buf_size, &message);
 			if(err != CHIAKI_ERR_SUCCESS)
 			{
-				CHIAKI_LOGE(ctrl->session->log, "Failed to receive Rudp ctrl packet");
-				ctrl_failed(ctrl, CHIAKI_QUIT_REASON_CTRL_UNKNOWN);
-				break;
+				chiaki_rudp_message_pointers_free(&message);
+				uint64_t now_ms = chiaki_time_now_monotonic_ms();
+				if(!rudp_error_since_ms)
+				{
+					CHIAKI_LOGW(ctrl->session->log, "Failed to receive Rudp ctrl packet, skipping it");
+					rudp_error_since_ms = now_ms;
+					continue;
+				}
+				if(now_ms - rudp_error_since_ms >= CTRL_RUDP_ERROR_LIMIT_MS)
+				{
+					CHIAKI_LOGE(ctrl->session->log, "Failed to receive Rudp ctrl packets for %d ms, giving up", CTRL_RUDP_ERROR_LIMIT_MS);
+					ctrl_failed(ctrl, CHIAKI_QUIT_REASON_CTRL_UNKNOWN);
+					break;
+				}
+				// a socket stuck in an error state stays readable and logs every failed receive, so
+				// pause between repeated errors instead of spinning; a message to send or a stop
+				// request still wakes the loop at once
+				chiaki_mutex_unlock(&ctrl->notif_mutex);
+				chiaki_stop_pipe_sleep(&ctrl->notif_pipe, CTRL_RUDP_ERROR_RETRY_MS);
+				chiaki_mutex_lock(&ctrl->notif_mutex);
+				continue;
 			}
-			if(message.data_size < 4)
-			{
-				CHIAKI_LOGE(ctrl->session->log, "Rudp ctrl message response too small");
-				chiaki_rudp_print_message(ctrl->session->rudp, &message);
-				ctrl_failed(ctrl, CHIAKI_QUIT_REASON_CTRL_UNKNOWN);
-				break;
-			}
+			rudp_error_since_ms = 0;
 			remote_counter = message.remote_counter;
 			while(true)
 			{
-				switch(message.subtype) // wrong but works ...
+				// Every frame of a packet is checked on its own: one carrying less than the
+				// 2 byte counter and 2 byte ack counter is skipped.
+				if(message.data_size < 4 && message.subtype != 0xC0)
+				{
+					CHIAKI_LOGW(ctrl->session->log, "Rudp ctrl frame too small, skipping it");
+					chiaki_rudp_print_message(ctrl->session->rudp, &message);
+				}
+				else switch(message.subtype) // wrong but works ...
 				{
 					case 0x12:
 					case 0x26:
@@ -545,7 +595,7 @@ static void *ctrl_thread_func(void *user)
 						chiaki_rudp_send_ack_message(ctrl->session->rudp, remote_counter);
 						int offset = rudp_packet_type_data_offset(message.subtype);
 						// ctrl message header is 8 bytes
-						if((message.data_size - offset) < 8)
+						if(message.data_size < (size_t)offset + 8)
 							break;
 						// check if message is ctrl message by making sure the payload size (size of message - 8 byte header is correct)
 						uint32_t ctrl_payload_size = ntohl(*(uint32_t*)(message.data + offset));
@@ -565,12 +615,11 @@ static void *ctrl_thread_func(void *user)
 						break;
 					default:
 						CHIAKI_LOGI(ctrl->session->log, "Received message of unknown type: 0x%04x", message.type);
-						chiaki_rudp_ack_packet(ctrl->session->rudp, ack_counter);
+						// no ack counter is read from an unknown frame, so it retires none of our packets
 						chiaki_rudp_send_ack_message(ctrl->session->rudp, remote_counter);
-						// we already checked before if data size was at least 4
 						int offset2 = 4;
 						// ctrl message header is 8 bytes
-						if((message.data_size - offset2) < 8)
+						if(message.data_size < (size_t)offset2 + 8)
 							break;
 						uint32_t ctrl_payload_size2 = ntohl(*(uint32_t*)(message.data + offset2));
 						if((message.data_size - offset2 - 8) == ctrl_payload_size2)
@@ -945,6 +994,7 @@ static void ctrl_message_received_heartbeat_req(ChiakiCtrl *ctrl, uint8_t *paylo
 
 	CHIAKI_LOGI(ctrl->session->log, "Ctrl received Heartbeat, sending reply");
 	ctrl_message_send(ctrl, CTRL_MESSAGE_TYPE_HEARTBEAT_REP, NULL, 0);
+	ctrl->heartbeat_rep_last_ms = chiaki_time_now_monotonic_ms();
 }
 
 static void ctrl_message_received_switch_to_stream_connection(ChiakiCtrl *ctrl, uint8_t *payload, size_t payload_size)
@@ -1284,6 +1334,7 @@ static ChiakiErrorCode ctrl_connect(ChiakiCtrl *ctrl)
 			"RP-ClientType: 11\r\n"
 			"RP-OSType: %s\r\n"
 			"RP-ConPath: 1\r\n"
+			"%s"
 			"%s%s%s"
 			"%s%s%s"
 			"\r\n";
@@ -1301,6 +1352,9 @@ static ChiakiErrorCode ctrl_connect(ChiakiCtrl *ctrl)
 	int request_len = snprintf(send_buf, sizeof(send_buf), request_fmt,
 			path, session->connect_info.hostname, port, auth_b64,
 			rp_version ? rp_version : "", did_b64, ostype_b64,
+			// without it a PS5 sends some adaptive trigger effects (such as Bow) in a form the
+			// controller doesn't apply
+			chiaki_target_is_ps5(session->target) ? "RP-PadProcNo: 3\r\n" : "",
 			have_bitrate ? "RP-StartBitrate: " : "",
 			have_bitrate ? bitrate_b64 : "",
 			have_bitrate ? "\r\n" : "",

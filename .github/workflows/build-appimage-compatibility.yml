@@ -3,6 +3,9 @@ name: Build chiaki-ng Appimage Compatibility
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-appimage_compat_x64:
     name: Build compatibility chiaki-ng appimage_x64

@@ -3,6 +3,10 @@ name: Build chiaki-ng for Switch
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   build-switch_x64:
     name: Build chiaki-ng switch_x64

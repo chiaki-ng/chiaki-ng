@@ -78,7 +78,19 @@ int real_main(int argc, char *argv[])
 	QGuiApplication::setApplicationVersion(CHIAKI_VERSION);
 	QGuiApplication::setApplicationDisplayName("chiaki-ng");
 #if defined(Q_OS_MACOS)
+	// Use a plain CAMetalLayer for Vulkan windows. Qt's own layer presents in step with each
+	// live resize, but our swapchain presents from the render thread, so every resize step
+	// stalled and resizing the window became very slow.
 	qputenv("QT_MTL_NO_TRANSACTION", "1");
+	// The Vulkan loader also reads Homebrew's driver folder, so with Homebrew's molten-vk installed
+	// the app loaded a second MoltenVK beside its own and listed every GPU twice. Use only the
+	// bundled one. Setting any of these variables yourself keeps your choice.
+	const QString moltenvk_icd = QFileInfo(QString::fromLocal8Bit(argv[0])).canonicalPath()
+		+ "/../Resources/vulkan/icd.d/MoltenVK_icd.json";
+	if(QFileInfo::exists(moltenvk_icd) && !qEnvironmentVariableIsSet("VK_DRIVER_FILES")
+		&& !qEnvironmentVariableIsSet("VK_ICD_FILENAMES") && !qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_SELECT")
+		&& !qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_DISABLE"))
+		qputenv("VK_DRIVER_FILES", QFileInfo(moltenvk_icd).canonicalFilePath().toUtf8());
 #endif
 #if defined(Q_OS_LINUX)
 	if(qEnvironmentVariableIsSet("FLATPAK_ID"))
@@ -94,6 +106,12 @@ int real_main(int argc, char *argv[])
 	mbstowcs (wc, argv[0], cSize);
 	QString import_path = QFileInfo(QString::fromWCharArray(wc)).dir().absolutePath() + "/qml";
 	qputenv("QML_IMPORT_PATH", import_path.toUtf8());
+	// Microsoft's OpenCL, OpenGL and Vulkan Compatibility Pack adds the Dozen driver (Vulkan on
+	// D3D12) beside the GPU's own, and loading it can crash the app even when it isn't used. Where
+	// Dozen is the only Vulkan driver, Vulkan then finds no device and chiaki-ng uses OpenGL,
+	// which the pack also provides. Setting either variable yourself keeps your choice.
+	if(!qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_DISABLE") && !qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_SELECT"))
+		qputenv("VK_LOADER_DRIVERS_DISABLE", "*dzn*");
 #endif
 #if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
 	qputenv("ANV_VIDEO_DECODE", "1");
@@ -174,6 +192,9 @@ int real_main(int argc, char *argv[])
 	QCommandLineOption passcode_option("passcode", "Automatically send your PlayStation login passcode (only affects users with a login passcode set on their PlayStation console).", "passcode");
 	parser.addOption(passcode_option);
 
+	QCommandLineOption opengl_option("opengl", "Switch the renderer to OpenGL from now on, for systems where Vulkan shows a blank window or crashes (switch back under Settings > Video > Renderer Backend).");
+	parser.addOption(opengl_option);
+
 	parser.process(app);
 	QStringList args = parser.positionalArguments();
 
@@ -187,6 +208,14 @@ int real_main(int argc, char *argv[])
 	bool use_alt_settings = false;
 	if(!parser.isSet(profile_option))
 		use_alt_settings = true;
+
+	if(parser.isSet(opengl_option))
+	{
+		Settings *active_settings = use_alt_settings ? &alt_settings : &settings;
+		active_settings->SetRenderBackend(RenderBackend::OpenGL);
+		active_settings->SetVulkanStartupPending(false);
+		active_settings->Sync();
+	}
 
 	if(args.length() == 0)
 		return RunMain(app, use_alt_settings ? &alt_settings : &settings, exit_app_on_stream_exit);

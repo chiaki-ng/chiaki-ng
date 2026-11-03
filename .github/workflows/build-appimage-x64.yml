@@ -3,6 +3,9 @@ name: Build chiaki-ng Appimage x86_64
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-appimage_x64:
     name: Build chiaki-ng appimage_x64
@@ -34,7 +37,7 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.9 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           
 

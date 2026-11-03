@@ -85,17 +85,20 @@ jobs:
         tag: weekly-canary-release-${{ github.sha }}
         allowUpdates: true
         bodyFile: "${{ github.workspace }}/release_notes.md"
-        token: "${{ secrets.RELEASE_PAT }}"
-    - uses: sgpublic/delete-release-action@v1.2
-      with:
-        repo: ${{ github.repository }}
-        release-drop: false
-        pre-release-drop: true
-        pre-release-keep-count: 1
-        pre-release-drop-tag: true
-        draft-drop: false
+        token: "${{ secrets.WEEKLY_PAT }}"
+    - name: Delete older weekly releases
+      # only weekly builds: keep this one and the one before it, and leave release candidates such
+      # as v1.10.1-rc1 alone, which the old cleanup deleted along with every other pre-release
       env:
-        GITHUB_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        gh release list -R "$REPO" --limit 200 --json tagName,isPrerelease,createdAt \
+          --jq '[.[] | select(.isPrerelease and (.tagName | startswith("weekly-canary-release-")))] | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' |
+        while read -r tag; do
+          echo "Deleting $tag"
+          gh release delete "$tag" -R "$REPO" -y --cleanup-tag
+        done
     outputs:
       upload_url: ${{ steps.maker.outputs.upload_url }}
 
@@ -107,7 +110,7 @@ jobs:
     needs: [check-changes, create-release]
     if: needs.check-changes.outputs.win_x64 == 'true'
     env:
-      sdl2_compat_tag: 2.32.64
+      sdl2_compat_tag: 2.32.74
     defaults:
       run:
         shell: msys2 {0}
@@ -132,7 +135,6 @@ jobs:
             curl:p
             fast_float:p
             fftw:p
-            hidapi:p
             json-c:p
             libevent:p
             lcms2:p
@@ -172,15 +174,16 @@ jobs:
 
       - name: Setup ffmpeg
         run: |
-          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip
-          unzip ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/bin/." /mingw64/bin
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/include/." /mingw64/include
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/lib/." /mingw64/lib
+          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip
+          unzip ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/bin/." /mingw64/bin
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/include/." /mingw64/include
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/lib/." /mingw64/lib
 
       - name: Build sdl2-compat
         run: |
           INSTALL_PREFIX=/mingw64 scripts/build-sdl2-compat.sh .
+          INSTALL_PREFIX=/mingw64 scripts/build-hidapi.sh .
           cp /mingw64/lib/pkgconfig/sdl2-compat.pc /mingw64/lib/pkgconfig/sdl2.pc
 
       - name: Configure chiaki-ng
@@ -300,11 +303,11 @@ jobs:
 
       - name: Setup ffmpeg
         run: |
-          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip
-          unzip ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/bin/." /clangarm64/bin
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/include/." /clangarm64/include
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/lib/." /clangarm64/lib
+          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip
+          unzip ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/bin/." /clangarm64/bin
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/include/." /clangarm64/include
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/lib/." /clangarm64/lib
 
       - name: Build sdl2-compat
         run: |
@@ -378,6 +381,8 @@ jobs:
           brew update
           brew uninstall pkgconfig || true
           brew install qt@6 ffmpeg pkgconfig opus openssl@3 cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
+          # OpenSSL 4 headers in the Homebrew prefix would shadow openssl@3; the bundled curl needs 3
+          brew unlink openssl@4 || true
 
       - name: Install sdl2-compat
         run: |
@@ -386,7 +391,7 @@ jobs:
 
       - name: Configure chiaki-ng
         run: |
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DOPENSSL_INCLUDE_DIR="$(brew --prefix)/opt/openssl@3/include" -DOPENSSL_CRYPTO_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libcrypto.dylib" -DOPENSSL_SSL_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libssl.dylib" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
 
       - name: Build chiaki-ng
         run: |
@@ -400,8 +405,8 @@ jobs:
           cp scripts/qtwebengine_import.qml gui/src/qml/
           $(brew --prefix)/opt/qt@6/bin/macdeployqt chiaki-ng.app -qmldir="$PWD/gui/src/qml" -libpath=$(brew --prefix)/lib
           mkdir -p chiaki-ng.app/Contents/Resources/vulkan/icd.d
-          wget https://github.com/KhronosGroup/MoltenVK/releases/download/v1.2.9/MoltenVK-macos.tar && tar xf MoltenVK-macos.tar
-          cp MoltenVK/MoltenVK/dylib/macOS/* chiaki-ng.app/Contents/Resources/vulkan/icd.d
+          wget https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar && tar xf MoltenVK-macos.tar
+          cp MoltenVK/MoltenVK/dynamic/dylib/macOS/* chiaki-ng.app/Contents/Resources/vulkan/icd.d
           $(brew --prefix)/opt/qt@6/bin/macdeployqt chiaki-ng.app -qmldir="$PWD/gui/src/qml" -libpath=$(brew --prefix)/lib
           ln -s ../../../../../../../Frameworks chiaki-ng.app/Contents/Frameworks/QtWebEngineCore.framework/Helpers/QtWebEngineProcess.app/Contents
           cp /usr/local/lib/libSDL3.dylib chiaki-ng.app/Contents/MacOS/libSDL3.dylib
@@ -415,11 +420,65 @@ jobs:
           install_name_tool -change @rpath/libSDL2-2.0.0.dylib @executable_path/libSDL2-2.0.0.dylib chiaki-ng.app/Contents/MacOS/chiaki || true
           install_name_tool -change /opt/homebrew/lib/libSDL2-2.0.0.dylib @executable_path/libSDL2-2.0.0.dylib chiaki-ng.app/Contents/MacOS/chiaki || true
           ln -s libvulkan.1.dylib chiaki-ng.app/Contents/Frameworks/vulkan
-          codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.app
-          rm -f chiaki-ng.dmg
-          hdiutil create -srcfolder chiaki-ng.app chiaki-ng.dmg
-          codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.dmg
-          cp chiaki-ng.dmg chiaki-ng-macos_arm64-Release.dmg
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            # main's weekly is signed by the job below; tar keeps the bundle's symlinks
+            tar -czf chiaki-ng-macos_arm64-unsigned.tar.gz chiaki-ng.app
+          else
+            codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.app
+            rm -f chiaki-ng.dmg
+            hdiutil create -srcfolder chiaki-ng.app chiaki-ng.dmg
+            codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.dmg
+            cp chiaki-ng.dmg chiaki-ng-macos_arm64-Release.dmg
+          fi
+
+      - name: Hand the unsigned app to the signing job
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chiaki-ng-macos_arm64-unsigned
+          path: chiaki-ng-macos_arm64-unsigned.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload chiaki-ng Artifact
+        if: github.ref != 'refs/heads/main'
+        uses: nanoufo/action-upload-artifacts-and-release-assets@v2
+        with:
+          path: |
+            chiaki-ng-macos_arm64-Release.dmg
+          if-no-files-found: error
+          upload-release-files: true
+          release-upload-url: ${{ needs.create-release.outputs.upload_url }}
+
+  sign-mac_arm64:
+    name: Sign and notarize macOS arm64
+    runs-on: macos-15
+    # Only main's weekly is signed. The weekly-signing environment only serves main, which needs the
+    # code owner's review, so even a branch that drops this if can't reach the signing keys
+    environment: weekly-signing
+    permissions:
+      contents: write
+    needs: [check-changes, create-release, build-mac_arm64_github]
+    if: needs.check-changes.outputs.mac_arm64 == 'true' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the unsigned app
+        uses: actions/download-artifact@v4
+        with:
+          name: chiaki-ng-macos_arm64-unsigned
+
+      - name: Unpack the app
+        run: tar -xzf chiaki-ng-macos_arm64-unsigned.tar.gz
+
+      - uses: ./.github/actions/sign-macos
+        with:
+          certificate-p12: ${{ secrets.MACOS_CERT_P12 }}
+          certificate-password: ${{ secrets.MACOS_CERT_PASSWORD }}
+          notary-key-p8: ${{ secrets.NOTARY_KEY_P8 }}
+          notary-key-id: ${{ secrets.NOTARY_KEY_ID }}
+          notary-issuer-id: ${{ secrets.NOTARY_ISSUER_ID }}
+          dmg: chiaki-ng-macos_arm64-Release.dmg
 
       - name: Upload chiaki-ng Artifact
         uses: nanoufo/action-upload-artifacts-and-release-assets@v2
@@ -464,7 +523,7 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.9 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           cp appimage/chiaki-ng.AppImage appimage/chiaki-ng.AppImage_x86_64
 
@@ -510,7 +569,7 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.7 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           cp appimage/chiaki-ng.AppImage appimage/chiaki-ng.AppImage_arm64
 
@@ -548,14 +607,17 @@ jobs:
       - name: Setup Flatpak Builder Environment
         run: |
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak install org.kde.Sdk//6.9 -y
-          flatpak install org.kde.Platform//6.9 -y
-          flatpak install io.qt.qtwebengine.BaseApp//6.9 -y
+          flatpak install org.kde.Sdk//6.11 -y
+          flatpak install org.kde.Platform//6.11 -y
+          flatpak install io.qt.qtwebengine.BaseApp//6.11 -y
           flatpak update --appstream --assumeyes
 
       - name: Build Flatpak package
         working-directory: chiaki-ng
         run: |
+          # build the checked-out commit, not the manifest's branch
+          sed -i 's|^        branch: main$|        commit: ${{ github.sha }}|' scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
+          grep -q '^        commit: ${{ github.sha }}$' scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
           flatpak-builder --repo=chiaki-ng --force-clean build-dir scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
 
       - name: Bundle Flatpak app
@@ -607,14 +669,17 @@ jobs:
       - name: Setup Flatpak Builder Environment
         run: |
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak install org.kde.Sdk//6.9 -y
-          flatpak install org.kde.Platform//6.9 -y
-          flatpak install io.qt.qtwebengine.BaseApp//6.9 -y
+          flatpak install org.kde.Sdk//6.11 -y
+          flatpak install org.kde.Platform//6.11 -y
+          flatpak install io.qt.qtwebengine.BaseApp//6.11 -y
           flatpak update --appstream --assumeyes
 
       - name: Build Flatpak package
         working-directory: chiaki-ng
         run: |
+          # build the checked-out commit, not the manifest's branch
+          sed -i 's|^        branch: main$|        commit: ${{ github.sha }}|' scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
+          grep -q '^        commit: ${{ github.sha }}$' scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
           flatpak-builder --repo=chiaki-ng --force-clean build-dir scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
 
       - name: Bundle Flatpak app

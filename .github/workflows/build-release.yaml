@@ -8,6 +8,8 @@ jobs:
   create-release:
     name: Upload release
     runs-on: ubuntu-latest
+    # RELEASE_PAT is an environment secret, so publishing waits for approval
+    environment: release
     permissions:
       contents: write
     steps:
@@ -17,12 +19,15 @@ jobs:
     - name: generate release notes
       working-directory: ${{ github.workspace }}
       run: |
-        git tag -l --format='%(contents)' ${GITHUB_REF_NAME} >> doc/release_notes.md
+        # subject and body only, so a signed tag's signature stays out of the notes
+        echo >> doc/release_notes.md
+        git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' ${GITHUB_REF_NAME} >> doc/release_notes.md
 
     - uses: ncipollo/release-action@v1
       id: maker
       with:
-        prerelease: false
+        # a tag like v1.10.1-rc1 makes a pre-release, to test the release build before the real tag
+        prerelease: ${{ contains(github.ref_name, '-') }}
         allowUpdates: true
         bodyFile: "${{ github.workspace }}/doc/release_notes.md"
         token: "${{ secrets.RELEASE_PAT }}"
@@ -36,7 +41,7 @@ jobs:
       contents: write
     needs: create-release
     env:
-      sdl2_compat_tag: 2.32.64
+      sdl2_compat_tag: 2.32.74
     defaults:
       run:
         shell: msys2 {0}
@@ -61,7 +66,6 @@ jobs:
             curl:p
             fast_float:p
             fftw:p
-            hidapi:p
             json-c:p
             libevent:p
             lcms2:p
@@ -101,15 +105,16 @@ jobs:
 
       - name: Setup ffmpeg
         run: |
-          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip
-          unzip ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/bin/." /mingw64/bin
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/include/." /mingw64/include
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/lib/." /mingw64/lib
+          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip
+          unzip ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/bin/." /mingw64/bin
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/include/." /mingw64/include
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/lib/." /mingw64/lib
 
       - name: Build sdl2-compat
         run: |
           INSTALL_PREFIX=/mingw64 scripts/build-sdl2-compat.sh .
+          INSTALL_PREFIX=/mingw64 scripts/build-hidapi.sh .
           cp /mingw64/lib/pkgconfig/sdl2-compat.pc /mingw64/lib/pkgconfig/sdl2.pc
 
       - name: Configure chiaki-ng
@@ -228,11 +233,11 @@ jobs:
 
       - name: Setup ffmpeg
         run: |
-          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip
-          unzip ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1.zip
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/bin/." /clangarm64/bin
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/include/." /clangarm64/include
-          cp -a "ffmpeg-n7.1-latest-winarm64-gpl-shared-7.1/lib/." /clangarm64/lib
+          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip
+          unzip ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0.zip
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/bin/." /clangarm64/bin
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/include/." /clangarm64/include
+          cp -a "ffmpeg-n9.0-latest-winarm64-gpl-shared-9.0/lib/." /clangarm64/lib
 
       - name: Build sdl2-compat
         run: |
@@ -296,7 +301,7 @@ jobs:
     name: Build macOSX arm64 version Github
     runs-on: macos-15
     permissions:
-      contents: write
+      contents: read
     needs: create-release
     steps:
       - uses: actions/checkout@v4
@@ -311,6 +316,8 @@ jobs:
           brew update
           brew uninstall pkgconfig || true
           brew install qt@6 ffmpeg pkgconfig opus openssl@3 cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
+          # OpenSSL 4 headers in the Homebrew prefix would shadow openssl@3; the bundled curl needs 3
+          brew unlink openssl@4 || true
 
       - name: Install sdl2-compat
         run: |
@@ -319,7 +326,7 @@ jobs:
 
       - name: Configure chiaki-ng
         run: |
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DOPENSSL_INCLUDE_DIR="$(brew --prefix)/opt/openssl@3/include" -DOPENSSL_CRYPTO_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libcrypto.dylib" -DOPENSSL_SSL_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libssl.dylib" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
 
       - name: Build chiaki-ng
         run: |
@@ -333,8 +340,8 @@ jobs:
           cp scripts/qtwebengine_import.qml gui/src/qml/
           $(brew --prefix)/opt/qt@6/bin/macdeployqt chiaki-ng.app -qmldir="$PWD/gui/src/qml" -libpath=$(brew --prefix)/lib
           mkdir -p chiaki-ng.app/Contents/Resources/vulkan/icd.d
-          wget https://github.com/KhronosGroup/MoltenVK/releases/download/v1.2.9/MoltenVK-macos.tar && tar xf MoltenVK-macos.tar
-          cp MoltenVK/MoltenVK/dylib/macOS/* chiaki-ng.app/Contents/Resources/vulkan/icd.d
+          wget https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar && tar xf MoltenVK-macos.tar
+          cp MoltenVK/MoltenVK/dynamic/dylib/macOS/* chiaki-ng.app/Contents/Resources/vulkan/icd.d
           $(brew --prefix)/opt/qt@6/bin/macdeployqt chiaki-ng.app -qmldir="$PWD/gui/src/qml" -libpath=$(brew --prefix)/lib
           ln -s ../../../../../../../Frameworks chiaki-ng.app/Contents/Frameworks/QtWebEngineCore.framework/Helpers/QtWebEngineProcess.app/Contents
           cp /usr/local/lib/libSDL3.dylib chiaki-ng.app/Contents/MacOS/libSDL3.dylib
@@ -348,11 +355,45 @@ jobs:
           install_name_tool -change @rpath/libSDL2-2.0.0.dylib @executable_path/libSDL2-2.0.0.dylib chiaki-ng.app/Contents/MacOS/chiaki || true
           install_name_tool -change /opt/homebrew/lib/libSDL2-2.0.0.dylib @executable_path/libSDL2-2.0.0.dylib chiaki-ng.app/Contents/MacOS/chiaki || true
           ln -s libvulkan.1.dylib chiaki-ng.app/Contents/Frameworks/vulkan
-          codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.app
-          rm -f chiaki-ng.dmg
-          hdiutil create -srcfolder chiaki-ng.app chiaki-ng.dmg
-          codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.dmg
-          cp chiaki-ng.dmg chiaki-ng-macos_arm64-Release.dmg
+          # tar keeps the bundle's symlinks, which an artifact upload alone would not
+          tar -czf chiaki-ng-macos_arm64-unsigned.tar.gz chiaki-ng.app
+
+      - name: Hand the unsigned app to the signing job
+        uses: actions/upload-artifact@v4
+        with:
+          name: chiaki-ng-macos_arm64-unsigned
+          path: chiaki-ng-macos_arm64-unsigned.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  sign-mac_arm64:
+    name: Sign and notarize macOS arm64
+    runs-on: macos-15
+    # The Developer ID certificate and notary key are secrets of this environment, which only serves
+    # v* tags (only the repository admin can create those); the build job above never sees them
+    environment: release
+    permissions:
+      contents: write
+    needs: [create-release, build-mac_arm64_github]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the unsigned app
+        uses: actions/download-artifact@v4
+        with:
+          name: chiaki-ng-macos_arm64-unsigned
+
+      - name: Unpack the app
+        run: tar -xzf chiaki-ng-macos_arm64-unsigned.tar.gz
+
+      - uses: ./.github/actions/sign-macos
+        with:
+          certificate-p12: ${{ secrets.MACOS_CERT_P12 }}
+          certificate-password: ${{ secrets.MACOS_CERT_PASSWORD }}
+          notary-key-p8: ${{ secrets.NOTARY_KEY_P8 }}
+          notary-key-id: ${{ secrets.NOTARY_KEY_ID }}
+          notary-issuer-id: ${{ secrets.NOTARY_ISSUER_ID }}
+          dmg: chiaki-ng-macos_arm64-Release.dmg
 
       - name: Upload chiaki-ng Artifact
         uses: nanoufo/action-upload-artifacts-and-release-assets@v2
@@ -396,7 +437,7 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.9 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           cp appimage/chiaki-ng.AppImage appimage/chiaki-ng.AppImage_x86_64
 
@@ -441,7 +482,7 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.7 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           cp appimage/chiaki-ng.AppImage appimage/chiaki-ng.AppImage_arm64
 

@@ -7,8 +7,8 @@ cd "./$1"
 ROOT="`pwd`"
 MSYSTEM_LOWER="$(printf '%s' "${MSYSTEM:-}" | tr '[:upper:]' '[:lower:]')"
 
-SDL_VER=3.4.0
-SDL_COMPAT_VER=2.32.64
+SDL_VER=3.4.18
+SDL_COMPAT_VER=2.32.74
 URL=https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VER}/SDL3-${SDL_VER}.tar.gz
 FILE=SDL3-${SDL_VER}.tar.gz
 DIR=SDL3-${SDL_VER}
@@ -80,11 +80,19 @@ if [[ "$MSYSTEM_LOWER" == "clangarm64" ]]; then
         -DCMAKE_SHARED_LINKER_FLAGS="-L${CLANG_RT_BUILTINS_DIR:-/clangarm64/lib} -lclang_rt.builtins-aarch64"
     )
 fi
+APPIMAGE_CMAKE_ARGS=()
+if [[ "$1" == "appimage" ]]; then
+    # The AppImage ships this build-tree sdl2-compat next to its own SDL3. Its build RPATH
+    # named the build machine's SDL3 directory, so it loaded the host's SDL3 (or failed on it)
+    # before the bundled one. Build it with $ORIGIN alone instead.
+    APPIMAGE_CMAKE_ARGS=(-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON '-DCMAKE_INSTALL_RPATH=$ORIGIN')
+fi
 cmake \
     -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
     -DCMAKE_PREFIX_PATH="$INSTALL_PREFIX" \
     -DSDL2COMPAT_TESTS=OFF \
+    "${APPIMAGE_CMAKE_ARGS[@]}" \
     "${WINDOWS_ARM_CMAKE_ARGS[@]}" \
     "${WINDOWS_ARM_SHARED_LINKER_FLAGS[@]}"
 
