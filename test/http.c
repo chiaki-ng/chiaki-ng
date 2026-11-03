@@ -66,8 +66,24 @@ static MunitParameterEnum params[] = {
 };
 
 #ifndef _WIN32
+#include <chiaki/thread.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+typedef struct
+{
+	int fd;
+	const char *data;
+} DelayedWrite;
+
+static void *delayed_write(void *arg)
+{
+	DelayedWrite *write_info = arg;
+	// Long enough that the receiver has already read the first part on its own
+	usleep(100 * 1000);
+	size_t size = strlen(write_info->data);
+	return (void *)(intptr_t)(write(write_info->fd, write_info->data, size) == (ssize_t)size);
+}
 
 static MunitResult test_http_recv_header_split(const MunitParameter params[], void *user)
 {
@@ -77,15 +93,23 @@ static MunitResult test_http_recv_header_split(const MunitParameter params[], vo
 	const char *part2 = "Content-Length: 0\r\n\r\nBODY";
 	const char *header_end = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
 	munit_assert_int(write(fds[1], part1, strlen(part1)), ==, (int)strlen(part1));
-	munit_assert_int(write(fds[1], part2, strlen(part2)), ==, (int)strlen(part2));
+	// Send the rest from another thread after a delay, so the header arrives over two reads
+	DelayedWrite second = { fds[1], part2 };
+	ChiakiThread writer;
+	munit_assert_int(chiaki_thread_create(&writer, delayed_write, &second), ==, CHIAKI_ERR_SUCCESS);
 	char buf[256];
 	size_t header_size = 0, received_size = 0;
 	ChiakiErrorCode err = chiaki_recv_http_header(fds[0], buf, sizeof(buf), &header_size, &received_size, NULL, 1000);
+	void *wrote = NULL;
+	munit_assert_int(chiaki_thread_join(&writer, &wrote), ==, CHIAKI_ERR_SUCCESS);
 	close(fds[0]);
 	close(fds[1]);
+	munit_assert_true(wrote != NULL);
 	munit_assert_int(err, ==, CHIAKI_ERR_SUCCESS);
 	munit_assert_size(header_size, ==, strlen(header_end));
 	munit_assert_size(received_size, ==, strlen(part1) + strlen(part2));
+	munit_assert_memory_equal(strlen(part1), buf, part1);
+	munit_assert_memory_equal(strlen(part2), buf + strlen(part1), part2);
 	return MUNIT_OK;
 }
 
