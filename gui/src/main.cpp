@@ -85,7 +85,7 @@ int real_main(int argc, char *argv[])
 	// The Vulkan loader also reads Homebrew's driver folder, so with Homebrew's molten-vk installed
 	// the app loaded a second MoltenVK beside its own and listed every GPU twice. Use only the
 	// bundled one. Setting any of these variables yourself keeps your choice.
-	const QString moltenvk_icd = QFileInfo(QString::fromLocal8Bit(argv[0])).absolutePath()
+	const QString moltenvk_icd = QFileInfo(QString::fromLocal8Bit(argv[0])).canonicalPath()
 		+ "/../Resources/vulkan/icd.d/MoltenVK_icd.json";
 	if(QFileInfo::exists(moltenvk_icd) && !qEnvironmentVariableIsSet("VK_DRIVER_FILES")
 		&& !qEnvironmentVariableIsSet("VK_ICD_FILENAMES") && !qEnvironmentVariableIsSet("VK_LOADER_DRIVERS_SELECT")
