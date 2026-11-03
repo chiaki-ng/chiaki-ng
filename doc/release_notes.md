@@ -60,13 +60,3 @@ This release provides the following improvements:
 - stop writing the login PIN to the session log
 - update libplacebo, SDL, curl and other libraries, move every package to FFmpeg 9.0.2, and move the Flatpak to KDE runtime 6.11 and the AppImages to Qt 6.9.3
 
-### v1.10.0
-
-This release provides the following improvements:
-
-- improve streaming quality and stability with better queueing, reset handling, congestion control, and streaming metrics
-- add an OpenGL renderer backend plus major renderer and libplacebo fixes, adaptive queue depth, and custom upscalers
-- add VSync support plus spatial upscaler presets under settings->video->Render
-- improve PSN remote play reliability with configurable NAT port guessing and holepunching fixes
-- rework audio, microphone, and haptics paths for better recovery and fewer failure cases
-- fix macOS ARM rendering, crash-on-exit, and controller input issues, and add iOS/tvOS compilation support

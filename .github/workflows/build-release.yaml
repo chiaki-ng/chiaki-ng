@@ -19,7 +19,9 @@ jobs:
     - name: generate release notes
       working-directory: ${{ github.workspace }}
       run: |
-        git tag -l --format='%(contents)' ${GITHUB_REF_NAME} >> doc/release_notes.md
+        # subject and body only, so a signed tag's signature stays out of the notes
+        echo >> doc/release_notes.md
+        git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' ${GITHUB_REF_NAME} >> doc/release_notes.md
 
     - uses: ncipollo/release-action@v1
       id: maker
