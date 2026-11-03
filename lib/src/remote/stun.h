@@ -579,7 +579,8 @@ static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *se
         }
         if (attr_type != STUN_ATTRIB_MAPPED_ADDRESS && attr_type != STUN_ATTRIB_XOR_MAPPED_ADDRESS)
         {
-            response_pos += sizeof(attr_type) + sizeof(attr_length) + attr_length;
+            // attribute values are padded to a multiple of 4 bytes
+            response_pos += sizeof(attr_type) + sizeof(attr_length) + (((size_t)attr_length + 3) & ~(size_t)3);
             continue;
         }
 
