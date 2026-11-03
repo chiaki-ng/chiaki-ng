@@ -72,6 +72,9 @@ typedef struct chiaki_holepunch_device_info_t
     char device_name[32];
     uint8_t device_uid[32];
     bool remoteplay_enabled;
+    /** "networkStandby" is in wakeupEnabledPowerModes, i.e. PSN can wake it from rest mode.
+     * true when the account data does not say. */
+    bool network_wakeup_enabled;
 } ChiakiHolepunchDeviceInfo;
 
 /** Port types used for remote play. */
@@ -170,6 +173,12 @@ CHIAKI_EXPORT bool chiaki_holepunch_session_get_stun_allocation(
 */
 CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_generate_client_device_uid(
     char *out, size_t *out_size);
+
+/**
+ * Set a CA bundle file (PEM) used for all PSN HTTPS and websocket requests.
+ * Only needed where libcurl has no default trust store (e.g. Android). NULL resets.
+ */
+CHIAKI_EXPORT void chiaki_holepunch_set_ca_info(const char *path);
 
 /**
  * Initialize a holepunching session.

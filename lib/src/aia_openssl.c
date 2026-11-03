@@ -98,6 +98,9 @@ void *chiaki_aia_trust_store(CURL *connection)
 		return store;
 	}
 #endif
+	// CURLINFO_CAINFO only reports the built-in default, not a CA file set on the handle.
+	if(!file && !path)
+		file = chiaki_aia_ca_info();
 	if((!file && !path) || X509_STORE_load_locations(store, file, path) != 1)
 		goto error;
 	return store;
