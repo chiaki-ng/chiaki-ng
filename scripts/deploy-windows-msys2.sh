@@ -37,6 +37,10 @@ fi
 # Where the imports are looked up; anything not found here is a Windows system DLL
 search_dirs=("$tool_dir" "$msys_prefix/bin")
 
+# DLLs to leave for Windows to supply. The GPU driver installs its own Vulkan loader, so use that
+# rather than a bundled one that may not work with the installed driver
+skip_dlls=("vulkan-1.dll")
+
 declare -A queued_paths=()
 declare -A scanned_paths=()
 
@@ -54,6 +58,14 @@ extract_dependencies() {
     local name dir
     while IFS= read -r name; do
         [[ -n "$name" ]] || continue
+        local skip skipped=false
+        for skip in "${skip_dlls[@]}"; do
+            if [[ "${name,,}" == "${skip,,}" ]]; then
+                skipped=true
+                break
+            fi
+        done
+        [[ "$skipped" == false ]] || continue
         for dir in "${search_dirs[@]}"; do
             if [[ -f "$dir/$name" ]]; then
                 printf '%s\n' "$dir/$name"
