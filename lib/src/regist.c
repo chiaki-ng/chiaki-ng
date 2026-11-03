@@ -363,7 +363,7 @@ static void *regist_thread_func(void *user)
 #ifdef _WIN32
 				CHIAKI_LOGE(regist->log, "Regist failed to send request header: %u", WSAGetLastError());
 #else
-				CHIAKI_LOGE(regist->log, "Regist failed to send request header: %s", strerror(errno));
+				CHIAKI_LOGE(regist->log, "Regist failed to send request header: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
 #endif
 			}
 			goto fail_socket;
@@ -393,7 +393,7 @@ static void *regist_thread_func(void *user)
 #ifdef _WIN32
 				CHIAKI_LOGE(regist->log, "Regist failed to send payload: %u", WSAGetLastError());
 #else
-				CHIAKI_LOGE(regist->log, "Regist failed to send payload: %s", strerror(errno));
+				CHIAKI_LOGE(regist->log, "Regist failed to send payload: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
 #endif
 			}
 			goto fail_socket;
@@ -474,7 +474,7 @@ static ChiakiErrorCode regist_search(ChiakiRegist *regist, struct addrinfo *addr
 		r = send(sock, src, strlen(src) + 1, 0);
 	if(r < 0)
 	{
-		CHIAKI_LOGE(regist->log, "Regist failed to send search: %s", strerror(errno));
+		CHIAKI_LOGE(regist->log, "Regist failed to send search: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
 		err = CHIAKI_ERR_NETWORK;
 		goto done;
 	}
@@ -499,7 +499,16 @@ static ChiakiErrorCode regist_search(ChiakiRegist *regist, struct addrinfo *addr
 		if(n <= 0)
 		{
 			if(n < 0)
-				CHIAKI_LOGE(regist->log, "Regist failed to receive search response: %s", strerror(errno));
+			{
+#ifdef _WIN32
+				bool refused = WSAGetLastError() == WSAECONNRESET;
+#else
+				bool refused = errno == ECONNREFUSED;
+#endif
+				CHIAKI_LOGE(regist->log, "Regist failed to receive search response: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
+				if(refused)
+					CHIAKI_LOGE(regist->log, "The console refused the registration search, keep its Link Device (PS5) or Add Device (PS4) screen with the code open while registering");
+			}
 			else
 				CHIAKI_LOGE(regist->log, "Regist failed to receive search response");
 			err = CHIAKI_ERR_NETWORK;
