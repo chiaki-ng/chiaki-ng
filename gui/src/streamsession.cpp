@@ -599,7 +599,9 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 		{
 			if(controller->IsDualSense() || controller->IsDualSenseEdge())
 			{
-				ConnectHaptics();
+				// Restart the retries rather than trying once: the device may not open for a
+				// moment after it appears, and the retries from connecting may have run out
+				WaitHaptics();
 				return;
 			}
 		}
