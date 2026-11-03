@@ -7287,6 +7287,11 @@ void QmlMainWindow::render()
     if (!hint_frame && frame_mix.num_frames)
         hint_frame = frame_mix.frames[0];
     struct pl_color_space hint = hint_frame ? hint_frame->color : pl_color_space{};
+    // libplacebo API 361 and later read a hint with unknown primaries and transfer as a request for
+    // VK_COLOR_SPACE_PASS_THROUGH_EXT, and switching MoltenVK's swapchain to it waits forever for the
+    // old swapchain, so the window hung at launch. Fill in the defaults it inferred before.
+    if (hint.primaries == PL_COLOR_PRIM_UNKNOWN && hint.transfer == PL_COLOR_TRC_UNKNOWN)
+        pl_color_space_infer(&hint);
     struct pl_color_space target_csp = sw_frame.color_space;
     if (target_csp.hdr.max_luma <= 0.0f) {
         target_csp.hdr.max_luma = 0.0f;
