@@ -37,6 +37,9 @@ jobs:
       - name: Build Flatpak package
         working-directory: chiaki-ng
         run: |
+          # build the checked-out commit, not the manifest's branch
+          sed -i 's|^        branch: main$|        commit: ${{ github.sha }}|' scripts/flatpak/chiaki4deck-devel.yaml
+          grep -q '^        commit: ${{ github.sha }}$' scripts/flatpak/chiaki4deck-devel.yaml
           flatpak-builder --repo=chiaki-ng-devel --force-clean build-dir scripts/flatpak/chiaki4deck-devel.yaml
 
       - name: Bundle Flatpak app
