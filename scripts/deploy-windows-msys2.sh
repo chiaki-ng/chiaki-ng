@@ -20,13 +20,22 @@ export PATH="${tool_dir}:${msys_prefix}/share/qt6/bin:${PATH}"
 export QT_PLUGIN_PATH="${msys_prefix}/share/qt6/plugins"
 export QML2_IMPORT_PATH="${msys_prefix}/share/qt6/qml"
 
-ldd_timeout="${LDD_TIMEOUT:-10}"
-ldd_timeout_cmd=()
-if command -v timeout >/dev/null; then
-    ldd_timeout_cmd=(timeout --kill-after=5s "${ldd_timeout}s")
-else
-    echo "warning: timeout(1) not found, ldd might hang" >&2
+# Read each binary's import table with objdump instead of running ldd: ldd loads the binary, and
+# under the x64 emulation MSYS2 uses on Windows ARM that load could hang the job for hours
+objdump_cmd=""
+for candidate in llvm-objdump objdump; do
+    if command -v "$candidate" >/dev/null; then
+        objdump_cmd="$candidate"
+        break
+    fi
+done
+if [[ -z "$objdump_cmd" ]]; then
+    echo "error: neither llvm-objdump nor objdump found" >&2
+    exit 1
 fi
+
+# Where the imports are looked up; anything not found here is a Windows system DLL
+search_dirs=("$tool_dir" "$msys_prefix/bin")
 
 declare -A queued_paths=()
 declare -A scanned_paths=()
@@ -36,27 +45,22 @@ queued_paths["$queue"]=1
 
 extract_dependencies() {
     local binary="$1"
-
-    local ldd_output
-    local ldd_status=0
-    if [[ ${#ldd_timeout_cmd[@]} -gt 0 ]]; then
-        set +e
-        ldd_output="$("${ldd_timeout_cmd[@]}" ldd "$binary" 2>&1)"
-        ldd_status=$?
-        set -e
-        if [[ $ldd_status -eq 124 ]]; then
-            echo "ldd timed out for $binary" >&2
-        elif [[ $ldd_status -ne 0 ]]; then
-            echo "ldd exited with status $ldd_status for $binary" >&2
-        fi
-    else
-        ldd_output="$(ldd "$binary" 2>&1)" || true
+    local imports
+    if ! imports="$("$objdump_cmd" -p "$binary" | awk '/DLL Name:/ { sub(/\r$/, "", $3); print $3 }')"; then
+        echo "error: $objdump_cmd could not read $binary" >&2
+        exit 1
     fi
 
-    printf '%s\n' "$ldd_output" | awk '
-        /=>/ && $(NF-1) != "not" { print $(NF-1) }
-        /^\// { print $1 }
-    ' | grep -iv "system32" | grep -iv "windows" || true
+    local name dir
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        for dir in "${search_dirs[@]}"; do
+            if [[ -f "$dir/$name" ]]; then
+                printf '%s\n' "$dir/$name"
+                break
+            fi
+        done
+    done <<< "$imports"
 }
 
 enqueue_dependency() {
@@ -86,9 +90,11 @@ while [[ ${#queue[@]} -gt 0 ]]; do
     fi
     scanned_paths["$current"]=1
 
+    # A command substitution, not a process substitution, so a failed read stops the script
+    dependencies="$(extract_dependencies "$current")"
     while IFS= read -r dependency; do
         enqueue_dependency "$dependency"
-    done < <(extract_dependencies "$current")
+    done <<< "$dependencies"
 done
 
 # Ensure SDL3 is bundled even if ldd/Qt doesn't list it.
