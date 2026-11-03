@@ -735,7 +735,12 @@ StreamSession::~StreamSession()
 	log.PrepareShutdown();
 
 	if(session_started)
+	{
+		// Quitting the app while streaming (Cmd-Q, for one) deletes the session without Stop()
+		// first, and the join then waited forever for a session nothing had told to stop
+		chiaki_session_stop(&session);
 		chiaki_session_join(&session);
+	}
 	chiaki_session_fini(&session);
 	chiaki_opus_decoder_fini(&opus_decoder);
 	chiaki_opus_encoder_fini(&opus_encoder);
