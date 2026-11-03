@@ -3,6 +3,9 @@
 ### All Systems
 - GPU or integrated graphics supporting Vulkan 1.2 or higher
 
+### MacOS
+- macOS 15 (Sequoia) or later on Apple Silicon (arm64)
+
 ### Linux Flatpak
 - pipewire
 
