@@ -24,7 +24,8 @@ jobs:
     - uses: ncipollo/release-action@v1
       id: maker
       with:
-        prerelease: false
+        # a tag like v1.10.1-rc1 makes a pre-release, to test the release build before the real tag
+        prerelease: ${{ contains(github.ref_name, '-') }}
         allowUpdates: true
         bodyFile: "${{ github.workspace }}/doc/release_notes.md"
         token: "${{ secrets.RELEASE_PAT }}"
@@ -298,7 +299,7 @@ jobs:
     name: Build macOSX arm64 version Github
     runs-on: macos-15
     permissions:
-      contents: write
+      contents: read
     needs: create-release
     steps:
       - uses: actions/checkout@v4
@@ -352,11 +353,81 @@ jobs:
           install_name_tool -change @rpath/libSDL2-2.0.0.dylib @executable_path/libSDL2-2.0.0.dylib chiaki-ng.app/Contents/MacOS/chiaki || true
           install_name_tool -change /opt/homebrew/lib/libSDL2-2.0.0.dylib @executable_path/libSDL2-2.0.0.dylib chiaki-ng.app/Contents/MacOS/chiaki || true
           ln -s libvulkan.1.dylib chiaki-ng.app/Contents/Frameworks/vulkan
-          codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.app
-          rm -f chiaki-ng.dmg
-          hdiutil create -srcfolder chiaki-ng.app chiaki-ng.dmg
-          codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.dmg
-          cp chiaki-ng.dmg chiaki-ng-macos_arm64-Release.dmg
+          # tar keeps the bundle's symlinks, which an artifact upload alone would not
+          tar -czf chiaki-ng-macos_arm64-unsigned.tar.gz chiaki-ng.app
+
+      - name: Hand the unsigned app to the signing job
+        uses: actions/upload-artifact@v4
+        with:
+          name: chiaki-ng-macos_arm64-unsigned
+          path: chiaki-ng-macos_arm64-unsigned.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  sign-mac_arm64:
+    name: Sign and notarize macOS arm64
+    runs-on: macos-15
+    # The Developer ID certificate and notary key are secrets of this environment, so this job waits
+    # for approval and runs only for release tags; the build job above never sees them
+    environment: release
+    permissions:
+      contents: write
+    needs: [create-release, build-mac_arm64_github]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get the unsigned app
+        uses: actions/download-artifact@v4
+        with:
+          name: chiaki-ng-macos_arm64-unsigned
+
+      - name: Import the Developer ID certificate
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ { print $2; exit }')"
+          test -n "$identity"
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
+      - name: Sign chiaki-ng
+        run: |
+          tar -xzf chiaki-ng-macos_arm64-unsigned.tar.gz
+          scripts/macos-sign.sh chiaki-ng.app "$SIGNING_IDENTITY"
+          hdiutil create -volname chiaki-ng -srcfolder chiaki-ng.app -format UDZO chiaki-ng-macos_arm64-Release.dmg
+          codesign --force --timestamp --sign "$SIGNING_IDENTITY" chiaki-ng-macos_arm64-Release.dmg
+
+      - name: Notarize and staple
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          key="$RUNNER_TEMP/notary.p8"
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$key"
+          xcrun notarytool submit chiaki-ng-macos_arm64-Release.dmg --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait --timeout 1h --output-format json > notary.json || true
+          cat notary.json
+          id="$(python3 -c 'import json; print(json.load(open("notary.json")).get("id", ""))')"
+          status="$(python3 -c 'import json; print(json.load(open("notary.json")).get("status", ""))')"
+          if [ "$status" != "Accepted" ]; then
+            [ -n "$id" ] && xcrun notarytool log "$id" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+            rm -f "$key"
+            exit 1
+          fi
+          rm -f "$key"
+          xcrun stapler staple chiaki-ng-macos_arm64-Release.dmg
+          spctl --assess --type open --context context:primary-signature -vv chiaki-ng-macos_arm64-Release.dmg
 
       - name: Upload chiaki-ng Artifact
         uses: nanoufo/action-upload-artifacts-and-release-assets@v2
@@ -366,6 +437,12 @@ jobs:
           if-no-files-found: error
           upload-release-files: true
           release-upload-url: ${{ needs.create-release.outputs.upload_url }}
+
+      - name: Remove the signing keychain
+        if: always()
+        run: |
+          [ -n "$SIGNING_KEYCHAIN" ] && security delete-keychain "$SIGNING_KEYCHAIN" || true
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"
 
   build-appimage_x64:
     name: Build chiaki-ng appimage_x64
