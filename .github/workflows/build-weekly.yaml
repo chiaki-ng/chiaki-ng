@@ -70,7 +70,7 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.any == 'true'
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.ref }}
     - name: generate release notes
@@ -120,7 +120,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
@@ -216,7 +216,7 @@ jobs:
           release-upload-url: ${{ needs.create-release.outputs.upload_url }}
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
@@ -249,7 +249,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
@@ -344,7 +344,7 @@ jobs:
           release-upload-url: ${{ needs.create-release.outputs.upload_url }}
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
@@ -369,7 +369,7 @@ jobs:
     needs: [check-changes, create-release]
     if: needs.check-changes.outputs.mac_arm64 == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -433,7 +433,7 @@ jobs:
 
       - name: Hand the unsigned app to the signing job
         if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-macos_arm64-unsigned
           path: chiaki-ng-macos_arm64-unsigned.tar.gz
@@ -461,10 +461,10 @@ jobs:
     needs: [check-changes, create-release, build-mac_arm64_github]
     if: needs.check-changes.outputs.mac_arm64 == 'true' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Get the unsigned app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: chiaki-ng-macos_arm64-unsigned
 
@@ -505,7 +505,7 @@ jobs:
           sudo apt-get -y install podman
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
@@ -551,7 +551,7 @@ jobs:
           sudo apt-get -y install podman
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
@@ -592,7 +592,7 @@ jobs:
     if: needs.check-changes.outputs.flatpak_x64 == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
@@ -654,7 +654,7 @@ jobs:
     if: needs.check-changes.outputs.flatpak_arm64 == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'

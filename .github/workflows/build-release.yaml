@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: write
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.ref }}
     - name: generate release notes
@@ -51,7 +51,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
@@ -147,7 +147,7 @@ jobs:
           release-upload-url: ${{ needs.create-release.outputs.upload_url }}
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
@@ -179,7 +179,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
@@ -266,7 +266,7 @@ jobs:
           echo "RELEASE_PACKAGE_PATH=${RELEASE_PACKAGE_FILE}" >> $GITHUB_ENV
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
@@ -280,7 +280,7 @@ jobs:
           release-upload-url: ${{ needs.create-release.outputs.upload_url }}
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
@@ -304,7 +304,7 @@ jobs:
       contents: read
     needs: create-release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -359,7 +359,7 @@ jobs:
           tar -czf chiaki-ng-macos_arm64-unsigned.tar.gz chiaki-ng.app
 
       - name: Hand the unsigned app to the signing job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-macos_arm64-unsigned
           path: chiaki-ng-macos_arm64-unsigned.tar.gz
@@ -376,10 +376,10 @@ jobs:
       contents: write
     needs: [create-release, build-mac_arm64_github]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Get the unsigned app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: chiaki-ng-macos_arm64-unsigned
 
@@ -418,7 +418,7 @@ jobs:
           sudo apt-get -y install podman
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
@@ -463,7 +463,7 @@ jobs:
           sudo apt-get -y install podman
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
