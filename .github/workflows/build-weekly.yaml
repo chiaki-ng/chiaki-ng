@@ -86,16 +86,19 @@ jobs:
         allowUpdates: true
         bodyFile: "${{ github.workspace }}/release_notes.md"
         token: "${{ secrets.WEEKLY_PAT }}"
-    - uses: sgpublic/delete-release-action@v1.2
-      with:
-        repo: ${{ github.repository }}
-        release-drop: false
-        pre-release-drop: true
-        pre-release-keep-count: 1
-        pre-release-drop-tag: true
-        draft-drop: false
+    - name: Delete older weekly releases
+      # only weekly builds: keep this one and the one before it, and leave release candidates such
+      # as v1.10.1-rc1 alone, which the old cleanup deleted along with every other pre-release
       env:
-        GITHUB_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+      run: |
+        gh release list -R "$REPO" --limit 200 --json tagName,isPrerelease,createdAt \
+          --jq '[.[] | select(.isPrerelease and (.tagName | startswith("weekly-canary-release-")))] | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' |
+        while read -r tag; do
+          echo "Deleting $tag"
+          gh release delete "$tag" -R "$REPO" -y --cleanup-tag
+        done
     outputs:
       upload_url: ${{ steps.maker.outputs.upload_url }}
 
