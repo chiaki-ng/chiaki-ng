@@ -102,7 +102,7 @@ DialogView {
                 id: targetPeakValue
                 Layout.preferredWidth: 250
                 from: 10
-                to: 10000
+                to: 3000
                 stepSize: 10
                 value: Chiaki.settings.displayTargetPeak
                 onMoved: Chiaki.settings.displayTargetPeak = value
@@ -122,6 +122,39 @@ DialogView {
                 Layout.alignment: Qt.AlignRight
                 text: qsTr("(1000 nits)")
                 visible: targetPeakChoice.currentIndex == 1
+            }
+
+            Label {
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("Target Peak HDR Only:")
+                visible: targetPeakChoice.currentIndex == 1
+            }
+
+            C.CheckBox {
+                checked: Chiaki.settings.displayTargetPeakHdrOnly
+                onToggled: Chiaki.settings.displayTargetPeakHdrOnly = checked
+                visible: targetPeakChoice.currentIndex == 1
+            }
+
+            Label {
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("(On)")
+                visible: targetPeakChoice.currentIndex == 1
+            }
+
+            Label {
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("Auto Inverse Tone-mapping:")
+            }
+
+            C.CheckBox {
+                checked: Chiaki.settings.displayTargetAutoInverseTonemap
+                onToggled: Chiaki.settings.displayTargetAutoInverseTonemap = checked
+            }
+
+            Label {
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("(Off)")
             }
 
             Label {
@@ -167,8 +200,8 @@ DialogView {
                 id: targetContrastValue
                 Layout.preferredWidth: 250
                 from: 10
-                to: 1000000
-                stepSize: 1000
+                to: 2000
+                stepSize: 100
                 value: Chiaki.settings.displayTargetContrast
                 onMoved: Chiaki.settings.displayTargetContrast = value
 
