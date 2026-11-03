@@ -8,6 +8,8 @@ jobs:
   create-release:
     name: Upload release
     runs-on: ubuntu-latest
+    # RELEASE_PAT is an environment secret, so publishing waits for approval
+    environment: release
     permissions:
       contents: write
     steps:

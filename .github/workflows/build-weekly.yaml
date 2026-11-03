@@ -85,7 +85,7 @@ jobs:
         tag: weekly-canary-release-${{ github.sha }}
         allowUpdates: true
         bodyFile: "${{ github.workspace }}/release_notes.md"
-        token: "${{ secrets.RELEASE_PAT }}"
+        token: "${{ secrets.WEEKLY_PAT }}"
     - uses: sgpublic/delete-release-action@v1.2
       with:
         repo: ${{ github.repository }}
