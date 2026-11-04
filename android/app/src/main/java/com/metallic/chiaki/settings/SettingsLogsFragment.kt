@@ -69,7 +69,7 @@ class SettingsLogsFragment: AppCompatDialogFragment(), TitleFragment
 	private fun shareLogFile(file: LogFile)
 	{
 		val activity = activity ?: return
-		val uri = FileProvider.getUriForFile(activity, fileProviderAuthority, file.file)
+		val uri = FileProvider.getUriForFile(activity, activity.fileProviderAuthority, file.file)
 		Intent(Intent.ACTION_SEND).also {
 			it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 			it.type = "text/plain"

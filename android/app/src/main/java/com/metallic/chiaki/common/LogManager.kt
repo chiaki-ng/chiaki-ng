@@ -9,7 +9,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
 
-val fileProviderAuthority = "com.metallic.chiaki.fileprovider"
+// must match the provider authority in AndroidManifest.xml
+val Context.fileProviderAuthority get() = "$packageName.fileprovider"
 private const val baseDirName = "session_logs" // must be in sync with filepaths.xml
 private val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss-SSS", Locale.US)
 private const val filePrefix = "chiaki_session_"
