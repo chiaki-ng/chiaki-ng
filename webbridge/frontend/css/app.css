@@ -1,0 +1,444 @@
+/* chiaki-web — handwritten dark theme. Mobile-first. */
+
+:root {
+  --bg: #0a0c10;
+  --bg-raised: #12151c;
+  --bg-overlay: rgba(10, 12, 16, 0.88);
+  --line: #232833;
+  --text: #e8ecf2;
+  --text-dim: #8b94a3;
+  --accent: #0070d1;          /* PlayStation blue */
+  --accent-hi: #2f8fe6;
+  --danger: #d64545;
+  --ready: #3ecf6a;
+  --standby: #e8a13d;
+  --unknown: #5a6270;
+  --radius: 10px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overscroll-behavior: none;
+}
+
+body.streaming { overflow: hidden; }
+
+.hidden { display: none !important; }
+
+button { font: inherit; }
+kbd {
+  font-family: var(--mono);
+  font-size: 0.78em;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+/* ── buttons ── */
+.btn {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  min-height: 40px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hi); border-color: var(--accent-hi); }
+.btn-ghost { background: transparent; }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover:not(:disabled) { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-wide { display: block; width: 100%; margin-top: 10px; }
+
+/* ── hosts view shell ── */
+.view { min-height: 100%; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 22px; height: 22px; color: var(--accent); }
+.brand h1 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.04em; }
+.brand-accent { color: var(--accent); }
+.topbar-actions { display: flex; gap: 8px; }
+
+.banner {
+  margin: 14px 18px 0;
+  padding: 12px 16px;
+  background: #3a1520;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+}
+
+.hosts-main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 26px;
+  padding: 18px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+@media (min-width: 760px) {
+  .hosts-main { grid-template-columns: 1fr 280px; }
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-head h2, .settings-col h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.card-list { display: grid; gap: 12px; }
+.card {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.card-head { display: flex; align-items: center; gap: 10px; }
+.card-head h3 { margin: 0; font-size: 1.05rem; flex: 1; }
+.state-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--unknown);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+}
+.state-ready { background: var(--ready); box-shadow: 0 0 8px var(--ready); }
+.state-standby { background: var(--standby); box-shadow: 0 0 8px var(--standby); }
+.badge {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-hi);
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  padding: 2px 9px;
+}
+.card-meta { margin: 8px 0 12px; color: var(--text-dim); font-size: 0.88rem; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.empty-note { color: var(--text-dim); }
+
+.settings-col { display: grid; gap: 12px; align-content: start; }
+.field { display: grid; gap: 5px; font-size: 0.9rem; }
+.field > span { color: var(--text-dim); }
+.field select, .field input[type="text"], .field input[type="number"] {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font: inherit;
+  min-height: 40px;
+}
+.field select:focus, .field input:focus { outline: none; border-color: var(--accent); }
+.field-row { grid-template-columns: auto 1fr; align-items: center; gap: 10px; }
+.field-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); }
+
+.form-error { color: var(--danger); font-size: 0.88rem; min-height: 1.2em; margin: 4px 0; }
+
+.footer {
+  padding: 20px 18px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+/* ── stream view ── */
+#view-stream {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#canvas-wrap { position: absolute; inset: 0; }
+.stream-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+}
+
+/* HUD: hidden until hover / tap, except the stats block when toggled on */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: 0.85rem;
+  z-index: 6; /* menu button stays tappable above the touch overlay */
+}
+.hud-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
+  background: linear-gradient(rgba(0, 0, 0, 0.65), transparent);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+#view-stream:hover .hud-top,
+#view-stream:focus-within .hud-top,
+#view-stream.hud-show .hud-top { opacity: 1; }
+@media (pointer: coarse) {
+  .hud-top { opacity: 1; } /* no hover on touch — keep the thin top bar */
+}
+#hud-nickname { font-weight: 600; }
+#hud-streaminfo { color: var(--text-dim); }
+.hud-menu-btn {
+  margin-left: auto;
+  pointer-events: auto;
+  min-width: 48px;
+  min-height: 44px;
+  border-color: transparent;
+}
+.hud-stats {
+  position: absolute;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #b7e3ff;
+  background: rgba(0, 20, 40, 0.55);
+  border: 1px solid rgba(0, 112, 209, 0.4);
+  border-radius: 8px;
+  white-space: pre;
+}
+
+/* ── virtual gamepad overlay ── */
+.vpad {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  touch-action: none;
+  z-index: 5;
+}
+.vpad-visible { display: block; }
+.vpad > * { pointer-events: auto; }
+
+.vpad-btn {
+  position: relative;
+  min-width: 48px;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1.05rem;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.vpad-btn.vpad-active {
+  background: rgba(0, 112, 209, 0.45);
+  border-color: var(--accent-hi);
+}
+
+.vpad-stick-zone {
+  position: absolute;
+  bottom: 8%;
+  width: 180px;
+  height: 180px;
+  touch-action: none;
+}
+.vpad-lstick-zone { left: 4%; }
+.vpad-rstick-zone { right: 4%; }
+.vpad-stick-base {
+  position: absolute;
+  inset: 15px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+.vpad-stick-nub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  background: rgba(0, 112, 209, 0.4);
+  border: 1px solid var(--accent-hi);
+}
+
+.vpad-dpad {
+  position: absolute;
+  left: 4%;
+  bottom: calc(8% + 200px);
+  display: grid;
+  grid-template-areas: ". up ." "left . right" ". down .";
+  gap: 2px;
+}
+.vpad-dpad .vpad-btn { border-radius: 12px; font-size: 0.8rem; }
+.vpad-dpad-up { grid-area: up; }
+.vpad-dpad-down { grid-area: down; }
+.vpad-dpad-left { grid-area: left; }
+.vpad-dpad-right { grid-area: right; }
+
+.vpad-face {
+  position: absolute;
+  right: 4%;
+  bottom: calc(8% + 200px); /* above the right thumbstick */
+  display: grid;
+  grid-template-areas: ". pyramid ." "box . moon" ". cross .";
+  gap: 6px;
+}
+.vpad-face .vpad-btn { width: 58px; height: 58px; font-size: 1.35rem; }
+.vpad-face-pyramid { grid-area: pyramid; }
+.vpad-face-box { grid-area: box; }
+.vpad-face-moon { grid-area: moon; }
+.vpad-face-cross { grid-area: cross; }
+
+.vpad-shoulders {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  display: flex;
+  gap: 8px;
+}
+.vpad-shoulders-left { left: 4%; }
+.vpad-shoulders-right { right: calc(4% + 64px); } /* clear the HUD menu button */
+.vpad-shoulder { border-radius: 14px; width: 74px; font-size: 0.85rem; }
+
+.vpad-system {
+  position: absolute;
+  left: 50%;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+.vpad-sys {
+  border-radius: 20px;
+  min-width: 56px;
+  min-height: 48px;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+}
+
+/* Landscape phones are short (~375-430px tall): the default layout stacks the
+   dpad/face clusters 200px above the 180px sticks, which rides them off the top
+   of the screen (under the shoulder buttons/HUD). Compact everything and anchor
+   to the bottom safe-area so the whole pad fits. Tablets/portrait (taller) keep
+   the roomier default layout. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .vpad-stick-zone {
+    width: 150px;
+    height: 150px;
+    bottom: calc(env(safe-area-inset-bottom) + 6px);
+  }
+  /* Drop the dpad/face into the mid-lower band and pull them inward toward the
+     centre (off the stick columns) so they're within easier thumb reach. They
+     clear the sticks horizontally (stick right edge = 4% + 150px). */
+  .vpad-dpad,
+  .vpad-face {
+    bottom: calc(env(safe-area-inset-bottom) + 96px);
+  }
+  .vpad-dpad { left: calc(4% + 158px); }
+  .vpad-face { right: calc(4% + 158px); }
+  .vpad-face .vpad-btn { width: 44px; height: 44px; font-size: 1.05rem; }
+  .vpad-face { gap: 5px; }
+  .vpad-dpad .vpad-btn { min-width: 42px; min-height: 42px; font-size: 0.72rem; }
+  .vpad-shoulder { min-height: 40px; width: 66px; font-size: 0.78rem; }
+}
+
+/* ── modals ── */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-overlay);
+  z-index: 20;
+  padding: 18px;
+}
+.modal-open { display: flex; }
+.modal-box {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  width: min(440px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  display: grid;
+  gap: 12px;
+}
+.modal-box h2 { margin: 0 0 4px; font-size: 1.1rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+.modal-menu-box { width: min(320px, 100%); }
+.modal-help-box { width: min(520px, 100%); }
+
+.help-table-el { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+.help-table-el td { padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.help-table-el td:first-child { white-space: nowrap; }
+.help-note { color: var(--text-dim); font-size: 0.8rem; margin: 4px 0 0; }
+
+/* ── toasts ── */
+.toasts {
+  position: fixed;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  z-index: 30;
+  pointer-events: none;
+  width: min(420px, calc(100vw - 32px));
+}
+.toast {
+  background: var(--bg-raised);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: 0.9rem;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.toast-show { opacity: 1; transform: translateY(0); }
+.toast-error { border-color: var(--danger); }
