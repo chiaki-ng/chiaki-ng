@@ -40,6 +40,10 @@ abstract class TouchControlsFragment : Fragment()
 	var onScreenControlsEnabled: LiveData<Boolean>? = null
 }
 
+/** Combined input of several controls fragments; each one contributes what it currently holds. */
+fun mergeControllerStates(sources: List<Flow<ControllerState>>): Flow<ControllerState> =
+	combine(sources) { states -> states.reduce { acc, state -> acc or state } }
+
 class DefaultTouchControlsFragment : TouchControlsFragment()
 {
 	private var _binding: FragmentControlsBinding? = null

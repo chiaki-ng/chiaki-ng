@@ -178,6 +178,13 @@ data class ControllerState constructor(
 	var orientZ: Float = 0.0f,
 	var orientW: Float = 1.0f
 ){
+	init
+	{
+		// own the touches, so copy() and or() give states that later touch changes
+		// cannot alter (equals compares them by content)
+		touches = touches.map { it.copy() }.toTypedArray()
+	}
+
 	companion object
 	{
 		val BUTTON_CROSS 		= (1 shl 0).toUInt()
