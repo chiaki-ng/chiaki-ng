@@ -2,6 +2,7 @@
 
 package com.metallic.chiaki.main
 
+import android.Manifest
 import android.app.ActivityOptions
 import android.content.Intent
 import android.os.Bundle
@@ -9,6 +10,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import androidx.activity.addCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
@@ -23,6 +25,9 @@ import com.metallic.chiaki.lib.ConnectInfo
 import com.metallic.chiaki.lib.DiscoveryHost
 import com.metallic.chiaki.manualconsole.EditManualConsoleActivity
 import com.metallic.chiaki.regist.RegistActivity
+import com.metallic.chiaki.session.DualSense
+import com.metallic.chiaki.session.InputDeviceInfo
+import com.metallic.chiaki.session.output.RawOutputAccess
 import com.metallic.chiaki.settings.SettingsActivity
 import com.metallic.chiaki.stream.StreamActivity
 
@@ -32,6 +37,13 @@ class MainActivity : AppCompatActivity()
 
 	private lateinit var binding: ActivityMainBinding
 	private var discoveryMenuItem: MenuItem? = null
+
+	private var pendingConnectInfo: ConnectInfo? = null
+	private val bluetoothPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+		// if denied, the stream falls back to the normal output and says so
+		pendingConnectInfo?.let { startStream(it) }
+		pendingConnectInfo = null
+	}
 
 	override fun onCreate(savedInstanceState: Bundle?)
 	{
@@ -180,11 +192,18 @@ class MainActivity : AppCompatActivity()
 		if(registeredHost != null)
 		{
 			fun connect() {
-				val connectInfo = ConnectInfo(host.isPS5, host.host, registeredHost.rpRegistKey, registeredHost.rpKey, Preferences(this).videoProfile)
-				Intent(this, StreamActivity::class.java).let {
-					it.putExtra(StreamActivity.EXTRA_CONNECT_INFO, connectInfo)
-					startActivity(it)
+				val preferences = Preferences(this)
+				val connectInfo = ConnectInfo(host.isPS5, host.host, registeredHost.rpRegistKey, registeredHost.rpKey, preferences.videoProfile,
+					DualSense.shouldEnable(preferences.dualSenseMode, InputDeviceInfo.snapshot()))
+				// adaptive triggers are on, but the permission is missing, e.g. revoked in system settings:
+				// ask now, a dialog over the stream would interrupt it
+				if(connectInfo.enableDualSense && RawOutputAccess.of(this, preferences) == RawOutputAccess.NEEDS_PERMISSION)
+				{
+					pendingConnectInfo = connectInfo
+					bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
 				}
+				else
+					startStream(connectInfo)
 			}
 
 			if(host is DiscoveredDisplayHost && host.discoveredHost.state == DiscoveryHost.State.STANDBY)
@@ -213,6 +232,14 @@ class MainActivity : AppCompatActivity()
 					it.putExtra(RegistActivity.EXTRA_ASSIGN_MANUAL_HOST_ID, host.manualHost.id)
 				startActivity(it)
 			}
+		}
+	}
+
+	private fun startStream(connectInfo: ConnectInfo)
+	{
+		Intent(this, StreamActivity::class.java).let {
+			it.putExtra(StreamActivity.EXTRA_CONNECT_INFO, connectInfo)
+			startActivity(it)
 		}
 	}
 

@@ -3,12 +3,18 @@
 package com.metallic.chiaki.session
 
 import android.graphics.SurfaceTexture
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.*
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.metallic.chiaki.common.LogManager
+import com.metallic.chiaki.common.Preferences
 import com.metallic.chiaki.lib.*
+import com.metallic.chiaki.session.output.OutputBackends
+import com.metallic.chiaki.session.output.OutputRouter
+import com.metallic.chiaki.session.output.TriggerOutputBackends
 
 sealed class StreamState
 object StreamStateIdle: StreamState()
@@ -18,15 +24,31 @@ data class StreamStateCreateError(val error: CreateError): StreamState()
 data class StreamStateQuit(val reason: QuitReason, val reasonString: String?): StreamState()
 data class StreamStateLoginPinRequest(val pinIncorrect: Boolean): StreamState()
 
-class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, val logVerbose: Boolean, val input: StreamInput)
+class StreamSession(
+	val connectInfo: ConnectInfo,
+	val logManager: LogManager,
+	val logVerbose: Boolean,
+	val input: StreamInput,
+	private val rumbleEnabled: Boolean,
+	private val hapticsRumbleLevel: Preferences.HapticsRumbleLevel,
+	private val backends: OutputBackends)
 {
 	var session: Session? = null
 		private set
 
 	private val _state = MutableLiveData<StreamState>(StreamStateIdle)
 	val state: LiveData<StreamState> get() = _state
-	private val _rumbleState = MutableLiveData<RumbleEvent>(RumbleEvent(0U, 0U))
-	val rumbleState: LiveData<RumbleEvent> get() = _rumbleState
+
+	@Volatile private var router: OutputRouter? = null
+	@Volatile private var hapticsRumble: HapticsRumble? = null
+	private val tickHandler = Handler(Looper.getMainLooper())
+	private val hapticsTick = object: Runnable {
+		override fun run()
+		{
+			hapticsRumble?.tick()
+			tickHandler.postDelayed(this, HapticsRumble.TICK_MS)
+		}
+	}
 
 	private var surfaceTexture: SurfaceTexture? = null
 	private var surface: Surface? = null
@@ -36,6 +58,12 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 		input.controllerStateChangedCallback = {
 			session?.setControllerState(it)
 		}
+		input.activeControllerChangedCallback = {
+			router?.setActiveController(it)
+		}
+		(backends as? TriggerOutputBackends)?.onBackendChanged = {
+			router?.rebuild()
+		}
 	}
 
 	fun shutdown()
@@ -43,6 +71,11 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 		session?.stop()
 		session?.dispose()
 		session = null
+		tickHandler.removeCallbacks(hapticsTick)
+		hapticsRumble?.clear()
+		hapticsRumble = null
+		router?.close()
+		router = null
 		_state.value = StreamStateIdle
 		//surfaceTexture?.release()
 	}
@@ -58,6 +91,11 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 			return
 		try
 		{
+			val router = OutputRouter(rumbleEnabled) { backends.create(it) }
+			router.setActiveController(input.activeControllerId)
+			this.router = router
+			hapticsRumble = HapticsRumble(hapticsRumbleLevel) { l, r -> router.onHapticRumble(l, r) }
+			tickHandler.post(hapticsTick)
 			val session = Session(connectInfo, logManager.createNewFile().file.absolutePath, logVerbose)
 			_state.value = StreamStateConnecting
 			session.eventCallback = this::eventCallback
@@ -89,7 +127,14 @@ class StreamSession(val connectInfo: ConnectInfo, val logManager: LogManager, va
 					event.pinIncorrect
 				)
 			)
-			is RumbleEvent -> _rumbleState.postValue(event)
+			is RumbleEvent -> router?.onRumble(event.left, event.right)
+			is MotionResetEvent -> input.onMotionReset()
+			is TriggerEffectsEvent -> router?.onTriggerEffects(event.typeLeft, event.left, event.typeRight, event.right)
+			is LedColorEvent -> router?.onLedColor(event.r, event.g, event.b)
+			is PlayerIndexEvent -> router?.onPlayerIndex(event.index)
+			is HapticIntensityEvent -> router?.onHapticIntensity(event.intensity)
+			is TriggerIntensityEvent -> router?.onTriggerIntensity(event.intensity)
+			is HapticStrengthEvent -> hapticsRumble?.push(event.left, event.right)
 		}
 	}
 

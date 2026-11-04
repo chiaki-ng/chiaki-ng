@@ -69,7 +69,8 @@ data class ConnectInfo(
 	val host: String,
 	val registKey: ByteArray,
 	val morning: ByteArray,
-	val videoProfile: ConnectVideoProfile
+	val videoProfile: ConnectVideoProfile,
+	val enableDualSense: Boolean = false
 ): Parcelable
 
 private class ChiakiNative
@@ -93,6 +94,11 @@ private class ChiakiNative
 		@JvmStatic external fun sessionSetSurface(ptr: Long, surface: Surface?)
 		@JvmStatic external fun sessionSetControllerState(ptr: Long, controllerState: ControllerState)
 		@JvmStatic external fun sessionSetLoginPin(ptr: Long, pin: String)
+		@JvmStatic external fun motionTrackerCreate(): Long
+		@JvmStatic external fun motionTrackerFree(ptr: Long)
+		@JvmStatic external fun motionTrackerUpdateAccel(ptr: Long, x: Float, y: Float, z: Float, timestampUs: Int, out: FloatArray)
+		@JvmStatic external fun motionTrackerUpdateGyro(ptr: Long, x: Float, y: Float, z: Float, timestampUs: Int, out: FloatArray)
+		@JvmStatic external fun motionTrackerReset(ptr: Long, out: FloatArray)
 		@JvmStatic external fun discoveryServiceCreate(result: CreateResult, options: DiscoveryServiceOptions, javaService: DiscoveryService)
 		@JvmStatic external fun discoveryServiceFree(ptr: Long)
 		@JvmStatic external fun discoveryServiceWakeup(ptr: Long, host: String, userCredential: Long, ps5: Boolean)
@@ -317,6 +323,27 @@ object ConnectedEvent: Event()
 data class LoginPinRequestEvent(val pinIncorrect: Boolean): Event()
 data class QuitEvent(val reason: QuitReason, val reasonString: String?): Event()
 data class RumbleEvent(val left: UByte, val right: UByte): Event()
+object MotionResetEvent: Event()
+
+enum class DualSenseIntensity(val value: Int)
+{
+	OFF(0),
+	STRONG(1),
+	MEDIUM(2),
+	WEAK(3);
+
+	companion object
+	{
+		fun fromValue(value: Int) = values().firstOrNull { it.value == value } ?: STRONG
+	}
+}
+
+class TriggerEffectsEvent(val typeLeft: UByte, val left: ByteArray, val typeRight: UByte, val right: ByteArray): Event()
+data class LedColorEvent(val r: UByte, val g: UByte, val b: UByte): Event()
+data class PlayerIndexEvent(val index: Int): Event()
+data class HapticIntensityEvent(val intensity: DualSenseIntensity): Event()
+data class TriggerIntensityEvent(val intensity: DualSenseIntensity): Event()
+data class HapticStrengthEvent(val left: Int, val right: Int): Event()
 
 class CreateError(val errorCode: ErrorCode): Exception("Failed to create a native object: $errorCode")
 
@@ -377,6 +404,41 @@ class Session(connectInfo: ConnectInfo, logFile: String?, logVerbose: Boolean)
 		event(RumbleEvent(left.toUByte(), right.toUByte()))
 	}
 
+	private fun eventMotionReset()
+	{
+		event(MotionResetEvent)
+	}
+
+	private fun eventTriggerEffects(typeLeft: Int, left: ByteArray, typeRight: Int, right: ByteArray)
+	{
+		event(TriggerEffectsEvent(typeLeft.toUByte(), left, typeRight.toUByte(), right))
+	}
+
+	private fun eventLedColor(r: Int, g: Int, b: Int)
+	{
+		event(LedColorEvent(r.toUByte(), g.toUByte(), b.toUByte()))
+	}
+
+	private fun eventPlayerIndex(index: Int)
+	{
+		event(PlayerIndexEvent(index))
+	}
+
+	private fun eventHapticIntensity(intensity: Int)
+	{
+		event(HapticIntensityEvent(DualSenseIntensity.fromValue(intensity)))
+	}
+
+	private fun eventTriggerIntensity(intensity: Int)
+	{
+		event(TriggerIntensityEvent(DualSenseIntensity.fromValue(intensity)))
+	}
+
+	private fun eventHapticStrength(left: Int, right: Int)
+	{
+		event(HapticStrengthEvent(left, right))
+	}
+
 	fun setSurface(surface: Surface?)
 	{
 		ChiakiNative.sessionSetSurface(nativePtr, surface)
@@ -390,6 +452,74 @@ class Session(connectInfo: ConnectInfo, logFile: String?, logVerbose: Boolean)
 	fun setLoginPin(pin: String)
 	{
 		ChiakiNative.sessionSetLoginPin(nativePtr, pin)
+	}
+}
+
+/**
+ * Orientation tracking for controller motion, using the same
+ * Madgwick filter and accel-zero handling as the desktop client.
+ * Accel in g, gyro in rad/s, timestamps in microseconds (wrapping).
+ */
+class MotionTracker
+{
+	private var nativePtr = ChiakiNative.motionTrackerCreate()
+	companion object
+	{
+		fun neutral(state: ControllerState)
+		{
+			state.gyroX = 0.0f
+			state.gyroY = 0.0f
+			state.gyroZ = 0.0f
+			state.accelX = 0.0f
+			state.accelY = 1.0f
+			state.accelZ = 0.0f
+			state.orientX = 0.0f
+			state.orientY = 0.0f
+			state.orientZ = 0.0f
+			state.orientW = 1.0f
+		}
+	}
+
+	private val values = FloatArray(10).also { it[4] = 1.0f; it[9] = 1.0f }
+
+	fun updateAccel(x: Float, y: Float, z: Float, timestampUs: Int)
+	{
+		if(nativePtr != 0L)
+			ChiakiNative.motionTrackerUpdateAccel(nativePtr, x, y, z, timestampUs, values)
+	}
+
+	fun updateGyro(x: Float, y: Float, z: Float, timestampUs: Int)
+	{
+		if(nativePtr != 0L)
+			ChiakiNative.motionTrackerUpdateGyro(nativePtr, x, y, z, timestampUs, values)
+	}
+
+	fun reset()
+	{
+		if(nativePtr != 0L)
+			ChiakiNative.motionTrackerReset(nativePtr, values)
+	}
+
+	fun applyTo(state: ControllerState)
+	{
+		state.gyroX = values[0]
+		state.gyroY = values[1]
+		state.gyroZ = values[2]
+		state.accelX = values[3]
+		state.accelY = values[4]
+		state.accelZ = values[5]
+		state.orientX = values[6]
+		state.orientY = values[7]
+		state.orientZ = values[8]
+		state.orientW = values[9]
+	}
+
+	fun dispose()
+	{
+		if(nativePtr == 0L)
+			return
+		ChiakiNative.motionTrackerFree(nativePtr)
+		nativePtr = 0L
 	}
 }
 

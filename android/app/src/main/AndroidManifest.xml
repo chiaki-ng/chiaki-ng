@@ -13,6 +13,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <queries>
+        <package android:name="com.android.bluetooth" />
+        <intent>
+            <action android:name="android.bluetooth.IBluetoothHidHost" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"
