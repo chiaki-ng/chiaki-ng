@@ -39,6 +39,14 @@ class Preferences(context: Context)
 		CODEC_H265("h265", R.string.preferences_codec_title_h265, com.metallic.chiaki.lib.Codec.CODEC_H265)
 	}
 
+	enum class MotionSource(val value: String, @StringRes val title: Int)
+	{
+		AUTO("auto", R.string.preferences_motion_source_title_auto),
+		CONTROLLER("controller", R.string.preferences_motion_source_title_controller),
+		PHONE("phone", R.string.preferences_motion_source_title_phone),
+		OFF("off", R.string.preferences_motion_source_title_off)
+	}
+
 	companion object
 	{
 		val resolutionDefault = Resolution.RES_720P
@@ -47,6 +55,15 @@ class Preferences(context: Context)
 		val fpsAll = FPS.values()
 		val codecDefault = Codec.CODEC_H265
 		val codecAll = Codec.values()
+		val motionSourceDefault = MotionSource.AUTO
+		val motionSourceAll = MotionSource.values()
+
+		fun motionSourceFromStored(stored: String?, legacyMotionEnabled: Boolean): MotionSource
+		{
+			if(stored == null)
+				return if(legacyMotionEnabled) MotionSource.AUTO else MotionSource.OFF
+			return MotionSource.values().firstOrNull { it.value == stored } ?: motionSourceDefault
+		}
 	}
 
 	private val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -80,9 +97,13 @@ class Preferences(context: Context)
 		set(value) { sharedPreferences.edit().putBoolean(rumbleEnabledKey, value).apply() }
 
 	val motionEnabledKey get() = resources.getString(R.string.preferences_motion_enabled_key)
-	var motionEnabled
-		get() = sharedPreferences.getBoolean(motionEnabledKey, true)
-		set(value) { sharedPreferences.edit().putBoolean(motionEnabledKey, value).apply() }
+
+	val motionSourceKey get() = resources.getString(R.string.preferences_motion_source_key)
+	var motionSource
+		get() = motionSourceFromStored(
+			sharedPreferences.getString(motionSourceKey, null),
+			sharedPreferences.getBoolean(motionEnabledKey, true))
+		set(value) { sharedPreferences.edit().putString(motionSourceKey, value.value).apply() }
 
 	val buttonHapticEnabledKey get() = resources.getString(R.string.preferences_button_haptic_enabled_key)
 	var buttonHapticEnabled

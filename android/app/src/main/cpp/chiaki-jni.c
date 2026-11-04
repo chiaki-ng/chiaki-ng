@@ -134,6 +134,7 @@ typedef struct android_chiaki_session_t
 	jmethodID java_session_event_login_pin_request_meth;
 	jmethodID java_session_event_quit_meth;
 	jmethodID java_session_event_rumble_meth;
+	jmethodID java_session_event_motion_reset_meth;
 	jfieldID java_controller_state_buttons;
 	jfieldID java_controller_state_l2_state;
 	jfieldID java_controller_state_r2_state;
@@ -198,6 +199,10 @@ static void android_chiaki_event_cb(ChiakiEvent *event, void *user)
 							  session->java_session_event_rumble_meth,
 							  (jint)event->rumble.left,
 							  (jint)event->rumble.right);
+			break;
+		case CHIAKI_EVENT_MOTION_RESET:
+			E->CallVoidMethod(env, session->java_session,
+							  session->java_session_event_motion_reset_meth);
 			break;
 		default:
 			break;
@@ -320,6 +325,7 @@ JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject 
 	session->java_session_event_login_pin_request_meth = E->GetMethodID(env, session->java_session_class, "eventLoginPinRequest", "(Z)V");
 	session->java_session_event_quit_meth = E->GetMethodID(env, session->java_session_class, "eventQuit", "(ILjava/lang/String;)V");
 	session->java_session_event_rumble_meth = E->GetMethodID(env, session->java_session_class, "eventRumble", "(II)V");
+	session->java_session_event_motion_reset_meth = E->GetMethodID(env, session->java_session_class, "eventMotionReset", "()V");
 
 	jclass controller_state_class = E->FindClass(env, BASE_PACKAGE"/ControllerState");
 	session->java_controller_state_buttons = E->GetFieldID(env, controller_state_class, "buttons", "I");
