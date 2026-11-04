@@ -88,6 +88,11 @@ class StreamActivity : AppCompatActivity()
 			insets
 		}
 
+		onBackPressedDispatcher.addCallback(this, StreamBackCallback(
+			isOverlayVisible = { binding.overlay.isVisible },
+			showOverlay = { showOverlay() },
+			leave = { finish() }))
+
 		viewModel.onScreenControlsEnabled.observe(this, Observer {
 			if(binding.onScreenControlsSwitch.isChecked != it)
 				binding.onScreenControlsSwitch.isChecked = it
@@ -178,7 +183,11 @@ class StreamActivity : AppCompatActivity()
 		viewModel.session.resume()
 	}
 
-	private val hideSystemUIRunnable = Runnable { hideSystemUI() }
+	// transient system bars are not reported, so the overlay can't wait for the bars to hide
+	private val hideSystemUIRunnable = Runnable {
+		hideSystemUI()
+		hideOverlay()
+	}
 
 	private fun showOverlay()
 	{
