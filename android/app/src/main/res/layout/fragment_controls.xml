@@ -47,6 +47,9 @@
         app:drawableHandle="@drawable/control_analog_stick_handle"
         />
 
+    <!-- Centered between share and options rather than the parent, so on narrow screens
+         (e.g. a dual-screen device's second display) it shrinks instead of overlapping them
+         and the face buttons. On wide screens the 300dp cap applies and nothing changes. -->
     <com.metallic.chiaki.touchcontrols.TouchpadView
         android:id="@+id/touchpadView"
         android:layout_width="0dp"
@@ -57,8 +60,8 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintWidth_max="300dp"
         app:layout_constraintDimensionRatio="1920:942"
-        app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"/>
+        app:layout_constraintLeft_toRightOf="@id/shareButtonView"
+        app:layout_constraintRight_toLeftOf="@id/optionsButtonView"/>
 
     <com.metallic.chiaki.touchcontrols.DPadView
         android:id="@+id/dpadView"

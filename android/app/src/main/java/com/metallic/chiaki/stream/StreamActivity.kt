@@ -55,6 +55,8 @@ class StreamActivity : AppCompatActivity()
 
 	private val uiVisibilityHandler = Handler(Looper.getMainLooper())
 
+	private var secondDisplayController: SecondDisplayController? = null
+
 	override fun onCreate(savedInstanceState: Bundle?)
 	{
 		super.onCreate(savedInstanceState)
@@ -110,9 +112,35 @@ class StreamActivity : AppCompatActivity()
 			showOverlay()
 		}
 
+		if(viewModel.preferences.menuButtonEnabled)
+		{
+			binding.menuButton.isVisible = true
+			binding.menuButton.alpha = viewModel.preferences.menuButtonOpacity / 100f
+			binding.menuButton.setOnClickListener { toggleOverlay() }
+		}
+
 		binding.displayModeToggle.addOnButtonCheckedListener { _, _, _ ->
 			adjustStreamViewAspect()
 			showOverlay()
+		}
+
+		if(viewModel.preferences.secondScreenControlsEnabled)
+		{
+			val controller = SecondDisplayController(this)
+			secondDisplayController = controller
+			controller.isActive
+				.onEach { secondScreenActiveChanged(it) }
+				.launchIn(lifecycleScope)
+			// Assign rather than OR-merge: `or` can only set button bits, never clear them. The
+			// on-screen fragments are hidden while this is active, so it's the only touch source.
+			controller.controllerState
+				.onEach { viewModel.input.touchControllerState = it }
+				.launchIn(lifecycleScope)
+			controller.onMenuRequested = { toggleOverlay() }
+			binding.secondScreenToggleButton.setOnClickListener {
+				controller.enabled = !controller.enabled
+				showOverlay()
+			}
 		}
 
 		//viewModel.session.attachToTextureView(textureView)
@@ -158,12 +186,14 @@ class StreamActivity : AppCompatActivity()
 		super.onResume()
 		hideSystemUI()
 		viewModel.session.resume()
+		secondDisplayController?.start()
 	}
 
 	override fun onPause()
 	{
 		super.onPause()
 		viewModel.session.pause()
+		secondDisplayController?.stop()
 	}
 
 	override fun onDestroy()
@@ -172,13 +202,28 @@ class StreamActivity : AppCompatActivity()
 		controlsJob?.cancel()
 	}
 
+	private fun secondScreenActiveChanged(active: Boolean)
+	{
+		findViewById<View>(R.id.controlsFragment)?.isVisible = !active && (viewModel.onScreenControlsEnabled.value ?: true)
+		findViewById<View>(R.id.touchpadOnlyFragment)?.isVisible = !active && (viewModel.touchpadOnlyEnabled.value ?: false)
+		binding.onScreenControlsSwitch.isVisible = !active
+		binding.touchpadOnlySwitch.isVisible = !active
+		binding.secondScreenToggleButton.isVisible = secondDisplayController?.hasDisplay == true
+		showOverlay()
+	}
+
 	private fun reconnect()
 	{
 		viewModel.session.shutdown()
 		viewModel.session.resume()
 	}
 
-	private val hideSystemUIRunnable = Runnable { hideSystemUI() }
+	// Hides the overlay directly too: when it was opened from the menu button, the
+	// system bars were never shown, so hiding them wouldn't trigger the insets listener.
+	private val hideUIRunnable = Runnable {
+		hideSystemUI()
+		hideOverlay()
+	}
 
 	private fun showOverlay()
 	{
@@ -192,8 +237,16 @@ class StreamActivity : AppCompatActivity()
 					binding.overlay.alpha = 1.0f
 				}
 			})
-		uiVisibilityHandler.removeCallbacks(hideSystemUIRunnable)
-		uiVisibilityHandler.postDelayed(hideSystemUIRunnable, HIDE_UI_TIMEOUT_MS)
+		uiVisibilityHandler.removeCallbacks(hideUIRunnable)
+		uiVisibilityHandler.postDelayed(hideUIRunnable, HIDE_UI_TIMEOUT_MS)
+	}
+
+	private fun toggleOverlay()
+	{
+		if(binding.overlay.isVisible)
+			hideOverlay()
+		else
+			showOverlay()
 	}
 
 	private fun hideOverlay()

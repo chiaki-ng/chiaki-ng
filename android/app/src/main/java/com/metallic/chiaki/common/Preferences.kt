@@ -39,6 +39,20 @@ class Preferences(context: Context)
 		CODEC_H265("h265", R.string.preferences_codec_title_h265, com.metallic.chiaki.lib.Codec.CODEC_H265)
 	}
 
+	enum class SecondScreenLayout(val value: String, @StringRes val title: Int)
+	{
+		AUTO("auto", R.string.preferences_second_screen_layout_title_auto),
+		FULL("full", R.string.preferences_second_screen_layout_title_full),
+		SIMPLIFIED("simplified", R.string.preferences_second_screen_layout_title_simplified);
+
+		fun isSimplified(controllerConnected: Boolean) = when(this)
+		{
+			AUTO -> controllerConnected
+			FULL -> false
+			SIMPLIFIED -> true
+		}
+	}
+
 	companion object
 	{
 		val resolutionDefault = Resolution.RES_720P
@@ -47,6 +61,8 @@ class Preferences(context: Context)
 		val fpsAll = FPS.values()
 		val codecDefault = Codec.CODEC_H265
 		val codecAll = Codec.values()
+		val secondScreenLayoutDefault = SecondScreenLayout.AUTO
+		val secondScreenLayoutAll = SecondScreenLayout.values()
 	}
 
 	private val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -73,6 +89,38 @@ class Preferences(context: Context)
 	var touchpadOnlyEnabled
 		get() = sharedPreferences.getBoolean(touchpadOnlyEnabledKey, false)
 		set(value) { sharedPreferences.edit().putBoolean(touchpadOnlyEnabledKey, value).apply() }
+
+	val menuButtonEnabledKey get() = resources.getString(R.string.preferences_menu_button_enabled_key)
+	var menuButtonEnabled
+		get() = sharedPreferences.getBoolean(menuButtonEnabledKey, false)
+		set(value) { sharedPreferences.edit().putBoolean(menuButtonEnabledKey, value).apply() }
+
+	val menuButtonOpacityKey get() = resources.getString(R.string.preferences_menu_button_opacity_key)
+	var menuButtonOpacity
+		get() = sharedPreferences.getInt(menuButtonOpacityKey, 50)
+		set(value) { sharedPreferences.edit().putInt(menuButtonOpacityKey, value).apply() }
+
+	val secondScreenControlsEnabledKey get() = resources.getString(R.string.preferences_second_screen_controls_enabled_key)
+	var secondScreenControlsEnabled
+		get() = sharedPreferences.getBoolean(secondScreenControlsEnabledKey, false)
+		set(value) { sharedPreferences.edit().putBoolean(secondScreenControlsEnabledKey, value).apply() }
+
+	val secondScreenMenuButtonEnabledKey get() = resources.getString(R.string.preferences_second_screen_menu_button_enabled_key)
+	var secondScreenMenuButtonEnabled
+		get() = sharedPreferences.getBoolean(secondScreenMenuButtonEnabledKey, false)
+		set(value) { sharedPreferences.edit().putBoolean(secondScreenMenuButtonEnabledKey, value).apply() }
+
+	val secondScreenLayoutKey get() = resources.getString(R.string.preferences_second_screen_layout_key)
+	var secondScreenLayout
+		get() = sharedPreferences.getString(secondScreenLayoutKey, secondScreenLayoutDefault.value)?.let { value ->
+			SecondScreenLayout.values().firstOrNull { it.value == value }
+		} ?: secondScreenLayoutDefault
+		set(value) { sharedPreferences.edit().putString(secondScreenLayoutKey, value.value).apply() }
+
+	val secondScreenOpacityKey get() = resources.getString(R.string.preferences_second_screen_opacity_key)
+	var secondScreenOpacity
+		get() = sharedPreferences.getInt(secondScreenOpacityKey, 100)
+		set(value) { sharedPreferences.edit().putInt(secondScreenOpacityKey, value).apply() }
 
 	val rumbleEnabledKey get() = resources.getString(R.string.preferences_rumble_enabled_key)
 	var rumbleEnabled

@@ -56,44 +56,30 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 	override fun onViewCreated(view: View, savedInstanceState: Bundle?)
 	{
 		super.onViewCreated(view, savedInstanceState)
-		binding.dpadView.stateChangeCallback = this::dpadStateChanged
-		binding.crossButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_CROSS)
-		binding.moonButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_MOON)
-		binding.pyramidButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_PYRAMID)
-		binding.boxButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_BOX)
-		binding.l1ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_L1)
-		binding.r1ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_R1)
-		binding.l3ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_L3)
-		binding.r3ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_R3)
-		binding.optionsButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_OPTIONS)
-		binding.shareButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_SHARE)
-		binding.psButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_PS)
-
-		binding.l2ButtonView.buttonPressedCallback = { ownControllerState = ownControllerState.copy().apply { l2State = if(it) 255U else 0U } }
-		binding.r2ButtonView.buttonPressedCallback = { ownControllerState = ownControllerState.copy().apply { r2State = if(it) 255U else 0U } }
-
-		val quantizeStick = { f: Float ->
-			(Short.MAX_VALUE * f).toInt().toShort()
-		}
-
-		binding.leftAnalogStickView.stateChangedCallback = { ownControllerState = ownControllerState.copy().apply {
-			leftX = quantizeStick(it.x)
-			leftY = quantizeStick(it.y)
-		}}
-
-		binding.rightAnalogStickView.stateChangedCallback = { ownControllerState = ownControllerState.copy().apply {
-			rightX = quantizeStick(it.x)
-			rightY = quantizeStick(it.y)
-		}}
+		bindTouchControls(binding) { change -> ownControllerState = ownControllerState.copy().apply(change) }
 
 		onScreenControlsEnabled?.observe(viewLifecycleOwner, Observer {
 			view.visibility = if(it) View.VISIBLE else View.GONE
 		})
 	}
+}
 
-	private fun dpadStateChanged(direction: DPadView.Direction?)
-	{
-		ownControllerState = ownControllerState.copy().apply {
+// Wires every control in the layout except the touchpad, which callers combine separately.
+// [update] applies a change to a copy of the caller's current controller state.
+fun bindTouchControls(binding: FragmentControlsBinding, update: (ControllerState.() -> Unit) -> Unit)
+{
+	fun buttonStateChanged(buttonMask: UInt) = { pressed: Boolean ->
+		update {
+			buttons =
+				if(pressed)
+					buttons or buttonMask
+				else
+					buttons and buttonMask.inv()
+		}
+	}
+
+	binding.dpadView.stateChangeCallback = { direction ->
+		update {
 			buttons = ((buttons
 						and ControllerState.BUTTON_DPAD_LEFT.inv()
 						and ControllerState.BUTTON_DPAD_RIGHT.inv()
@@ -114,14 +100,32 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 		}
 	}
 
-	private fun buttonStateChanged(buttonMask: UInt) = { pressed: Boolean ->
-		ownControllerState = ownControllerState.copy().apply {
-			buttons =
-				if(pressed)
-					buttons or buttonMask
-				else
-					buttons and buttonMask.inv()
+	binding.crossButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_CROSS)
+	binding.moonButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_MOON)
+	binding.pyramidButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_PYRAMID)
+	binding.boxButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_BOX)
+	binding.l1ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_L1)
+	binding.r1ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_R1)
+	binding.l3ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_L3)
+	binding.r3ButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_R3)
+	binding.optionsButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_OPTIONS)
+	binding.shareButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_SHARE)
+	binding.psButtonView.buttonPressedCallback = buttonStateChanged(ControllerState.BUTTON_PS)
 
-		}
+	binding.l2ButtonView.buttonPressedCallback = { pressed -> update { l2State = if(pressed) 255U else 0U } }
+	binding.r2ButtonView.buttonPressedCallback = { pressed -> update { r2State = if(pressed) 255U else 0U } }
+
+	val quantizeStick = { f: Float ->
+		(Short.MAX_VALUE * f).toInt().toShort()
 	}
+
+	binding.leftAnalogStickView.stateChangedCallback = { stick -> update {
+		leftX = quantizeStick(stick.x)
+		leftY = quantizeStick(stick.y)
+	}}
+
+	binding.rightAnalogStickView.stateChangedCallback = { stick -> update {
+		rightX = quantizeStick(stick.x)
+		rightY = quantizeStick(stick.y)
+	}}
 }

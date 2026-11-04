@@ -75,6 +75,21 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:switchPadding="8dp" />
 
+            <com.google.android.material.button.MaterialButton
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:id="@+id/secondScreenToggleButton"
+                android:layout_width="48dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:contentDescription="@string/stream_toggle_second_screen"
+                android:visibility="gone"
+                app:icon="@drawable/ic_swap_vert"
+                app:iconPadding="0dp"
+                app:iconTint="@color/stream_material_button_icon_tint"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/displayModeToggle"
+                app:strokeColor="@color/stream_text"/>
+
             <com.google.android.material.button.MaterialButtonToggleGroup
                 android:id="@+id/displayModeToggle"
                 android:layout_width="wrap_content"
@@ -116,5 +131,19 @@
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 32dp at the very top fits above the touchpad in the full controls layout, which starts 32dp down -->
+    <ImageButton
+        android:id="@+id/menuButton"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="top|center_horizontal"
+        android:padding="6dp"
+        android:scaleType="fitCenter"
+        android:background="@drawable/bg_stream_menu_button"
+        android:src="@drawable/ic_overflow"
+        android:contentDescription="@string/stream_menu_button"
+        android:visibility="gone"
+        app:tint="@color/stream_text"/>
 
 </FrameLayout>
