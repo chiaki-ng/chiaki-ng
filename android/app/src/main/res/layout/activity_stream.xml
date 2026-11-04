@@ -117,4 +117,18 @@
 
 </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <!-- 32dp at the very top fits above the touchpad in the full controls layout, which starts 32dp down -->
+    <ImageButton
+        android:id="@+id/menuButton"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="top|center_horizontal"
+        android:padding="6dp"
+        android:scaleType="fitCenter"
+        android:background="@drawable/bg_stream_menu_button"
+        android:src="@drawable/ic_overflow"
+        android:contentDescription="@string/stream_menu_button"
+        android:visibility="gone"
+        app:tint="@color/stream_text"/>
+
 </FrameLayout>

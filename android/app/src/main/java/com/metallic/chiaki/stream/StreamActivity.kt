@@ -110,6 +110,13 @@ class StreamActivity : AppCompatActivity()
 			showOverlay()
 		}
 
+		if(viewModel.preferences.menuButtonEnabled)
+		{
+			binding.menuButton.isVisible = true
+			binding.menuButton.alpha = viewModel.preferences.menuButtonOpacity / 100f
+			binding.menuButton.setOnClickListener { toggleOverlay() }
+		}
+
 		binding.displayModeToggle.addOnButtonCheckedListener { _, _, _ ->
 			adjustStreamViewAspect()
 			showOverlay()
@@ -178,7 +185,12 @@ class StreamActivity : AppCompatActivity()
 		viewModel.session.resume()
 	}
 
-	private val hideSystemUIRunnable = Runnable { hideSystemUI() }
+	// Hides the overlay directly too: when it was opened from the menu button, the
+	// system bars were never shown, so hiding them wouldn't trigger the insets listener.
+	private val hideUIRunnable = Runnable {
+		hideSystemUI()
+		hideOverlay()
+	}
 
 	private fun showOverlay()
 	{
@@ -192,8 +204,16 @@ class StreamActivity : AppCompatActivity()
 					binding.overlay.alpha = 1.0f
 				}
 			})
-		uiVisibilityHandler.removeCallbacks(hideSystemUIRunnable)
-		uiVisibilityHandler.postDelayed(hideSystemUIRunnable, HIDE_UI_TIMEOUT_MS)
+		uiVisibilityHandler.removeCallbacks(hideUIRunnable)
+		uiVisibilityHandler.postDelayed(hideUIRunnable, HIDE_UI_TIMEOUT_MS)
+	}
+
+	private fun toggleOverlay()
+	{
+		if(binding.overlay.isVisible)
+			hideOverlay()
+		else
+			showOverlay()
 	}
 
 	private fun hideOverlay()

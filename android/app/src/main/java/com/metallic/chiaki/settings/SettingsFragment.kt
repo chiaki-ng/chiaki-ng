@@ -27,6 +27,7 @@ class DataStore(val preferences: Preferences): PreferenceDataStore()
 		preferences.rumbleEnabledKey -> preferences.rumbleEnabled
 		preferences.motionEnabledKey -> preferences.motionEnabled
 		preferences.buttonHapticEnabledKey -> preferences.buttonHapticEnabled
+		preferences.menuButtonEnabledKey -> preferences.menuButtonEnabled
 		else -> defValue
 	}
 
@@ -39,6 +40,7 @@ class DataStore(val preferences: Preferences): PreferenceDataStore()
 			preferences.rumbleEnabledKey -> preferences.rumbleEnabled = value
 			preferences.motionEnabledKey -> preferences.motionEnabled = value
 			preferences.buttonHapticEnabledKey -> preferences.buttonHapticEnabled = value
+			preferences.menuButtonEnabledKey -> preferences.menuButtonEnabled = value
 		}
 	}
 
@@ -71,6 +73,20 @@ class DataStore(val preferences: Preferences): PreferenceDataStore()
 				val codec = Preferences.Codec.values().firstOrNull { it.value == value } ?: return
 				preferences.codec = codec
 			}
+		}
+	}
+
+	override fun getInt(key: String?, defValue: Int) = when(key)
+	{
+		preferences.menuButtonOpacityKey -> preferences.menuButtonOpacity
+		else -> defValue
+	}
+
+	override fun putInt(key: String?, value: Int)
+	{
+		when(key)
+		{
+			preferences.menuButtonOpacityKey -> preferences.menuButtonOpacity = value
 		}
 	}
 }
