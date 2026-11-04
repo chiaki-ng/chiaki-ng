@@ -10,6 +10,8 @@
 #include <chiaki/discoveryservice.h>
 #include <chiaki/regist.h>
 
+#include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <linux/in.h>
 #include <linux/in6.h>
@@ -134,6 +136,13 @@ typedef struct android_chiaki_session_t
 	jmethodID java_session_event_login_pin_request_meth;
 	jmethodID java_session_event_quit_meth;
 	jmethodID java_session_event_rumble_meth;
+	jmethodID java_session_event_motion_reset_meth;
+	jmethodID java_session_event_trigger_effects_meth;
+	jmethodID java_session_event_led_color_meth;
+	jmethodID java_session_event_player_index_meth;
+	jmethodID java_session_event_haptic_intensity_meth;
+	jmethodID java_session_event_trigger_intensity_meth;
+	jmethodID java_session_event_haptic_strength_meth;
 	jfieldID java_controller_state_buttons;
 	jfieldID java_controller_state_l2_state;
 	jfieldID java_controller_state_r2_state;
@@ -199,10 +208,88 @@ static void android_chiaki_event_cb(ChiakiEvent *event, void *user)
 							  (jint)event->rumble.left,
 							  (jint)event->rumble.right);
 			break;
+		case CHIAKI_EVENT_MOTION_RESET:
+			E->CallVoidMethod(env, session->java_session,
+							  session->java_session_event_motion_reset_meth);
+			break;
+		case CHIAKI_EVENT_TRIGGER_EFFECTS:
+		{
+			jbyteArray left = E->NewByteArray(env, 10);
+			jbyteArray right = E->NewByteArray(env, 10);
+			E->SetByteArrayRegion(env, left, 0, 10, (const jbyte *)event->trigger_effects.left);
+			E->SetByteArrayRegion(env, right, 0, 10, (const jbyte *)event->trigger_effects.right);
+			E->CallVoidMethod(env, session->java_session,
+							  session->java_session_event_trigger_effects_meth,
+							  (jint)event->trigger_effects.type_left, left,
+							  (jint)event->trigger_effects.type_right, right);
+			E->DeleteLocalRef(env, left);
+			E->DeleteLocalRef(env, right);
+			break;
+		}
+		case CHIAKI_EVENT_LED_COLOR:
+			E->CallVoidMethod(env, session->java_session,
+							  session->java_session_event_led_color_meth,
+							  (jint)event->led_state[0], (jint)event->led_state[1], (jint)event->led_state[2]);
+			break;
+		case CHIAKI_EVENT_PLAYER_INDEX:
+			E->CallVoidMethod(env, session->java_session,
+							  session->java_session_event_player_index_meth,
+							  (jint)event->player_index);
+			break;
+		case CHIAKI_EVENT_HAPTIC_INTENSITY:
+			E->CallVoidMethod(env, session->java_session,
+							  session->java_session_event_haptic_intensity_meth,
+							  (jint)event->intensity);
+			break;
+		case CHIAKI_EVENT_TRIGGER_INTENSITY:
+			E->CallVoidMethod(env, session->java_session,
+							  session->java_session_event_trigger_intensity_meth,
+							  (jint)event->intensity);
+			break;
 		default:
 			break;
 	}
 
+	(*global_vm)->DetachCurrentThread(global_vm);
+}
+
+#define HAPTIC_RUMBLE_MIN_STRENGTH 100
+
+static void android_chiaki_haptics_frame(uint8_t *buf, size_t buf_size, void *user)
+{
+	AndroidChiakiSession *session = user;
+	const size_t sample_size = 2 * sizeof(int16_t); // stereo
+	if(buf_size == 0 || buf_size % sample_size != 0)
+		return;
+	size_t count = buf_size / sample_size;
+	uint64_t sum_left = 0, sum_right = 0;
+	for(size_t i = 0; i < count; i++)
+	{
+		int16_t left, right;
+		memcpy(&left, buf + i * sample_size, sizeof(int16_t));
+		memcpy(&right, buf + i * sample_size + sizeof(int16_t), sizeof(int16_t));
+		sum_left += (uint64_t)abs(left) * 2;
+		sum_right += (uint64_t)abs(right) * 2;
+	}
+	uint32_t strength_left = (uint32_t)(sum_left / count);
+	uint32_t strength_right = (uint32_t)(sum_right / count);
+	if(strength_left <= HAPTIC_RUMBLE_MIN_STRENGTH)
+		strength_left = 0;
+	if(strength_right <= HAPTIC_RUMBLE_MIN_STRENGTH)
+		strength_right = 0;
+	if(!strength_left && !strength_right)
+		return;
+	if(strength_left > UINT16_MAX)
+		strength_left = UINT16_MAX;
+	if(strength_right > UINT16_MAX)
+		strength_right = UINT16_MAX;
+
+	JNIEnv *env = attach_thread_jni();
+	if(!env)
+		return;
+	E->CallVoidMethod(env, session->java_session,
+					  session->java_session_event_haptic_strength_meth,
+					  (jint)strength_left, (jint)strength_right);
 	(*global_vm)->DetachCurrentThread(global_vm);
 }
 
@@ -230,6 +317,8 @@ JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject 
 
 	ChiakiConnectInfo connect_info = { 0 };
 	connect_info.ps5 = ps5;
+	connect_info.enable_dualsense = E->GetBooleanField(env, connect_info_obj, E->GetFieldID(env, connect_info_class, "enableDualSense", "Z"));
+	CHIAKI_LOGI(log, "DualSense features %s", connect_info.enable_dualsense ? "enabled" : "disabled");
 
 	const char *str_borrow = E->GetStringUTFChars(env, host_string, NULL);
 	connect_info.host = host_str = strdup(str_borrow);
@@ -320,6 +409,13 @@ JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject 
 	session->java_session_event_login_pin_request_meth = E->GetMethodID(env, session->java_session_class, "eventLoginPinRequest", "(Z)V");
 	session->java_session_event_quit_meth = E->GetMethodID(env, session->java_session_class, "eventQuit", "(ILjava/lang/String;)V");
 	session->java_session_event_rumble_meth = E->GetMethodID(env, session->java_session_class, "eventRumble", "(II)V");
+	session->java_session_event_motion_reset_meth = E->GetMethodID(env, session->java_session_class, "eventMotionReset", "()V");
+	session->java_session_event_trigger_effects_meth = E->GetMethodID(env, session->java_session_class, "eventTriggerEffects", "(I[BI[B)V");
+	session->java_session_event_led_color_meth = E->GetMethodID(env, session->java_session_class, "eventLedColor", "(III)V");
+	session->java_session_event_player_index_meth = E->GetMethodID(env, session->java_session_class, "eventPlayerIndex", "(I)V");
+	session->java_session_event_haptic_intensity_meth = E->GetMethodID(env, session->java_session_class, "eventHapticIntensity", "(I)V");
+	session->java_session_event_trigger_intensity_meth = E->GetMethodID(env, session->java_session_class, "eventTriggerIntensity", "(I)V");
+	session->java_session_event_haptic_strength_meth = E->GetMethodID(env, session->java_session_class, "eventHapticStrength", "(II)V");
 
 	jclass controller_state_class = E->FindClass(env, BASE_PACKAGE"/ControllerState");
 	session->java_controller_state_buttons = E->GetFieldID(env, controller_state_class, "buttons", "I");
@@ -352,6 +448,14 @@ JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject 
 	ChiakiAudioSink audio_sink;
 	android_chiaki_audio_decoder_get_sink(&session->audio_decoder, &audio_sink);
 	chiaki_session_set_audio_sink(&session->session, &audio_sink);
+
+	if(connect_info.enable_dualsense)
+	{
+		ChiakiAudioSink haptics_sink = { 0 };
+		haptics_sink.user = session;
+		haptics_sink.frame_cb = android_chiaki_haptics_frame;
+		chiaki_session_set_haptics_sink(&session->session, &haptics_sink);
+	}
 
 beach:
 	if(!session && log)
