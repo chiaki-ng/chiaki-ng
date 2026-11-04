@@ -125,7 +125,8 @@ class DPadView @JvmOverloads constructor(
 
 	override fun onTouchEvent(event: MotionEvent): Boolean
 	{
-		touchTracker.touchEvent(event)
+		if(!downInSystemGestureArea(event))
+			touchTracker.touchEvent(event)
 		return true
 	}
 
