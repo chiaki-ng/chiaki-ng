@@ -270,6 +270,12 @@ class Settings : public QObject
 		RumbleHapticsIntensity GetRumbleHapticsIntensity() const;
 		void SetRumbleHapticsIntensity(RumbleHapticsIntensity intensity);
 
+		bool GetDualSenseBtHaptics() const				{ return settings.value("settings/dualsense_bt_haptics", true).toBool(); }
+		void SetDualSenseBtHaptics(bool enabled)		{ settings.setValue("settings/dualsense_bt_haptics", enabled); }
+
+		bool GetDualSenseBtSpeaker() const				{ return settings.value("settings/dualsense_bt_speaker", false).toBool(); }
+		void SetDualSenseBtSpeaker(bool enabled)		{ settings.setValue("settings/dualsense_bt_speaker", enabled); }
+
 		bool GetShowStreamStats() const            { return settings.value("settings/show_stream_stats", false).toBool(); }
 		void SetShowStreamStats(bool enabled)      { settings.setValue("settings/show_stream_stats", enabled); }
 

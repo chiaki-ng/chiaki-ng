@@ -96,6 +96,8 @@ class SdeckHapticsWorker;
 		bool keyboard_controller_enabled;
 		bool mouse_touch_enabled;
 		bool enable_dualsense;
+		bool dualsense_bt_haptics;
+		bool dualsense_bt_speaker;
 		bool auto_regist;
 		float haptic_override;
 		ChiakiDisableAudioVideo audio_video_disabled;
@@ -146,6 +148,8 @@ struct MicBuf
 	uint32_t size_bytes;
 	uint32_t current_byte;
 };
+
+class DualSenseBtAudio;
 
 class StreamSession : public QObject
 {
@@ -242,6 +246,9 @@ class StreamSession : public QObject
 		RumbleHapticsIntensity rumble_haptics_intensity;
 		bool start_mic_unmuted;
 		bool session_started;
+		bool dualsense_bt_haptics = false;
+		bool dualsense_bt_speaker = false;
+		DualSenseBtAudio *dualsense_bt_audio = nullptr;
 
 		ChiakiFfmpegDecoder *ffmpeg_decoder;
 		void TriggerFfmpegFrameAvailable();

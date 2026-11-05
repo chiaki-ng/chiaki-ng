@@ -255,6 +255,28 @@ void QmlSettings::setRumbleHapticsIntensity(int intensity)
     emit rumbleHapticsIntensityChanged();
 }
 
+bool QmlSettings::dualSenseBtHaptics() const
+{
+    return settings->GetDualSenseBtHaptics();
+}
+
+void QmlSettings::setDualSenseBtHaptics(bool enabled)
+{
+    settings->SetDualSenseBtHaptics(enabled);
+    emit dualSenseBtHapticsChanged();
+}
+
+bool QmlSettings::dualSenseBtSpeaker() const
+{
+    return settings->GetDualSenseBtSpeaker();
+}
+
+void QmlSettings::setDualSenseBtSpeaker(bool enabled)
+{
+    settings->SetDualSenseBtSpeaker(enabled);
+    emit dualSenseBtSpeakerChanged();
+}
+
 bool QmlSettings::iDROnFECFailureEnabled() const
 {
     return settings->GetIDROnFECFailureEnabled();
@@ -1894,6 +1916,8 @@ void QmlSettings::refreshAllKeys()
     emit vSyncEnabledChanged();
     emit hapticOverrideChanged();
     emit rumbleHapticsIntensityChanged();
+    emit dualSenseBtHapticsChanged();
+    emit dualSenseBtSpeakerChanged();
     emit buttonsByPositionChanged();
     emit allowJoystickBackgroundEventsChanged();
     emit startMicUnmutedChanged();

@@ -2798,6 +2798,20 @@ DialogView {
                                 text: qsTr("(Normal)")
                             }
                         }
+                        C.CheckBox {
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: Qt.platform.os === "linux"
+                            text: qsTr("True haptics for a DualSense on Bluetooth (experimental)")
+                            checked: Chiaki.settings.dualSenseBtHaptics
+                            onToggled: Chiaki.settings.dualSenseBtHaptics = checked
+                        }
+                        C.CheckBox {
+                            Layout.alignment: Qt.AlignHCenter
+                            visible: Qt.platform.os === "linux"
+                            text: qsTr("Also play game audio on a DualSense speaker or headphones on Bluetooth (experimental)")
+                            checked: Chiaki.settings.dualSenseBtSpeaker
+                            onToggled: Chiaki.settings.dualSenseBtSpeaker = checked
+                        }
                         RowLayout {
                             spacing: 10
                             Layout.alignment: Qt.AlignHCenter
