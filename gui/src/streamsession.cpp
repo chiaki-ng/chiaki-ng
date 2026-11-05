@@ -4,6 +4,10 @@
 #include <settings.h>
 #include <controllermanager.h>
 
+#ifdef Q_OS_LINUX
+#include <dualsensebtaudio.h>
+#endif
+
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>
 #include <chiaki/remote/holepunch.h>
@@ -305,6 +309,8 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
 	this->mouse_touch_enabled = settings->GetMouseTouchEnabled();
 	this->enable_keyboard = false;
 	this->enable_dualsense = true;
+	this->dualsense_bt_haptics = settings->GetDualSenseBtHaptics();
+	this->dualsense_bt_speaker = settings->GetDualSenseBtSpeaker();
 	this->enable_idr_on_fec_failure = settings->GetIDROnFECFailureEnabled();
 	this->rumble_haptics_intensity = settings->GetRumbleHapticsIntensity();
 	this->buttons_by_pos = settings->GetButtonsByPosition();
@@ -679,6 +685,12 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 #endif
 		rumble_haptics_intensity = connect_info.rumble_haptics_intensity;
 		ConnectRumbleHaptics();
+		dualsense_bt_haptics = connect_info.dualsense_bt_haptics;
+		dualsense_bt_speaker = connect_info.dualsense_bt_speaker;
+#ifdef Q_OS_LINUX
+		if(dualsense_bt_haptics || dualsense_bt_speaker)
+			dualsense_bt_audio = new DualSenseBtAudio(log.GetChiakiLog());
+#endif
 	}
 	UpdateGamepads();
 	QTimer *packet_loss_timer = new QTimer(this);
@@ -787,6 +799,10 @@ StreamSession::~StreamSession()
 		SDL_CloseAudioDevice(haptics_output);
 		haptics_output = 0;
 	}
+#ifdef Q_OS_LINUX
+	delete dualsense_bt_audio;
+	dualsense_bt_audio = nullptr;
+#endif
 	if (haptics_resampler_buf)
 	{
 		free(haptics_resampler_buf);
@@ -1378,6 +1394,10 @@ void StreamSession::SendFeedbackState()
 
 void StreamSession::InitAudio(unsigned int channels, unsigned int rate)
 {
+#ifdef Q_OS_LINUX
+	if(dualsense_bt_audio)
+		dualsense_bt_audio->SetAudioFormat(channels, rate);
+#endif
 	StopAudioOutDrainThread();
 	allow_unmute = true;
 	if(start_mic_unmuted)
@@ -1801,6 +1821,10 @@ void StreamSession::InitHaptics()
 void StreamSession::DisconnectHaptics()
 {
 	haptics_retry_generation++;
+#ifdef Q_OS_LINUX
+	if(dualsense_bt_audio)
+		dualsense_bt_audio->Stop();
+#endif
 	if (this->haptics_output > 0)
 	{
 		SDL_CloseAudioDevice(haptics_output);
@@ -1855,6 +1879,10 @@ void StreamSession::QueueRumbleHaptics(uint16_t strength)
 
 void StreamSession::ConnectHaptics()
 {
+#ifdef Q_OS_LINUX
+	if(dualsense_bt_audio && dualsense_bt_audio->IsActive())
+		return;
+#endif
 	if (this->haptics_output > 0)
 	{
 		CHIAKI_LOGW(this->log.GetChiakiLog(), "Haptics already connected to an attached DualSense controller, ignoring additional controllers.");
@@ -1902,6 +1930,28 @@ void StreamSession::ConnectHaptics()
 		});
 		return;
 	}
+#ifdef Q_OS_LINUX
+	// A DualSense on Bluetooth has no audio device, its audio goes in HID reports instead
+	if(dualsense_bt_audio)
+	{
+		const QString device = DualSenseBtAudio::FindDevice();
+		if(!device.isEmpty() && dualsense_bt_audio->Start(device, dualsense_bt_speaker))
+		{
+			if(dualsense_bt_haptics)
+			{
+				QMetaObject::invokeMethod(this, [this]() {
+					const uint8_t clear_effect[10] = { 0 };
+					for(auto controller : controllers)
+					{
+						if(controller->IsDualSense())
+							controller->SetTriggerEffects(0x05, clear_effect, 0x05, clear_effect);
+					}
+				});
+			}
+			return;
+		}
+	}
+#endif
 	CHIAKI_LOGW(log.GetChiakiLog(), "DualSense features were enabled and a DualSense is connected, but could not find the DualSense audio device!");
 	return;
 }
@@ -1958,6 +2008,11 @@ void StreamSession::StopSdeckHaptics()
 
 void StreamSession::PushAudioFrame(int16_t *og_buf, size_t samples_count)
 {
+#ifdef Q_OS_LINUX
+	// Ahead of the volume check, so that setting the volume to 0 leaves only the controller playing
+	if(dualsense_bt_audio)
+		dualsense_bt_audio->PushAudio(og_buf, samples_count);
+#endif
 	if(!audio_out || !audio_volume)
 		return;
 
@@ -2244,6 +2299,14 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 			packetr.haptic_packet[i] = amplituder;
 		}
 		emit SdeckHapticPushed(packetl, packetr);
+		return;
+	}
+#endif
+#ifdef Q_OS_LINUX
+	if(dualsense_bt_haptics && dualsense_bt_audio && dualsense_bt_audio->IsActive())
+	{
+		if(ps5_rumble_intensity >= 0)
+			dualsense_bt_audio->PushHaptics(buf, buf_size / (2 * sizeof(int16_t)), haptic_override);
 		return;
 	}
 #endif

@@ -18,6 +18,8 @@ class QmlSettings : public QObject
     Q_PROPERTY(bool logVerbose READ logVerbose WRITE setLogVerbose NOTIFY logVerboseChanged)
     Q_PROPERTY(bool logSanitize READ logSanitize WRITE setLogSanitize NOTIFY logSanitizeChanged)
     Q_PROPERTY(bool vSyncEnabled READ vSyncEnabled WRITE setVSyncEnabled NOTIFY vSyncEnabledChanged)
+    Q_PROPERTY(bool dualSenseBtHaptics READ dualSenseBtHaptics WRITE setDualSenseBtHaptics NOTIFY dualSenseBtHapticsChanged)
+    Q_PROPERTY(bool dualSenseBtSpeaker READ dualSenseBtSpeaker WRITE setDualSenseBtSpeaker NOTIFY dualSenseBtSpeakerChanged)
     Q_PROPERTY(int rumbleHapticsIntensity READ rumbleHapticsIntensity WRITE setRumbleHapticsIntensity NOTIFY rumbleHapticsIntensityChanged)
 #ifdef CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
     Q_PROPERTY(bool steamDeckHaptics READ steamDeckHaptics WRITE setSteamDeckHaptics NOTIFY steamDeckHapticsChanged)
@@ -210,6 +212,10 @@ public:
 
     int rumbleHapticsIntensity() const;
     void setRumbleHapticsIntensity(int intensity);
+    bool dualSenseBtHaptics() const;
+    void setDualSenseBtHaptics(bool enabled);
+    bool dualSenseBtSpeaker() const;
+    void setDualSenseBtSpeaker(bool enabled);
 
 #ifdef CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
     bool steamDeckHaptics() const;
@@ -622,6 +628,8 @@ signals:
     void logSanitizeChanged();
     void vSyncEnabledChanged();
     void rumbleHapticsIntensityChanged();
+    void dualSenseBtHapticsChanged();
+    void dualSenseBtSpeakerChanged();
     void buttonsByPositionChanged();
     void allowJoystickBackgroundEventsChanged();
     void startMicUnmutedChanged();

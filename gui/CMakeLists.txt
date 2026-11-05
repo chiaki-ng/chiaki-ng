@@ -96,6 +96,10 @@ target_include_directories(chiaki PRIVATE include)
 
 add_library(placebo-libav-impl src/libav_impl.c)
 target_link_libraries(placebo-libav-impl PkgConfig::LIBPLACEBO FFMPEG::avcodec FFMPEG::avutil FFMPEG::avformat)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	target_sources(chiaki PRIVATE include/dualsensebtaudio.h src/dualsensebtaudio.cpp)
+endif()
+
 target_link_libraries(chiaki PkgConfig::LIBPLACEBO placebo-libav-impl)
 
 target_link_libraries(chiaki chiaki-lib)
