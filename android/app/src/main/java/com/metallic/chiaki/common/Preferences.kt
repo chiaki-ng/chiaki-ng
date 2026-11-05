@@ -74,6 +74,12 @@ class Preferences(context: Context)
 		get() = sharedPreferences.getBoolean(touchpadOnlyEnabledKey, false)
 		set(value) { sharedPreferences.edit().putBoolean(touchpadOnlyEnabledKey, value).apply() }
 
+	val videoEnabledKey get() = resources.getString(R.string.preferences_video_enabled_key)
+	val audioEnabledKey get() = resources.getString(R.string.preferences_audio_enabled_key)
+	val streamMedia get() = StreamMedia(
+		video = sharedPreferences.getBoolean(videoEnabledKey, true),
+		audio = sharedPreferences.getBoolean(audioEnabledKey, true))
+
 	val rumbleEnabledKey get() = resources.getString(R.string.preferences_rumble_enabled_key)
 	var rumbleEnabled
 		get() = sharedPreferences.getBoolean(rumbleEnabledKey, true)

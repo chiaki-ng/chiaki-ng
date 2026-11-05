@@ -76,6 +76,20 @@
             app:title="@string/preferences_codec_title"
             app:summary="%s"
             app:icon="@drawable/ic_codec"/>
+
+        <SwitchPreference
+            app:key="@string/preferences_video_enabled_key"
+            app:title="@string/preferences_video_enabled_title"
+            app:summary="@string/preferences_video_enabled_summary"
+            app:defaultValue="true"
+            app:icon="@drawable/ic_video"/>
+
+        <SwitchPreference
+            app:key="@string/preferences_audio_enabled_key"
+            app:title="@string/preferences_audio_enabled_title"
+            app:summary="@string/preferences_audio_enabled_summary"
+            app:defaultValue="true"
+            app:icon="@drawable/ic_audio"/>
     </PreferenceCategory>
 
     <PreferenceCategory

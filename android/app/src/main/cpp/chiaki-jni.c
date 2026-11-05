@@ -159,6 +159,8 @@ typedef struct android_chiaki_session_t
 	AndroidChiakiVideoDecoder video_decoder;
 	AndroidChiakiAudioDecoder audio_decoder;
 	void *audio_output;
+	bool video_enabled;
+	bool audio_enabled;
 } AndroidChiakiSession;
 
 static void android_chiaki_event_cb(ChiakiEvent *event, void *user)
@@ -206,6 +208,12 @@ static void android_chiaki_event_cb(ChiakiEvent *event, void *user)
 	(*global_vm)->DetachCurrentThread(global_vm);
 }
 
+// Accepting the frame keeps the receiver's reference frame tracking intact
+static bool android_chiaki_video_sample_discard(uint8_t *buf, size_t buf_size, int32_t frames_lost, bool frame_recovered, void *user)
+{
+	return true;
+}
+
 JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject result, jobject connect_info_obj, jstring log_file_str, jboolean log_verbose, jobject java_session)
 {
 	AndroidChiakiSession *session = NULL;
@@ -222,6 +230,8 @@ JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject 
 
 	jclass connect_info_class = E->GetObjectClass(env, connect_info_obj);
 	jboolean ps5 = E->GetBooleanField(env, connect_info_obj, E->GetFieldID(env, connect_info_class, "ps5", "Z"));
+	jboolean video_enabled = E->GetBooleanField(env, connect_info_obj, E->GetFieldID(env, connect_info_class, "videoEnabled", "Z"));
+	jboolean audio_enabled = E->GetBooleanField(env, connect_info_obj, E->GetFieldID(env, connect_info_class, "audioEnabled", "Z"));
 	jstring host_string = E->GetObjectField(env, connect_info_obj, E->GetFieldID(env, connect_info_class, "host", "Ljava/lang/String;"));
 	jbyteArray regist_key_array = E->GetObjectField(env, connect_info_obj, E->GetFieldID(env, connect_info_class, "registKey", "[B"));
 	jbyteArray morning_array = E->GetObjectField(env, connect_info_obj, E->GetFieldID(env, connect_info_class, "morning", "[B"));
@@ -280,6 +290,9 @@ JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject 
 	}
 	memset(session, 0, sizeof(AndroidChiakiSession));
 	session->log = log;
+	session->video_enabled = video_enabled;
+	session->audio_enabled = audio_enabled;
+	CHIAKI_LOGI(log, "Video %s, audio %s", video_enabled ? "enabled" : "disabled", audio_enabled ? "enabled" : "disabled");
 	err = android_chiaki_video_decoder_init(&session->video_decoder, log, connect_info.video_profile.width, connect_info.video_profile.height,
 			connect_info.ps5 ? connect_info.video_profile.codec : CHIAKI_CODEC_H264);
 	if(err != CHIAKI_ERR_SUCCESS)
@@ -347,11 +360,19 @@ JNIEXPORT void JNICALL JNI_FCN(sessionCreate)(JNIEnv *env, jobject obj, jobject 
 	session->java_controller_touch_id = E->GetFieldID(env, controller_touch_class, "id", "B");
 
 	chiaki_session_set_event_cb(&session->session, android_chiaki_event_cb, session);
-	chiaki_session_set_video_sample_cb(&session->session, android_chiaki_video_decoder_video_sample, &session->video_decoder);
+	// Without video or audio the stream is still received but dropped here,
+	// so the decoder and the audio output are never started.
+	if(video_enabled)
+		chiaki_session_set_video_sample_cb(&session->session, android_chiaki_video_decoder_video_sample, &session->video_decoder);
+	else
+		chiaki_session_set_video_sample_cb(&session->session, android_chiaki_video_sample_discard, NULL);
 
-	ChiakiAudioSink audio_sink;
-	android_chiaki_audio_decoder_get_sink(&session->audio_decoder, &audio_sink);
-	chiaki_session_set_audio_sink(&session->session, &audio_sink);
+	if(audio_enabled)
+	{
+		ChiakiAudioSink audio_sink;
+		android_chiaki_audio_decoder_get_sink(&session->audio_decoder, &audio_sink);
+		chiaki_session_set_audio_sink(&session->session, &audio_sink);
+	}
 
 beach:
 	if(!session && log)
@@ -407,6 +428,8 @@ JNIEXPORT jint JNICALL JNI_FCN(sessionJoin)(JNIEnv *env, jobject obj, jlong ptr)
 JNIEXPORT void JNICALL JNI_FCN(sessionSetSurface)(JNIEnv *env, jobject obj, jlong ptr, jobject surface)
 {
 	AndroidChiakiSession *session = (AndroidChiakiSession *)ptr;
+	if(!session->video_enabled)
+		return;
 	android_chiaki_video_decoder_set_surface(&session->video_decoder, env, surface);
 }
 

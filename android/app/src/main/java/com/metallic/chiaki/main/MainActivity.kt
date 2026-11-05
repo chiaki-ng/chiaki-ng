@@ -19,7 +19,6 @@ import com.metallic.chiaki.common.*
 import com.metallic.chiaki.common.ext.putRevealExtra
 import com.metallic.chiaki.common.ext.viewModelFactory
 import com.metallic.chiaki.databinding.ActivityMainBinding
-import com.metallic.chiaki.lib.ConnectInfo
 import com.metallic.chiaki.lib.DiscoveryHost
 import com.metallic.chiaki.manualconsole.EditManualConsoleActivity
 import com.metallic.chiaki.regist.RegistActivity
@@ -60,7 +59,7 @@ class MainActivity : AppCompatActivity()
 		viewModel = ViewModelProvider(this, viewModelFactory { MainViewModel(getDatabase(this), Preferences(this)) })
 			.get(MainViewModel::class.java)
 
-		val recyclerViewAdapter = DisplayHostRecyclerViewAdapter(this::hostTriggered, this::wakeupHost, this::editHost, this::deleteHost)
+		val recyclerViewAdapter = DisplayHostRecyclerViewAdapter(this::hostTriggered, this::connectWithOptions, this::wakeupHost, this::editHost, this::deleteHost)
 		binding.hostsRecyclerView.adapter = recyclerViewAdapter
 		binding.hostsRecyclerView.layoutManager = LinearLayoutManager(this)
 		viewModel.displayHosts.observe(this, Observer {
@@ -174,13 +173,31 @@ class MainActivity : AppCompatActivity()
 		}
 	}
 
-	private fun hostTriggered(host: DisplayHost)
+	private fun hostTriggered(host: DisplayHost) = hostTriggered(host, Preferences(this).streamMedia)
+
+	private fun connectWithOptions(host: DisplayHost)
+	{
+		val checked = Preferences(this).streamMedia.let { booleanArrayOf(it.video, it.audio) }
+		MaterialAlertDialogBuilder(this)
+			.setTitle(R.string.action_connect_with_options)
+			.setMultiChoiceItems(arrayOf(getString(R.string.connect_options_video), getString(R.string.connect_options_audio)), checked) { _, which, isChecked ->
+				checked[which] = isChecked
+			}
+			.setPositiveButton(R.string.action_connect) { _, _ ->
+				hostTriggered(host, StreamMedia(video = checked[0], audio = checked[1]))
+			}
+			.setNegativeButton(R.string.action_connect_cancel_connect) { _, _ -> }
+			.create()
+			.show()
+	}
+
+	private fun hostTriggered(host: DisplayHost, media: StreamMedia)
 	{
 		val registeredHost = host.registeredHost
 		if(registeredHost != null)
 		{
 			fun connect() {
-				val connectInfo = ConnectInfo(host.isPS5, host.host, registeredHost.rpRegistKey, registeredHost.rpKey, Preferences(this).videoProfile)
+				val connectInfo = media.connectInfo(host.isPS5, host.host, registeredHost.rpRegistKey, registeredHost.rpKey, Preferences(this).videoProfile)
 				Intent(this, StreamActivity::class.java).let {
 					it.putExtra(StreamActivity.EXTRA_CONNECT_INFO, connectInfo)
 					startActivity(it)

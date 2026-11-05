@@ -69,7 +69,9 @@ data class ConnectInfo(
 	val host: String,
 	val registKey: ByteArray,
 	val morning: ByteArray,
-	val videoProfile: ConnectVideoProfile
+	val videoProfile: ConnectVideoProfile,
+	val videoEnabled: Boolean = true,
+	val audioEnabled: Boolean = true
 ): Parcelable
 
 private class ChiakiNative

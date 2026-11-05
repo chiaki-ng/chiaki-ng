@@ -117,6 +117,12 @@ class StreamActivity : AppCompatActivity()
 
 		//viewModel.session.attachToTextureView(textureView)
 		viewModel.session.attachToSurfaceView(binding.surfaceView)
+		if(!connectInfo.videoEnabled)
+		{
+			// The screen has to stay on, only the app in front gets controller input, so keep it dark
+			binding.surfaceView.isGone = true
+			window.attributes = window.attributes.also { it.screenBrightness = 0.0f }
+		}
 		viewModel.session.state.observe(this, Observer { this.stateChanged(it) })
 		adjustStreamViewAspect()
 
@@ -233,6 +239,7 @@ class StreamActivity : AppCompatActivity()
 	private fun stateChanged(state: StreamState)
 	{
 		binding.progressBar.visibility = if(state == StreamStateConnecting) View.VISIBLE else View.GONE
+		binding.videoOffLabel.isVisible = state == StreamStateConnected && !viewModel.session.connectInfo.videoEnabled
 
 		when(state)
 		{

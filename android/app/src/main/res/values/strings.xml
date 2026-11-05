@@ -105,6 +105,15 @@
     <string name="display_hosts_empty_discovery_on_info">No consoles added or discovered.</string>
     <string name="stream_on_screen_controls">On-Screen Controls</string>
     <string name="stream_touchpad_only">Touchpad only</string>
+    <string name="stream_video_off">Video off, controller only</string>
+    <string name="preferences_video_enabled_title">Video</string>
+    <string name="preferences_video_enabled_summary">Show the stream on this device. Turn off to use it only as a controller, e.g. while watching on the TV</string>
+    <string name="preferences_audio_enabled_title">Audio</string>
+    <string name="preferences_audio_enabled_summary">Play the stream\'s sound on this device</string>
+    <string name="action_connect_with_options">Connect with Options…</string>
+    <string name="connect_options_video">Video</string>
+    <string name="connect_options_audio">Audio</string>
+    <string name="action_connect">Connect</string>
 
     <!-- Don't localize these -->
     <string name="preferences_discovery_enabled_key">discovery_enabled</string>
@@ -121,4 +130,6 @@
     <string name="preferences_fps_key">stream_fps</string>
     <string name="preferences_bitrate_key">stream_bitrate</string>
     <string name="preferences_codec_key">stream_codec</string>
+    <string name="preferences_video_enabled_key">stream_video_enabled</string>
+    <string name="preferences_audio_enabled_key">stream_audio_enabled</string>
 </resources>
