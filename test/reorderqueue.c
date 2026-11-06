@@ -171,11 +171,70 @@ static MunitResult test_reorder_queue_16(const MunitParameter params[], void *te
 	return MUNIT_OK;
 }
 
+static MunitResult test_reorder_queue_drop(const MunitParameter params[], void *test_user)
+{
+	ChiakiReorderQueue queue;
+	ChiakiErrorCode err = chiaki_reorder_queue_init_16(&queue, 2, 42);
+	munit_assert_int(err, ==, CHIAKI_ERR_SUCCESS);
+
+	DropRecord drop_record = { 0 };
+	chiaki_reorder_queue_set_drop_cb(&queue, drop, &drop_record);
+
+	uint64_t seq_num = 0;
+	void *user = NULL;
+
+	chiaki_reorder_queue_push(&queue, 42, (void *)0);
+	chiaki_reorder_queue_push(&queue, 43, (void *)1);
+	chiaki_reorder_queue_push(&queue, 44, (void *)2);
+	munit_assert_uint64(chiaki_reorder_queue_count(&queue), ==, 3);
+
+	// drop the head, it must not be peeked or pulled afterwards
+	chiaki_reorder_queue_drop(&queue, 0);
+	munit_assert(!drop_record.failed);
+	munit_assert_uint64(drop_record.count[0], ==, 1);
+	munit_assert_uint64(drop_record.seq_num[0], ==, 42);
+	munit_assert(!chiaki_reorder_queue_peek(&queue, 0, &seq_num, &user));
+	munit_assert(!chiaki_reorder_queue_pull(&queue, &seq_num, &user));
+
+	// dropping it again does nothing
+	chiaki_reorder_queue_drop(&queue, 0);
+	munit_assert_uint64(drop_record.count[0], ==, 1);
+
+	// drop the tail, count shrinks to the last set element
+	chiaki_reorder_queue_drop(&queue, 2);
+	munit_assert_uint64(drop_record.count[2], ==, 1);
+	munit_assert_uint64(chiaki_reorder_queue_count(&queue), ==, 2);
+
+	// a packet pushed into the dropped head slot is pulled, then the remaining one
+	chiaki_reorder_queue_push(&queue, 42, (void *)3);
+	munit_assert(!drop_record.failed);
+	munit_assert_uint64(drop_record.count[3], ==, 0);
+	munit_assert(chiaki_reorder_queue_pull(&queue, &seq_num, &user));
+	munit_assert_uint64(seq_num, ==, 42);
+	munit_assert_uint64((uint64_t)(size_t)user, ==, 3);
+	munit_assert(chiaki_reorder_queue_pull(&queue, &seq_num, &user));
+	munit_assert_uint64(seq_num, ==, 43);
+	munit_assert_uint64((uint64_t)(size_t)user, ==, 1);
+	munit_assert_uint64(chiaki_reorder_queue_count(&queue), ==, 0);
+
+	chiaki_reorder_queue_fini(&queue);
+
+	return MUNIT_OK;
+}
+
 
 MunitTest tests_reorder_queue[] = {
 	{
 		"/reorder_queue_16",
 		test_reorder_queue_16,
+		NULL,
+		NULL,
+		MUNIT_TEST_OPTION_NONE,
+		NULL
+	},
+	{
+		"/reorder_queue_drop",
+		test_reorder_queue_drop,
 		NULL,
 		NULL,
 		MUNIT_TEST_OPTION_NONE,

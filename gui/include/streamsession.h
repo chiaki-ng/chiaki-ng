@@ -293,6 +293,9 @@ class StreamSession : public QObject
 		// Drop the console's rumble for the BT DualSense while it is playing haptics
 		bool bt_haptics_suppress_rumble = true;
 		bool bt_rumble_suppressed = false;
+		// A connected controller restarts the retries; older ones stop
+		quint64 haptics_retry_generation = 0;
+		size_t haptics_retry_attempt = 0;
 		SDL_AudioCVT haptics_cvt;
 		uint8_t *haptics_resampler_buf;
 		MicBuf mic_buf;
@@ -327,6 +330,7 @@ class StreamSession : public QObject
 #endif
 		void AdjustAdaptiveTriggerPacket(uint8_t *buf, uint8_t type);
 		void WaitHaptics();
+		void RetryHaptics(quint64 generation);
 
 	private slots:
 		void InitAudio(unsigned int channels, unsigned int rate);

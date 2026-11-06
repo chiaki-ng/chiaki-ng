@@ -24,6 +24,7 @@ extern "C" {
 #include <QPointer>
 #include <QColor>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QThread>
 #include <QShortcut>
 #include <QStandardPaths>
@@ -56,10 +57,13 @@ extern "C" {
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
+#include <type_traits>
+#include <limits>
 #include <utility>
 #include <atomic>
 #if defined(Q_OS_MACOS)
 #include <objc/message.h>
+#include <objc/runtime.h>
 #endif
 
 Q_LOGGING_CATEGORY(chiakiGui, "chiaki.gui", QtInfoMsg);
@@ -2553,6 +2557,12 @@ QmlMainWindow::~QmlMainWindow()
 {
     Q_ASSERT(!placebo_swapchain);
 
+    // A normal exit isn't a crash, whether or not Vulkan showed a frame or the queued clear ran
+    if (settings && render_backend == RenderBackend::Vulkan) {
+        settings->SetVulkanStartupPending(false);
+        settings->Sync();
+    }
+
     if (stats_overlay_widget) {
         stats_overlay_widget->hide();
         delete stats_overlay_widget;
@@ -2669,6 +2679,11 @@ QmlMainWindow::~QmlMainWindow()
     pl_cache_destroy(&placebo_cache);
     pl_queue_destroy(&placebo_queue);
     pl_renderer_destroy(&placebo_renderer);
+    // User shader hooks hold a reference to the GPU (their descriptors destroy
+    // buffers/textures via p->gpu), so they must be released before the GPU is.
+    pl_mpv_user_shader_destroy(&fsr_hook);
+    pl_mpv_user_shader_destroy(&fsrcnnx_hook_8);
+    pl_mpv_user_shader_destroy(&fsrcnnx_hook_16);
     if (render_backend == RenderBackend::Vulkan) {
         pl_vulkan_destroy(&placebo_vulkan);
         pl_vk_inst_destroy(&placebo_vk_inst);
@@ -2679,9 +2694,6 @@ QmlMainWindow::~QmlMainWindow()
     delete qt_gl_offscreen_surface;
     delete qt_gl_context;
     pl_options_free(&renderparams_opts);
-    pl_mpv_user_shader_destroy(&fsr_hook);
-    pl_mpv_user_shader_destroy(&fsrcnnx_hook_8);
-    pl_mpv_user_shader_destroy(&fsrcnnx_hook_16);
     pl_log_destroy(&placebo_log);
 }
 
@@ -3065,6 +3077,7 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         if (!synthetic_warmup_frame && !has_video && startup_first_real_frame_queued_pending_visibility.loadAcquire() == 0)
             startup_first_real_frame_queued_pending_visibility.storeRelease(1);
     };
+    bool defer_queue_reset = false;
     if (!synthetic_warmup_frame) {
         if (!placebo_state_mutex.tryLock()) {
             if (storePendingFrame(frame, true, synthetic_warmup_frame)) {
@@ -3089,9 +3102,22 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
                     mutex->unlock();
             }
         } placebo_state_unlocker{&placebo_state_mutex};
-        if (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin) {
+        if (frame_mix_in_use && (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin)) {
+            // Resetting now would free frames the render thread is drawing; the next render
+            // applies this frame before it updates the queue and resets it then
+            defer_queue_reset = true;
+            queue_rollback_pending = true;
+            {
+                // frames still pending are from the timeline before the rollback; drop them so the
+                // rolled-back frame isn't rejected as older than them
+                QMutexLocker pending_locker(&pending_frame_mutex);
+                prunePendingFramesBeforeLocked(std::numeric_limits<double>::infinity());
+            }
+        } else if (queue_pts_origin < 0.0 || frame.pts + 1e-6 < queue_pts_origin) {
             logPtsRollback("presentFrame/rollback", frame.pts, queue_pts_origin, false, frame.duration * 1000.0);
             pl_queue_reset(placebo_queue);
+            placebo_queue_resets++;
+            queue_rollback_pending = false;
             resetQueueDepthTracking();
             ts_start = 0;
             queue_pts_origin = frame.pts;
@@ -3107,6 +3133,16 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         deinterlace_enabled = this->renderparams_opts->params.deinterlace_params;
     } else {
         deinterlace_enabled = this->renderparams_opts->params.deinterlace_params;
+    }
+    if (defer_queue_reset) {
+        if (storePendingFrame(frame, true, synthetic_warmup_frame)) {
+            snapshotPendingFrame();
+            armStartupVisibility();
+        }
+        if (frame.frame)
+            av_frame_free(&frame.frame);
+        queuePendingFrameRelease();
+        return;
     }
 
     struct pl_source_frame src_frame{
@@ -3442,6 +3478,9 @@ void QmlMainWindow::resetPlaceboQueue()
         << "queue_pts_origin=" << queue_pts_origin
         << "playback_started=" << playback_started;
     pl_queue_reset(placebo_queue);
+    placebo_queue_resets++;
+    // the next stored frame is compared with the new origin as usual
+    queue_rollback_pending = false;
     renderer_cache_flush_pending.storeRelaxed(1);
     newest_queued_frame_pts = -1.0;
     resetQueueDepthTracking();
@@ -4214,7 +4253,9 @@ bool QmlMainWindow::queueStoredFrame(AVFrame *frame, double pts, float duration,
     }
     {
         QMutexLocker locker(&placebo_state_mutex);
-        if (!synthetic_warmup && newest_queued_frame_pts >= 0.0 && pts <= newest_queued_frame_pts + 1e-6) {
+        // A rolled-back frame is older than what is queued by definition, so it isn't stale
+        const bool rollback_pending = !synthetic_warmup && queue_rollback_pending;
+        if (!synthetic_warmup && !rollback_pending && newest_queued_frame_pts >= 0.0 && pts <= newest_queued_frame_pts + 1e-6) {
             logDroppedFrameReason("stale_stored_frame", static_cast<qint64>(chiaki_time_now_monotonic_us()), pts,
                                   "before queue submission");
             qCInfo(chiakiGui)
@@ -4228,9 +4269,11 @@ bool QmlMainWindow::queueStoredFrame(AVFrame *frame, double pts, float duration,
         const bool preserve_timeline = preserve_playback_timeline;
         preserve_playback_timeline = false;
         double queue_origin = synthetic_warmup ? pts : queue_pts_origin;
-        if (!synthetic_warmup && (queue_pts_origin < 0.0 || pts + 1e-6 < queue_pts_origin)) {
+        if (!synthetic_warmup && (rollback_pending || queue_pts_origin < 0.0 || pts + 1e-6 < queue_pts_origin)) {
             logPtsRollback("applyPendingFrame/rollback", pts, queue_pts_origin, preserve_timeline, duration * 1000.0);
             pl_queue_reset(placebo_queue);
+            placebo_queue_resets++;
+            queue_rollback_pending = false;
             resetQueueDepthTracking();
             const double old_origin = queue_pts_origin;
             queue_pts_origin = pts;
@@ -4877,6 +4920,9 @@ void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
     auto fallbackToOpenGL = [&](const QString &reason) {
         qCWarning(chiakiGui) << "Vulkan renderer initialization failed, falling back to OpenGL:" << reason;
         pending_renderer_fallback_reason = reason;
+        // Vulkan was given up on without a crash, so the next launch shouldn't count this one
+        settings->SetVulkanStartupPending(false);
+        settings->Sync();
 
         if (placebo_vulkan)
             pl_vulkan_destroy(&placebo_vulkan);
@@ -4903,6 +4949,17 @@ void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
             fallbackToOpenGL(reason);
             goto renderer_backend_ready;
         }
+
+        if (settings->GetVulkanStartupPending()) {
+            // The last launch closed before Vulkan showed a frame, which is how a crash inside the
+            // Vulkan driver or a third-party Vulkan layer looks; keep OpenGL until switched back
+            settings->SetRenderBackend(RenderBackend::OpenGL);
+            fallbackToOpenGL(tr("chiaki-ng closed while starting Vulkan last time, so it now uses OpenGL. "
+                                "You can switch back under Settings > Video > Renderer Backend."));
+            goto renderer_backend_ready;
+        }
+        settings->SetVulkanStartupPending(true);
+        settings->Sync();
 
         const char *vk_exts[] = {
             nullptr,
@@ -5111,9 +5168,8 @@ renderer_backend_ready:
         if (session)
             session->BlockInput(0);
         // Only drain at session end (teardown): prevents frame_mix use-after-free.
-        // At session start there is no prior in-flight frame_mix, and the queue
-        // reset below is mutex-protected, so blocking the main thread here is
-        // unnecessary and causes a visible freeze in the connecting UI.
+        // At session start draining would visibly freeze the connecting UI, so the
+        // queue reset below waits only for a render that is drawing queued frames.
         if (!s)
             drainRenderThread();
         if (!preserve_startup_warmup) {
@@ -5124,7 +5180,20 @@ renderer_backend_ready:
             }
             {
                 QMutexLocker locker(&placebo_state_mutex);
+                // pl_queue_reset frees the frames a render may still be drawing, so let that render
+                // finish with them first; that's far shorter than draining the render thread
+                QElapsedTimer frame_mix_wait;
+                frame_mix_wait.start();
+                while (frame_mix_in_use && frame_mix_wait.elapsed() < 1000) {
+                    locker.unlock();
+                    QThread::usleep(500);
+                    locker.relock();
+                }
+                if (frame_mix_in_use)
+                    qCWarning(chiakiGui) << "Resetting the frame queue while a render still uses it after waiting 1 s";
                 pl_queue_reset(placebo_queue);
+                placebo_queue_resets++;
+                queue_rollback_pending = false;
                 newest_queued_frame_pts = -1.0;
             }
             resetQueueDepthTracking();
@@ -5353,10 +5422,12 @@ void QmlMainWindow::update()
 
     if (quick_need_sync.fetchAndStoreRelaxed(0) != 0) {
         quick_render->polishItems();
+        // QQuickRenderControl::sync() reads the QML items, so the GUI thread has to wait
+        // for it; otherwise it can change or free them while the scene graph is synced
         if (quick_render->thread() == QThread::currentThread())
             sync();
         else
-            QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::QueuedConnection);
+            QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::BlockingQueuedConnection);
     }
 
     last_render_dispatch_us.storeRelease(static_cast<qint64>(chiaki_time_now_monotonic_us()));
@@ -5686,6 +5757,7 @@ void QmlMainWindow::processDeferredSwapTask(qint64 submit_begin_us,
         if (!pl_swapchain_submit_frame(placebo_swapchain))
             qCWarning(chiakiGui) << "Failed to submit Placebo frame on deferred thread!";
         else {
+            confirmVulkanStartup();
             const qint64 submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_call_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()
@@ -5883,9 +5955,19 @@ void QmlMainWindow::createSwapchain()
         Q_UNREACHABLE();
     }
 #elif defined(Q_OS_MACOS)
+    auto send_id = reinterpret_cast<id(*)(id, SEL)>(objc_msgSend);
+    auto send_is_kind = reinterpret_cast<BOOL(*)(id, SEL, Class)>(objc_msgSend);
+    auto send_responds = reinterpret_cast<BOOL(*)(id, SEL, SEL)>(objc_msgSend);
+    id layer = send_id(reinterpret_cast<id>(winId()), sel_registerName("layer"));
+    // From Qt 6.10 the view's layer is a container holding the CAMetalLayer as its content
+    // layer; MoltenVK needs the CAMetalLayer itself
+    SEL content_layer_sel = sel_registerName("contentLayer");
+    if (layer && !send_is_kind(layer, sel_registerName("isKindOfClass:"), objc_getClass("CAMetalLayer"))
+        && send_responds(layer, sel_registerName("respondsToSelector:"), content_layer_sel))
+        layer = send_id(layer, content_layer_sel);
     VkMetalSurfaceCreateInfoEXT surfaceInfo = {};
     surfaceInfo.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
-    surfaceInfo.pLayer = static_cast<const CAMetalLayer*>(reinterpret_cast<void*(*)(id, SEL)>(objc_msgSend)(reinterpret_cast<id>(winId()), sel_registerName("layer")));
+    surfaceInfo.pLayer = reinterpret_cast<const CAMetalLayer*>(layer);
     err = vk_funcs.vkCreateMetalSurfaceEXT(placebo_vk_inst->instance, &surfaceInfo, nullptr, &surface);
 #elif defined(Q_OS_WIN)
     VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
@@ -5974,10 +6056,12 @@ void QmlMainWindow::createSwapchain()
 
 void QmlMainWindow::destroySwapchain()
 {
-    Q_ASSERT(QThread::currentThread() == render_thread);
-
+    // macOS can send an expose event while the window is still being set up, before the
+    // render thread is chosen; with no swapchain yet there is nothing to do on any thread
     if (!placebo_swapchain)
         return;
+
+    Q_ASSERT(QThread::currentThread() == render_thread);
 
     if (deferred_swap_thread && deferred_swap_thread->hasPendingWork())
         drainDeferredSwaps();
@@ -6128,10 +6212,11 @@ void QmlMainWindow::updateSwapchain()
     else
         QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::resizeSwapchain, this), Qt::QueuedConnection);
     quick_render->polishItems();
+    // the GUI thread has to wait for sync(), as in update()
     if (quick_render->thread() == QThread::currentThread())
         sync();
     else
-        QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::QueuedConnection);
+        QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::sync, this), Qt::BlockingQueuedConnection);
     QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::render, this), Qt::QueuedConnection);
     const qint64 update_swapchain_end_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     if (update_swapchain_end_us >= update_swapchain_begin_us && update_swapchain_end_us - update_swapchain_begin_us >= 12000) {
@@ -6303,6 +6388,16 @@ void QmlMainWindow::endFrame()
     const qint64 quick_release_after_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     if (quick_release_after_us >= quick_release_begin_us)
         logQuickReleaseStats(quick_release_after_us, quick_release_after_us - quick_release_begin_us);
+}
+
+void QmlMainWindow::confirmVulkanStartup()
+{
+    if (render_backend != RenderBackend::Vulkan || vulkan_startup_confirmed.fetchAndStoreRelaxed(1) != 0)
+        return;
+    QMetaObject::invokeMethod(this, [this]() {
+        settings->SetVulkanStartupPending(false);
+        settings->Sync();
+    }, Qt::QueuedConnection);
 }
 
 void QmlMainWindow::handleVulkanDeviceLost(const QString &reason)
@@ -6545,8 +6640,12 @@ void QmlMainWindow::render()
     const bool swapchain_recreated = swapchain_recreate_pending.fetchAndStoreRelaxed(0) != 0;
     if (swapchain_recreated) {
         destroySwapchain();
-        createSwapchain();
-        resizeSwapchain();
+        // A hidden window (a locked session, for one) can't present, so a new swapchain would
+        // fail again and be recreated on every frame. The next expose event creates it again.
+        if (isExposed() && width() > 0 && height() > 0) {
+            createSwapchain();
+            resizeSwapchain();
+        }
     }
 
     auto schedulePostSwapchainRecreateRefresh = [this, swapchain_recreated]() {
@@ -6678,9 +6777,11 @@ void QmlMainWindow::render()
     bool kept_frame_enqueued = false;
     const qint64 queue_update_begin_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     int queue_depth_before_update = -1;
+    quint64 frame_mix_resets = 0;
     struct pl_frame direct_render_frame = {};
     const struct pl_frame *direct_frames[] = { &direct_render_frame };
-    const float direct_timestamps[] = { 0.0f };
+    // pl_frame_mix timestamps are float before libplacebo API 387 and double from it
+    const std::remove_cv_t<std::remove_pointer_t<decltype(pl_frame_mix::timestamps)>> direct_timestamps[] = { 0 };
     if (bypass_frame_queue) {
         AVFrame *incoming = nullptr;
         bool reset_direct_frame = false;
@@ -6758,7 +6859,20 @@ void QmlMainWindow::render()
                 }
             }
         }
+        frame_mix_in_use = true;
+        frame_mix_resets = placebo_queue_resets;
     }
+    struct FrameMixRelease
+    {
+        QmlMainWindow *window;
+        ~FrameMixRelease()
+        {
+            if (!window)
+                return;
+            QMutexLocker locker(&window->placebo_state_mutex);
+            window->frame_mix_in_use = false;
+        }
+    } frame_mix_release{bypass_frame_queue ? nullptr : this};
     switch (queue_status) {
     case PL_QUEUE_ERR:
         finalize_render();
@@ -6773,6 +6887,25 @@ void QmlMainWindow::render()
             pending_frame_release_queued.storeRelease(0);
         else
             queuePendingFrameRelease();
+        if (!bypass_frame_queue) {
+            // Applying the pending frame can reset the queue, which frees the frames in frame_mix
+            TimedMutexLocker locker(placebo_state_mutex, "render_queue_refresh");
+            if (placebo_queue_resets != frame_mix_resets) {
+                // the reset can restart the timeline (ts_start, playback_started), so aim at the
+                // new one rather than the target worked out before it
+                const uint64_t ts_refresh = chiaki_time_now_monotonic_us();
+                qparams.pts = playback_started && ts_refresh > ts_start
+                    ? (double)(ts_refresh - ts_start) / 1000000.0 + vsync_duration - kPtsStaleMarginS
+                    : 0.0;
+                queue_status = pl_queue_update(placebo_queue, &frame_mix, &qparams);
+                queue_depth_cached.storeRelease(pl_queue_num_frames(placebo_queue));
+                frame_mix_resets = placebo_queue_resets;
+            }
+        }
+        if (queue_status == PL_QUEUE_ERR) {
+            finalize_render();
+            return;
+        }
     }
     {
         const qint64 queue_update_after_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
@@ -7018,6 +7151,7 @@ void QmlMainWindow::render()
                 if (!pl_swapchain_submit_frame(placebo_swapchain))
                     qCWarning(chiakiGui) << "Failed to submit Placebo frame!";
                 else {
+                    confirmVulkanStartup();
                     submit_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             logLatencyStats("pl_swapchain_submit_frame", submit_us - submit_begin_us);
             CHIAKI_NOISY_DEBUG().nospace()
@@ -7153,6 +7287,11 @@ void QmlMainWindow::render()
     if (!hint_frame && frame_mix.num_frames)
         hint_frame = frame_mix.frames[0];
     struct pl_color_space hint = hint_frame ? hint_frame->color : pl_color_space{};
+    // libplacebo API 361 and later read a hint with unknown primaries and transfer as a request for
+    // VK_COLOR_SPACE_PASS_THROUGH_EXT, and switching MoltenVK's swapchain to it waits forever for the
+    // old swapchain, so the window hung at launch. Fill in the defaults it inferred before.
+    if (hint.primaries == PL_COLOR_PRIM_UNKNOWN && hint.transfer == PL_COLOR_TRC_UNKNOWN)
+        pl_color_space_infer(&hint);
     struct pl_color_space target_csp = sw_frame.color_space;
     if (target_csp.hdr.max_luma <= 0.0f) {
         target_csp.hdr.max_luma = 0.0f;

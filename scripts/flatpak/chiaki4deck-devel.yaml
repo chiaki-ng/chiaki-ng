@@ -1,9 +1,9 @@
 app-id: io.github.streetpea.Chiaki4deck-devel
 runtime: org.kde.Platform
-runtime-version: '6.9'
+runtime-version: '6.11'
 sdk: org.kde.Sdk
 base: io.qt.qtwebengine.BaseApp
-base-version: '6.9'
+base-version: '6.11'
 command: chiaki
 rename-icon: chiaking
 rename-desktop-file: chiaking.desktop
@@ -66,17 +66,18 @@ modules:
     sources:
       - type: git
         url: https://github.com/haasn/libplacebo
-        tag: v7.360.1
+        tag: v7.387.0
 
   - name: libevent
     buildsystem: cmake-ninja
     config-opts:
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - -DEVENT__DISABLE_SAMPLES:BOOL=OFF
       - -DEVENT__DISABLE_TESTS:BOOL=OFF
     sources:
       - type: git
         url: https://github.com/libevent/libevent
-        tag: release-2.1.12-stable
+        tag: release-2.1.13-stable
 
   - name: nv-codec-headers
     only-arches:
@@ -87,7 +88,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/FFmpeg/nv-codec-headers.git
-        tag: n13.0.19.0
+        tag: n13.1.15.0
 
   - name: ffmpeg-x86_64
     only-arches:
@@ -120,8 +121,8 @@ modules:
       - --enable-ffnvcodec
     sources:
       - type: archive
-        url: https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz
-        sha256: 40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6
+        url: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+        sha256: 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
       - type: patch
         path: 0001-vulkan-ignore-frames-without-hw-context.patch
 
@@ -147,55 +148,12 @@ modules:
       - --enable-hwaccel=hevc_vulkan
     sources:
       - type: archive
-        url: https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz
-        sha256: 40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6
+        url: https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz
+        sha256: 8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
       - type: patch
         path: 0001-vulkan-ignore-frames-without-hw-context.patch
 
-  - name: python3-google
-    buildsystem: simple
-    build-commands:
-      - "pip3 install --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} --no-build-isolation google"
-    sources:
-      - type: file
-        url: https://files.pythonhosted.org/packages/3e/db/5ba900920642414333bdc3cb397075381d63eafc7e75c2373bbc560a9fa1/soupsieve-2.0.1.tar.gz
-        sha256: a59dc181727e95d25f781f0eb4fd1825ff45590ec8ff49eadfd7f1a537cc0232
-      - type: file
-        url: https://files.pythonhosted.org/packages/e8/b0/cd2b968000577ec5ce6c741a54d846dfa402372369b8b6861720aa9ecea7/beautifulsoup4-4.11.1.tar.gz
-        sha256: ad9aa55b65ef2808eb405f46cf74df7fcb7044d5cbc26487f96eb2ef2e436693
-      - type: file
-        url: https://files.pythonhosted.org/packages/89/97/b49c69893cddea912c7a660a4b6102c6b02cd268f8c7162dd70b7c16f753/google-3.0.0.tar.gz
-        sha256: 143530122ee5130509ad5e989f0512f7cb218b2d4eddbafbad40fd10e8d8ccbe
-
-  - name: python3-protobuf
-    buildsystem: simple
-    build-commands:
-      - "pip3 install --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} --no-build-isolation protobuf"
-    sources:
-      - type: file
-        url: https://files.pythonhosted.org/packages/ba/dd/f8a01b146bf45ac12a829bbc599e6590aa6a6849ace7d28c42d77041d6ab/protobuf-4.21.12.tar.gz
-        sha256: 7cd532c4566d0e6feafecc1059d04c7915aec8e182d1cf7adee8b24ef1e2e6ab
-
-  - name: python3-requests
-    buildsystem: simple
-    build-commands:
-      - "pip3 install --no-index --find-links=\"file://${PWD}\" --prefix=${FLATPAK_DEST} --no-build-isolation requests"
-    sources:
-      - type: file
-        url: https://files.pythonhosted.org/packages/ea/b7/e0e3c1c467636186c39925827be42f16fee389dc404ac29e930e9136be70/idna-2.10.tar.gz
-        sha256: b307872f855b18632ce0c21c5e45be78c0ea7ae4c15c828c20788b26921eb3f6
-      - type: file
-        url: https://files.pythonhosted.org/packages/da/67/672b422d9daf07365259958912ba533a0ecab839d4084c487a5fe9a5405f/requests-2.24.0.tar.gz
-        sha256: b3559a131db72c33ee969480840fff4bb6dd111de7dd27c8ee1f820f4f00231b
-      - type: file
-        url: https://files.pythonhosted.org/packages/40/a7/ded59fa294b85ca206082306bba75469a38ea1c7d44ea7e1d64f5443d67a/certifi-2020.6.20.tar.gz
-        sha256: 5930595817496dd21bb8dc35dad090f1c2cd0adfaf21204bf6732ca5d8ee34d3
-      - type: file
-        url: https://files.pythonhosted.org/packages/81/f4/87467aeb3afc4a6056e1fe86626d259ab97e1213b1dfec14c7cb5f538bf0/urllib3-1.25.10.tar.gz
-        sha256: 91056c15fa70756691db97756772bb1eb9678fa585d9184f24534b100dc60f4a
-      - type: file
-        url: https://files.pythonhosted.org/packages/fc/bb/a5768c230f9ddb03acc9ef3f0d4a3cf93462473795d18e9535498c8f929d/chardet-3.0.4.tar.gz
-        sha256: 84ab92ed1c4d4f16916e05906b6b75a6c0fb5db821cc65e70cbd64a3e2a5eaae
+  - python3-modules.yaml
 
   - name: python3-mkdocs
     buildsystem: simple
@@ -436,7 +394,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/json-c/json-c.git
-        tag: json-c-0.18-20240915
+        tag: json-c-0.19-20260627
 
   - name: miniupnpc
     buildsystem: cmake-ninja
@@ -444,7 +402,7 @@ modules:
     sources:
     - type: git
       url: https://github.com/miniupnp/miniupnp
-      tag: miniupnpc_2_3_0
+      tag: miniupnpc_2_3_3
 
   - name: SDL3
     buildsystem: cmake-ninja
@@ -455,13 +413,13 @@ modules:
     sources:
       - type: git
         url: https://github.com/libsdl-org/SDL.git
-        tag: release-3.4.0
+        tag: release-3.4.18
 
   - name: sdl2-compat
     sources:
       - type: git
         url: https://github.com/libsdl-org/sdl2-compat
-        tag: release-2.32.64
+        tag: release-2.32.74
     buildsystem: cmake-ninja
     config-opts:
       - -DSDL2COMPAT_TESTS=OFF
@@ -474,7 +432,7 @@ modules:
     builddir: true
     sources:
       - type: git
-        url: https://github.com/streetpea/chiaki-ng.git
+        url: https://github.com/chiaki-ng/chiaki-ng.git
         branch: main
     post-install:
       - "install -Dm755 ../scripts/psn-account-id.py /app/bin/psn-account-id"

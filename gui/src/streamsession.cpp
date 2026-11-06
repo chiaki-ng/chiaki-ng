@@ -592,6 +592,21 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 
 #if CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	connect(ControllerManager::GetInstance(), &ControllerManager::AvailableControllersUpdated, this, &StreamSession::UpdateGamepads);
+	connect(ControllerManager::GetInstance(), &ControllerManager::AudioOutputDeviceAdded, this, [this](const QString &name) {
+		// haptics_resampler_buf is only allocated when DualSense features are on
+		if(haptics_output > 0 || !haptics_resampler_buf || !name.contains(DUALSENSE_AUDIO_DEVICE_NEEDLE))
+			return;
+		for(auto controller : controllers)
+		{
+			if(controller->IsDualSense() || controller->IsDualSenseEdge())
+			{
+				// Restart the retries rather than trying once: the device may not open for a
+				// moment after it appears, and the retries from connecting may have run out
+				WaitHaptics();
+				return;
+			}
+		}
+	});
 	connect(this, &StreamSession::DualSenseIntensityChanged, ControllerManager::GetInstance(), &ControllerManager::SetDualSenseIntensity);
 	if(connect_info.buttons_by_pos)
 		ControllerManager::GetInstance()->SetButtonsByPos();
@@ -725,7 +740,12 @@ StreamSession::~StreamSession()
 	log.PrepareShutdown();
 
 	if(session_started)
+	{
+		// Quitting the app while streaming (Cmd-Q, for one) deletes the session without Stop()
+		// first, and the join then waited forever for a session nothing had told to stop
+		chiaki_session_stop(&session);
 		chiaki_session_join(&session);
+	}
 	chiaki_session_fini(&session);
 	chiaki_opus_decoder_fini(&opus_decoder);
 	chiaki_opus_encoder_fini(&opus_encoder);
@@ -1193,7 +1213,12 @@ void StreamSession::UpdateGamepads()
 			{
 				haptics_handheld--;
 			}
-			QTimer::singleShot(1000, this, [this, controller] {
+			QTimer::singleShot(1000, this, [this, controller_id] {
+				// The controller may have been removed (and released) before this fires
+				// (e.g. a quick disconnect), so re-look it up instead of capturing a raw pointer.
+				auto controller = controllers.value(controller_id);
+				if(!controller)
+					return;
 				controller->ChangePlayerIndex(player_index);
 				controller->ChangeLEDColor(led_color);
 			});
@@ -1222,9 +1247,33 @@ void StreamSession::UpdateGamepads()
 
 void StreamSession::WaitHaptics()
 {
+	haptics_retry_attempt = 0;
+	RetryHaptics(++haptics_retry_generation);
+}
+
+void StreamSession::RetryHaptics(quint64 generation)
+{
+	if(generation != haptics_retry_generation)
+		return;
 	ConnectHaptics();
-	if(!(this->haptics_output > 0))
-		QTimer::singleShot(14000, this, &StreamSession::ConnectHaptics);
+	if(this->haptics_output > 0)
+		return;
+	// The audio device can take a moment to open after it appears, so keep trying with a growing
+	// delay; one that appears later still is picked up when SDL reports it. A DualSense on battery
+	// has no audio device to wait for
+	bool possibly_wired_dualsense = false;
+	for(auto controller : controllers)
+	{
+		if((controller->IsDualSense() || controller->IsDualSenseEdge()) && !controller->IsWireless())
+		{
+			possibly_wired_dualsense = true;
+			break;
+		}
+	}
+	static const int retry_delays_ms[] = { 500, 1000, 1000, 2000, 2000, 4000, 4000 };
+	if(!possibly_wired_dualsense || haptics_retry_attempt >= std::size(retry_delays_ms))
+		return;
+	QTimer::singleShot(retry_delays_ms[haptics_retry_attempt++], this, [this, generation] { RetryHaptics(generation); });
 }
 
 void StreamSession::DpadSendFeedbackState()
@@ -1763,6 +1812,7 @@ void StreamSession::InitHaptics()
 
 void StreamSession::DisconnectHaptics()
 {
+	haptics_retry_generation++;
 	if (this->haptics_output > 0)
 	{
 		SDL_CloseAudioDevice(haptics_output);
@@ -2418,6 +2468,12 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 		CHIAKI_LOGE(log.GetChiakiLog(), "Failed to resample haptics audio: %s", SDL_GetError());
 		return;
 	}
+
+	// Keep at most 60 ms queued (haptics_buffer_size is 10 ms of 4-channel S16) so haptics
+	// don't fall behind the game after a network stall
+	const Uint32 haptics_most_queued = static_cast<Uint32>(haptics_buffer_size * 4 * sizeof(int16_t) * 6);
+	if (SDL_GetQueuedAudioSize(haptics_output) > haptics_most_queued)
+		SDL_ClearQueuedAudio(haptics_output);
 
 	if (SDL_QueueAudio(haptics_output, cvt.buf, cvt.len_cvt) < 0)
 	{

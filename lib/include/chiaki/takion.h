@@ -158,6 +158,12 @@ typedef struct chiaki_takion_t
 	int64_t video_queue_head_wait_start_us;
 	uint64_t video_queue_head_wait_seq_num;
 	ChiakiTakionSendBuffer send_buffer;
+	/**
+	 * send_buffer only exists from the end of the handshake until the receive loop ends.
+	 * Senders may only push into it while send_buffer_active is true.
+	 */
+	bool send_buffer_active;
+	ChiakiMutex send_buffer_active_mutex;
 
 	ChiakiTakionCallback cb;
 	void *cb_user;

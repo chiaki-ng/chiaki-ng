@@ -40,7 +40,7 @@ option(CHIAKI_LIB_MINIUPNPC_EXTERNAL_PROJECT "Build miniupnpc from source via Fe
 
 set(CHIAKI_VERSION_MAJOR 1)
 set(CHIAKI_VERSION_MINOR 10)
-set(CHIAKI_VERSION_PATCH 0)
+set(CHIAKI_VERSION_PATCH 1)
 set(CHIAKI_VERSION ${CHIAKI_VERSION_MAJOR}.${CHIAKI_VERSION_MINOR}.${CHIAKI_VERSION_PATCH})
 
 set(CPACK_PACKAGE_NAME "chiaki-ng")
@@ -57,7 +57,14 @@ set(CHIAKI_IS_SWITCH ${NSWITCH})
 
 if(APPLE)
 	if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
-		set(CMAKE_OSX_DEPLOYMENT_TARGET 13.0 CACHE STRING "Minimum OS X deployment version" FORCE)
+		# The app bundles Homebrew's libraries, which are built for the macOS they were installed on,
+		# so the app can't run on anything older than the build machine's macOS; say so in Info.plist
+		execute_process(COMMAND sw_vers -productVersion OUTPUT_VARIABLE CHIAKI_HOST_MACOS_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+		string(REGEX MATCH "^[0-9]+" CHIAKI_HOST_MACOS_MAJOR "${CHIAKI_HOST_MACOS_VERSION}")
+		if(NOT CHIAKI_HOST_MACOS_MAJOR)
+			message(FATAL_ERROR "Could not read the macOS version from sw_vers: '${CHIAKI_HOST_MACOS_VERSION}'")
+		endif()
+		set(CMAKE_OSX_DEPLOYMENT_TARGET ${CHIAKI_HOST_MACOS_MAJOR}.0 CACHE STRING "Minimum OS X deployment version" FORCE)
 	else()
 		set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0 CACHE STRING "Minimum OS X deployment version" FORCE)
 	endif()

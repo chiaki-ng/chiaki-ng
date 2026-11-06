@@ -28,7 +28,7 @@ Visit [chiaki-ng Releases](updates/releases.md){target="_blank" rel="noopener"} 
 
 !!! Question "Where is `chiaki-ng` available?"
 
-    There is a flatpak on flathub for Linux (https://flathub.org/apps/io.github.streetpea.Chiaki4deck){target="_blank" rel="noopener"} as well as packages for Linux, Windows, and macOS on Apple Silicon (arm64) on the [releases page](https://github.com/streetpea/chiaki4deck/releases){target="_blank" rel="noopener"}. Intel macOS (x86_64/amd64) builds are no longer produced or tested by GitHub Actions. See the [Installation section](setup/installation.md){target="_blank" rel="noopener"} to get started.
+    There is a flatpak on flathub for Linux (https://flathub.org/apps/io.github.streetpea.Chiaki4deck){target="_blank" rel="noopener"} as well as packages for Linux, Windows, and macOS on Apple Silicon (arm64) on the [releases page](https://github.com/chiaki-ng/chiaki-ng/releases){target="_blank" rel="noopener"}. Intel macOS (x86_64/amd64) builds are no longer produced or tested by GitHub Actions. See the [Installation section](setup/installation.md){target="_blank" rel="noopener"} to get started.
     
 For users that want to build from source, I have also provided the updated source code on the accompanying GitHub repo (the link to the GitHub is on the top right [top left menu on mobile] of the site banner you see if you scroll to the top of any page). Instructions for this are in the [DIY section](diy/buildit.md){target="_blank" rel="noopener"}. As it stands, a lot of the documentation applies to the general Chiaki flatpak in addition to the `chiaki-ng` flatpak, but instructions are specifically tailored to `chiaki-ng` and the updates included therein. To use this documentation with the Chiaki flatpak replace `io.github.streetpea.Chiaki4deck` with `re.chiaki.Chiaki` where applicable and note that the features listed in the [Updates section](updates/done.md){target="_blank" rel="noopener"} will not work with that version (they only work with `chiaki-ng` until the main `Chiaki` flatpak gets an update.)
 
@@ -38,7 +38,7 @@ If you want to update the documentation to add helpful information of your own, 
 
 ## Making Suggestions for Improvements to the Documentation
 
-Please submit general issues to the [chiaki-ng GitHub](https://github.com/streetpea/chiaki-ng/issues){target="_blank" rel="noopener"} as well as specific issues related to a given page by clicking the :material-heart-broken: underneath "Was this page helpful?" and opening the feedback form for the page you think needs updating.
+Please submit general issues to the [chiaki-ng GitHub](https://github.com/chiaki-ng/chiaki-ng/issues){target="_blank" rel="noopener"} as well as specific issues related to a given page by clicking the :material-heart-broken: underneath "Was this page helpful?" and opening the feedback form for the page you think needs updating.
 
 ## Acknowledgements
 

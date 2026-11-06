@@ -3,12 +3,15 @@ name: Build chiaki-ng macOSX arm64
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-mac_arm64_github:
     name: Build macOSX arm64 version Github
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -20,6 +23,8 @@ jobs:
           brew update
           brew uninstall pkgconfig || true
           brew install --force qt@6 ffmpeg pkgconfig opus openssl@3 cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
+          # OpenSSL 4 headers in the Homebrew prefix would shadow openssl@3; the bundled curl needs 3
+          brew unlink openssl@4 || true
 
       - name: Install sdl2-compat
         run: |
@@ -28,7 +33,7 @@ jobs:
 
       - name: Configure chiaki-ng
         run: |
-          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
+          cmake -S . -B build -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCHIAKI_ENABLE_CLI=OFF -DCHIAKI_ENABLE_STEAMDECK_NATIVE=OFF -DOPENSSL_ROOT_DIR="$(brew --prefix)/opt/openssl@3" -DOPENSSL_INCLUDE_DIR="$(brew --prefix)/opt/openssl@3/include" -DOPENSSL_CRYPTO_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libcrypto.dylib" -DOPENSSL_SSL_LIBRARY="$(brew --prefix)/opt/openssl@3/lib/libssl.dylib" -DCMAKE_PREFIX_PATH="$(brew --prefix)/opt/openssl@3;$(brew --prefix)/opt/qt@6;$(brew --prefix)/opt/protobuf@29"
 
       - name: Build chiaki-ng
         run: |
@@ -42,8 +47,8 @@ jobs:
           cp scripts/qtwebengine_import.qml gui/src/qml/
           $(brew --prefix)/opt/qt@6/bin/macdeployqt chiaki-ng.app -qmldir="$PWD/gui/src/qml" -libpath=$(brew --prefix)/lib
           mkdir -p chiaki-ng.app/Contents/Resources/vulkan/icd.d
-          wget https://github.com/KhronosGroup/MoltenVK/releases/download/v1.2.9/MoltenVK-macos.tar && tar xf MoltenVK-macos.tar
-          cp MoltenVK/MoltenVK/dylib/macOS/* chiaki-ng.app/Contents/Resources/vulkan/icd.d
+          wget https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar && tar xf MoltenVK-macos.tar
+          cp MoltenVK/MoltenVK/dynamic/dylib/macOS/* chiaki-ng.app/Contents/Resources/vulkan/icd.d
           $(brew --prefix)/opt/qt@6/bin/macdeployqt chiaki-ng.app -qmldir="$PWD/gui/src/qml" -libpath=$(brew --prefix)/lib
           if [[ -d chiaki-ng.app/Contents/Frameworks/QtWebEngineCore.framework/Helpers/QtWebEngineProcess.app ]]
           then
@@ -66,7 +71,7 @@ jobs:
           codesign --force --entitlements gui/entitlements.xml --deep --sign - chiaki-ng.dmg
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-macos_arm64-Release
           path: chiaki-ng.dmg

@@ -92,7 +92,7 @@
 
     1. Acquire pictures to use for the game library in Steam
 
-        1. Get the official `chiaki-ng` images [here](https://raw.githubusercontent.com/streetpea/chiaki4deck/main/assets/chiaki-ngImages.tar.xz){target="_blank" rel="noopener"}.
+        1. Get the official `chiaki-ng` images [here](https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/assets/chiaki-ngImages.tar.xz){target="_blank" rel="noopener"}.
 
         2. Extract the package to a folder of your choice (such as your `Documents` folder).
         

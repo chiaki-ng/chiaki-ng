@@ -65,6 +65,7 @@ class ControllerManager : public QObject
 	signals:
 		void AvailableControllersUpdated();
 		void ControllerMoved();
+		void AudioOutputDeviceAdded(const QString &name);
 };
 
 class Controller : public QObject
@@ -146,6 +147,7 @@ class Controller : public QObject
 		bool IsBluetooth();
 		// Path usable with SDL_hid_open_path(), empty if SDL is not driving the device through HIDAPI
 		QString GetHidPath();
+		bool IsWireless();
 		void resetMotionControls();
 
 	signals:

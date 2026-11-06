@@ -1,7 +1,7 @@
 site_name: chiaki-ng
-repo_url: https://github.com/streetpea/chiaki-ng
-site_url: https://streetpea.github.io/chiaki-ng/
-edit_uri: edit/chiaki-ng/docs
+repo_url: https://github.com/chiaki-ng/chiaki-ng
+site_url: https://chiaki-ng.github.io/chiaki-ng/
+edit_uri: edit/main/docs
 nav:
   - Home: index.md
   - Setup:
@@ -69,7 +69,7 @@ copyright: >
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/streetpea/chiaki-ng
+      link: https://github.com/chiaki-ng/chiaki-ng
     - icon: fontawesome/brands/reddit
       link: https://www.reddit.com/u/Street_Pea_6693/?utm_source=share&utm_medium=ios_app&utm_name=iossmf
     - icon: fontawesome/brands/discord
@@ -90,7 +90,7 @@ extra:
           data: 0
           note: >- 
             Thanks for your feedback! Help me improve this page by
-            using my <a href="https://github.com/streetpea/chiaki-ng/issues/new/?title=[Feedback]+{title}+-+{url}" target="_blank" rel="noopener">feedback form</a>.
+            using my <a href="https://github.com/chiaki-ng/chiaki-ng/issues/new/?title=[Feedback]+{title}+-+{url}" target="_blank" rel="noopener">feedback form</a>.
 
   consent:
     title: Cookie consent

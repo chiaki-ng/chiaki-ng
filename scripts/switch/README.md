@@ -2,4 +2,4 @@
 
 If you ended up here, then you are trying to compile it. if you are trying to compile it, you will essentially end up with the same as existing chiaki.nro
 
-Do not open a  new issue to report any issues. Use this issue to track switch issues [#355](https://github.com/streetpea/chiaki-ng/issues/355)
+Do not open a  new issue to report any issues. Use this issue to track switch issues [#355](https://github.com/chiaki-ng/chiaki-ng/issues/355)
