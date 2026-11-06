@@ -4,6 +4,7 @@
 #include <chiaki/config.h>
 
 extern MunitTest tests_seq_num[];
+extern MunitTest tests_packet_stats[];
 extern MunitTest tests_key_state[];
 extern MunitTest tests_feedback[];
 extern MunitTest tests_reorder_queue[];
@@ -25,6 +26,13 @@ static MunitSuite suites[] = {
 	{
 		"/seq_num",
 		tests_seq_num,
+		NULL,
+		1,
+		MUNIT_SUITE_OPTION_NONE
+	},
+	{
+		"/packet_stats",
+		tests_packet_stats,
 		NULL,
 		1,
 		MUNIT_SUITE_OPTION_NONE

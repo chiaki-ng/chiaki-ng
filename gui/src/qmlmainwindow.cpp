@@ -3162,6 +3162,7 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
     // minimum libplacebo needs to advance past a displayed frame.
     const int submission_depth_limit = depth_limit;
     bool queued = false;
+    AVFrame *snapshot_ref = nullptr;
     bool depth_exceeded = false;
     bool promote_pending = false;
     const bool render_busy = render_active.loadAcquire() != 0;
@@ -3231,6 +3232,10 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         }
         if (!depth_exceeded && !promote_pending && !pending_exists)
         {
+            // Once pushed, the render thread owns frame.frame and may free it via discard_frame,
+            // so take our own reference first for the snapshot/reset seed below.
+            if (!synthetic_warmup_frame)
+                snapshot_ref = av_frame_clone(frame.frame);
             const qint64 push_begin_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
             pl_queue_push(placebo_queue, &src_frame);
             const qint64 push_end_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
@@ -3414,10 +3419,10 @@ void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, q
         {
             const quint64 reset_seed_generation = reset_seed_capture_generation.loadAcquire();
             if (reset_seed_capture_active.loadAcquire() != 0 && reset_seed_generation != 0)
-                storeResetSeedFrame(frame.frame, frame.pts, frame.duration, reset_seed_generation);
+                storeResetSeedFrame(snapshot_ref, frame.pts, frame.duration, reset_seed_generation);
         }
 
-        snapshotLastFrame(frame.frame, frame.pts, frame.duration);
+        snapshotLastFrame(snapshot_ref, frame.pts, frame.duration, true);
 
         if (!playback_started) {
             uint64_t now_us = chiaki_time_now_monotonic_us();
@@ -4149,7 +4154,6 @@ void QmlMainWindow::snapshotLastFrame(AVFrame *frame, double pts, float duration
         }
     }
     clone->opaque = this;
-    AVFrame *fallback_clone = make_fallback_snapshot_frame(frame);
     {
         QMutexLocker locker(&kept_frame_mutex);
         if (kept_frame)
@@ -4161,9 +4165,6 @@ void QmlMainWindow::snapshotLastFrame(AVFrame *frame, double pts, float duration
         kept_frame_duration = duration;
         stored = true;
         reason = "stored";
-        fallback_frame = fallback_clone;
-        if (!fallback_clone && frame->hw_frames_ctx && frame->format != AV_PIX_FMT_VULKAN)
-            qCWarning(chiakiGui) << "snapshotLastFrame: failed to create fallback frame";
     }
     snapshot_generation.fetchAndAddRelaxed(1);
     // qCInfo(chiakiGui) << "snapshotLastFrame: stored kept_frame pts=" << pts << " duration=" << duration;
@@ -4181,22 +4182,56 @@ void QmlMainWindow::clearSnapshotFrame()
     fallback_frame = nullptr;
 }
 
-bool QmlMainWindow::enqueueKeptFrame(double queue_pts_origin_hint, bool deinterlace_enabled, double &used_origin)
+// The software fallback of a hw kept_frame is only downloaded here, when the frame is actually
+// replayed, instead of reading back every presented frame from the GPU.
+AVFrame *QmlMainWindow::cloneKeptFrameForReplay(double &pts, float &duration)
 {
-    AVFrame *clone = nullptr;
-    double pts = 0.0;
-    float duration = 0.0f;
+    AVFrame *kept_ref = nullptr;
     {
         QMutexLocker locker(&kept_frame_mutex);
-        AVFrame *source = fallback_frame ? fallback_frame : kept_frame;
-        if (!source)
-            return false;
-        clone = clone_frame_for_replay(source);
-        if (!clone)
-            return false;
         pts = kept_frame_pts;
         duration = kept_frame_duration;
+        if (fallback_frame)
+            return clone_frame_for_replay(fallback_frame);
+        if (!kept_frame)
+            return nullptr;
+        if (!kept_frame->hw_frames_ctx || kept_frame->format == AV_PIX_FMT_VULKAN)
+            return clone_frame_for_replay(kept_frame);
+        kept_ref = av_frame_clone(kept_frame);
+        if (!kept_ref)
+            return nullptr;
     }
+
+    // Download outside the lock so presentFrame() is not blocked by the readback
+    AVFrame *fallback = make_fallback_snapshot_frame(kept_ref);
+    if (!fallback) {
+        qCWarning(chiakiGui) << "cloneKeptFrameForReplay: failed to create fallback frame";
+        return kept_ref;
+    }
+
+    AVFrame *replay = nullptr;
+    {
+        QMutexLocker locker(&kept_frame_mutex);
+        // kept_ref pins the buffer, so a matching buffer means kept_frame was not replaced meanwhile
+        const bool same_kept_frame = kept_frame && kept_frame->buf[0] && kept_ref->buf[0]
+            && kept_frame->buf[0]->buffer == kept_ref->buf[0]->buffer;
+        if (same_kept_frame && !fallback_frame) {
+            fallback_frame = fallback;
+            replay = clone_frame_for_replay(fallback_frame);
+            fallback = nullptr;
+        }
+    }
+    av_frame_free(&kept_ref);
+    return replay ? replay : fallback;
+}
+
+bool QmlMainWindow::enqueueKeptFrame(double queue_pts_origin_hint, bool deinterlace_enabled, double &used_origin)
+{
+    double pts = 0.0;
+    float duration = 0.0f;
+    AVFrame *clone = cloneKeptFrameForReplay(pts, duration);
+    if (!clone)
+        return false;
 
     clone->opaque = this;
     double origin = queue_pts_origin_hint;
@@ -4434,20 +4469,11 @@ bool QmlMainWindow::applyResetSeedFrame(quint64 generation)
 
 bool QmlMainWindow::applyKeptFrameSnapshot()
 {
-    AVFrame *clone = nullptr;
     double pts = 0.0;
     float duration = 0.0f;
-    {
-        QMutexLocker locker(&kept_frame_mutex);
-        AVFrame *source = fallback_frame ? fallback_frame : kept_frame;
-        if (!source)
-            return false;
-        clone = clone_frame_for_replay(source);
-        if (!clone)
-            return false;
-        pts = kept_frame_pts;
-        duration = kept_frame_duration;
-    }
+    AVFrame *clone = cloneKeptFrameForReplay(pts, duration);
+    if (!clone)
+        return false;
 
     return queueStoredFrame(clone, pts, duration, discard_snapshot_frame);
 }
