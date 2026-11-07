@@ -234,6 +234,8 @@ private:
     void beginFrame();
     void endFrame();
     void render();
+    // Clears the Vulkan startup marker once Vulkan has presented a frame; callable from any thread
+    void confirmVulkanStartup();
     void handleVulkanDeviceLost(const QString &reason);
     void handleVulkanRendererFallback(const QString &title, const QString &message, const QString &fallback_reason);
     void applyPendingFrame();
@@ -279,6 +281,13 @@ private:
     bool has_video = false;
     struct pl_queue_params qparams;
     struct pl_frame_mix frame_mix;
+    // frame_mix points at frames owned by placebo_queue, and pl_queue_reset frees them, so
+    // render() marks the mix in use until it returns; both guarded by placebo_state_mutex
+    bool frame_mix_in_use = false;
+    // A timestamp rollback that arrived while frame_mix was in use; the next stored frame resets
+    // the queue for it. Guarded by placebo_state_mutex
+    bool queue_rollback_pending = false;
+    quint64 placebo_queue_resets = 0;
     // Direct rendering retains the displayed mapping and replaces only pending input.
     bool bypass_frame_queue = true;
     QMutex direct_frame_mutex;
@@ -448,6 +457,7 @@ private:
     qint64 next_buffered_update_us = 0;
     qint64 last_buffered_interval_us = 0;
     QString pending_renderer_fallback_reason;
+    QAtomicInteger<int> vulkan_startup_confirmed = 0;
     VkPhysicalDeviceProperties vk_device_props = {};
     VkPhysicalDeviceDriverProperties vk_device_driver_props = {};
     pl_options renderparams_opts = {};

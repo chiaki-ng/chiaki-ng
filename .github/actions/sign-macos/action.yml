@@ -1,0 +1,96 @@
+name: Sign and notarize chiaki-ng for macOS
+description: Sign chiaki-ng.app with a Developer ID certificate, build and sign the DMG, then notarize and staple it
+
+inputs:
+  certificate-p12:
+    description: The Developer ID Application certificate and key as a base64 .p12
+    required: true
+  certificate-password:
+    description: The .p12 export password
+    required: true
+  notary-key-p8:
+    description: The App Store Connect API key as a base64 .p8
+    required: true
+  notary-key-id:
+    description: The API key ID
+    required: true
+  notary-issuer-id:
+    description: The API key issuer ID
+    required: true
+  dmg:
+    description: The DMG to write
+    required: true
+  label:
+    description: A label to draw on the DMG background, such as weekly, or empty for a release
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # Installed before any certificate is loaded, and pinned by hash, so no download happens and no
+    # unreviewed code runs while the signing identity is in a keychain
+    - name: Install dmgbuild
+      shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/dmgbuild"
+        "$RUNNER_TEMP/dmgbuild/bin/pip" install --quiet --disable-pip-version-check --require-hashes \
+          --only-binary :all: -r scripts/macos/dmgbuild-requirements.txt
+        echo "DMGBUILD=$RUNNER_TEMP/dmgbuild/bin/dmgbuild" >> "$GITHUB_ENV"
+
+    - name: Sign chiaki-ng
+      shell: bash
+      env:
+        MACOS_CERT_P12: ${{ inputs.certificate-p12 }}
+        MACOS_CERT_PASSWORD: ${{ inputs.certificate-password }}
+      run: |
+        { read -r keychain; read -r identity; } < <(scripts/macos-keychain.sh import)
+        trap 'scripts/macos-keychain.sh delete "$keychain"' EXIT
+        test -n "$identity"
+        scripts/macos-sign.sh chiaki-ng.app "$identity"
+
+    # Built with no keychain present, since dmgbuild and its dependencies are third-party code
+    - name: Build the DMG
+      shell: bash
+      run: |
+        scripts/macos-dmg.sh chiaki-ng.app "${{ inputs.dmg }}" "${{ inputs.label }}"
+
+    - name: Sign the DMG
+      shell: bash
+      env:
+        MACOS_CERT_P12: ${{ inputs.certificate-p12 }}
+        MACOS_CERT_PASSWORD: ${{ inputs.certificate-password }}
+      run: |
+        { read -r keychain; read -r identity; } < <(scripts/macos-keychain.sh import)
+        trap 'scripts/macos-keychain.sh delete "$keychain"' EXIT
+        test -n "$identity"
+        codesign --force --timestamp --sign "$identity" "${{ inputs.dmg }}"
+
+    - name: Notarize and staple
+      shell: bash
+      env:
+        NOTARY_KEY_P8: ${{ inputs.notary-key-p8 }}
+        NOTARY_KEY_ID: ${{ inputs.notary-key-id }}
+        NOTARY_ISSUER_ID: ${{ inputs.notary-issuer-id }}
+      run: |
+        key="$RUNNER_TEMP/notary.p8"
+        echo "$NOTARY_KEY_P8" | base64 --decode > "$key"
+        xcrun notarytool submit "${{ inputs.dmg }}" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait --timeout 1h --output-format json > "$RUNNER_TEMP/notary.json" || true
+        cat "$RUNNER_TEMP/notary.json"
+        id="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("id", ""))' "$RUNNER_TEMP/notary.json")"
+        status="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("status", ""))' "$RUNNER_TEMP/notary.json")"
+        if [ "$status" != "Accepted" ]; then
+          [ -n "$id" ] && xcrun notarytool log "$id" --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+          rm -f "$key"
+          exit 1
+        fi
+        rm -f "$key"
+        xcrun stapler staple "${{ inputs.dmg }}"
+        spctl --assess --type open --context context:primary-signature -vv "${{ inputs.dmg }}"
+
+    - name: Remove the signing keychain
+      if: always()
+      shell: bash
+      run: |
+        scripts/macos-keychain.sh delete "$RUNNER_TEMP/signing.keychain-db" || true
+        rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/notary.p8"

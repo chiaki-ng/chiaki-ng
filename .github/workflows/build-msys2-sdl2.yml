@@ -3,6 +3,9 @@ name: Build chiaki-ng msys2 x86 Windows SDL2
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-windows_x64-msys2-sdl2:
     name: Build windows msys2 version with SDL2
@@ -16,7 +19,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - uses: msys2/setup-msys2@v2
@@ -31,7 +34,6 @@ jobs:
             curl:p
             fast_float:p
             fftw:p
-            hidapi:p
             json-c:p
             libevent:p
             lcms2:p
@@ -70,15 +72,16 @@ jobs:
 
       - name: Setup ffmpeg
         run: |
-          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip
-          unzip ffmpeg-n7.1-latest-win64-gpl-shared-7.1.zip
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/bin/." /mingw64/bin
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/include/." /mingw64/include
-          cp -a "ffmpeg-n7.1-latest-win64-gpl-shared-7.1/lib/." /mingw64/lib
+          curl -LO https://github.com/streetpea/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip
+          unzip ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/bin/." /mingw64/bin
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/include/." /mingw64/include
+          cp -a "ffmpeg-n9.0-latest-win64-gpl-shared-9.0/lib/." /mingw64/lib
 
       - name: Build SDL2
         run: |
           INSTALL_PREFIX=/mingw64 scripts/build-sdl2.sh .
+          INSTALL_PREFIX=/mingw64 scripts/build-hidapi.sh .
 
       - name: Configure chiaki-ng
         run: |
@@ -102,7 +105,7 @@ jobs:
           echo "RELEASE_PACKAGE_PATH=${RELEASE_PACKAGE_FILE}" >> $GITHUB_ENV
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-win_x64-MSYS2-SDL2-Release-portable.zip
           path: ${{ env.RELEASE_PACKAGE_PATH }}
@@ -110,7 +113,7 @@ jobs:
           retention-days: 7
 
       - name: Compile .ISS to .EXE Installer
-        uses: Minionguyjpro/Inno-Setup-Action@v1.2.7
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.9
         with:
           path: "scripts/chiaki-ng.iss"
           options: /O+
@@ -120,7 +123,7 @@ jobs:
           cp chiaki-ng-windows-installer.exe chiaki-ng-win_x64-MSYS2-SDL2-installer.exe
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-win_x64-MSYS2-SDL2-Release-installer.exe
           path: chiaki-ng-win_x64-MSYS2-SDL2-installer.exe
