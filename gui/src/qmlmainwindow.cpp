@@ -5568,6 +5568,10 @@ void QmlMainWindow::scheduleBufferedUpdate(UpdateRequestReason reason)
 
 void QmlMainWindow::scheduleRenderIfBacklog(UpdateRequestReason reason)
 {
+    // A hidden window has no swapchain, so render() can't consume the frame; the next expose restarts rendering
+    if (!placebo_swapchain)
+        return;
+
     if (render_backend == RenderBackend::Vulkan && vulkan_deferred_swap_enabled && deferred_present_in_flight.loadAcquire() != 0)
         return;
 
