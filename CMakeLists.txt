@@ -55,7 +55,7 @@ include(CPack)
 
 set(CHIAKI_IS_SWITCH ${NSWITCH})
 
-if(APPLE)
+if(APPLE AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
 		# The app bundles Homebrew's libraries, which are built for the macOS they were installed on,
 		# so the app can't run on anything older than the build machine's macOS; say so in Info.plist
