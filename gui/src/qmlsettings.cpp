@@ -1697,6 +1697,12 @@ QStringList QmlSettings::availableDecoders() const
 #endif
     };
     QStringList out = {"none"};
+#if defined(Q_OS_LINUX)
+    // V4L2 M2M is a named codec, not an AVHWDeviceType.
+    if (avcodec_find_decoder_by_name("h264_v4l2m2m")
+        && avcodec_find_decoder_by_name("hevc_v4l2m2m"))
+        out.append("v4l2m2m");
+#endif
     enum AVHWDeviceType hw_dev = AV_HWDEVICE_TYPE_NONE;
     while (true) {
         hw_dev = av_hwdevice_iterate_types(hw_dev);

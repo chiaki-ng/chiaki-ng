@@ -45,6 +45,7 @@ CHIAKI_EXPORT void chiaki_video_receiver_init(ChiakiVideoReceiver *video_receive
 	memset(video_receiver->profiles, 0, sizeof(video_receiver->profiles));
 	video_receiver->profiles_count = 0;
 	video_receiver->profile_cur = -1;
+	video_receiver->profile_header_pending = false;
 
 	video_receiver->frame_index_cur = -1;
 	video_receiver->frame_index_prev = -1;
@@ -154,24 +155,12 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 		return;
 	}
 
-	// check adaptive stream index
-	if(video_receiver->profile_cur < 0 || video_receiver->profile_cur != packet->adaptive_stream_index)
+	if(packet->adaptive_stream_index >= video_receiver->profiles_count)
 	{
-		if(packet->adaptive_stream_index >= video_receiver->profiles_count)
-		{
-			CHIAKI_LOGE(video_receiver->log, "Packet has invalid adaptive stream index %u >= %u",
-					(unsigned int)packet->adaptive_stream_index,
-					(unsigned int)video_receiver->profiles_count);
-			return;
-		}
-		video_receiver->profile_cur = packet->adaptive_stream_index;
-
-		ChiakiVideoProfile *profile = video_receiver->profiles + video_receiver->profile_cur;
-		CHIAKI_LOGI(video_receiver->log, "Switched to profile %d, resolution: %ux%u", video_receiver->profile_cur, profile->width, profile->height);
-		if(video_receiver->session->video_sample_cb)
-			video_receiver->session->video_sample_cb(profile->header, profile->header_sz, 0, false, video_receiver->session->video_sample_cb_user);
-		if(!chiaki_bitstream_header(&video_receiver->bitstream, profile->header, profile->header_sz))
-			CHIAKI_LOGW(video_receiver->log, "Failed to parse video header");
+		CHIAKI_LOGE(video_receiver->log, "Packet has invalid adaptive stream index %u >= %u",
+				(unsigned int)packet->adaptive_stream_index,
+				(unsigned int)video_receiver->profiles_count);
+		return;
 	}
 
 	// next frame?
@@ -183,7 +172,9 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 
 		// last frame not flushed yet?
 		if(video_receiver->frame_index_cur >= 0 && video_receiver->frame_index_prev != video_receiver->frame_index_cur)
+		{
 			err = chiaki_video_receiver_flush_frame(video_receiver);
+		}
 
 		if(err != CHIAKI_ERR_SUCCESS)
 			CHIAKI_LOGW(video_receiver->log, "Video receiver could not flush frame.");
@@ -198,6 +189,20 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 				CHIAKI_LOGW(video_receiver->log, "Error sending corrupt frame.");
 		}
 
+		// Flush the previous picture before switching its header/bitstream context.
+		if(video_receiver->profile_cur != packet->adaptive_stream_index)
+		{
+			ChiakiVideoProfile *profile = video_receiver->profiles + packet->adaptive_stream_index;
+			if(profile->header_sz > SIZE_MAX - 15)
+				return;
+			video_receiver->profile_cur = packet->adaptive_stream_index;
+			video_receiver->profile_header_pending = true;
+			video_receiver->frame_processor.frame_buf_prefix_size = (profile->header_sz + 15) & ~(size_t)15;
+			CHIAKI_LOGI(video_receiver->log, "Switched to profile %d, resolution: %ux%u", video_receiver->profile_cur, profile->width, profile->height);
+			if(!chiaki_bitstream_header(&video_receiver->bitstream, profile->header, profile->header_sz))
+				CHIAKI_LOGW(video_receiver->log, "Failed to parse video header");
+		}
+
 		video_receiver->frame_index_cur = frame_index;
 		err = chiaki_frame_processor_alloc_frame(&video_receiver->frame_processor, packet);
 		if(err != CHIAKI_ERR_SUCCESS)
@@ -206,14 +211,18 @@ CHIAKI_EXPORT void chiaki_video_receiver_av_packet(ChiakiVideoReceiver *video_re
 
 	err = chiaki_frame_processor_put_unit(&video_receiver->frame_processor, packet);
 	if(err != CHIAKI_ERR_SUCCESS)
+	{
 		CHIAKI_LOGW(video_receiver->log, "Video receiver could not put unit.");
+	}
 
 	// if we are currently building up a frame
 	if(video_receiver->frame_index_cur != video_receiver->frame_index_prev)
 	{
 		// if we already have enough for the whole frame, flush it already
 		if(chiaki_frame_processor_flush_possible(&video_receiver->frame_processor) || packet->unit_index == packet->units_in_frame_total - 1)
+		{
 			err = chiaki_video_receiver_flush_frame(video_receiver);
+		}
 		if(err != CHIAKI_ERR_SUCCESS)
 			CHIAKI_LOGW(video_receiver->log, "Video receiver could not flush frame.");
 	}
@@ -327,7 +336,18 @@ static ChiakiErrorCode chiaki_video_receiver_flush_frame(ChiakiVideoReceiver *vi
 
 	if(succ && video_receiver->session->video_sample_cb)
 	{
+		// Unit assembly and FEC leave headroom in the same reusable frame buffer.
+		// Keep slice parsing above on picture data, then prepend the profile once.
+		if(video_receiver->profile_header_pending)
+		{
+			ChiakiVideoProfile *profile = video_receiver->profiles + video_receiver->profile_cur;
+			frame -= profile->header_sz;
+			memcpy(frame, profile->header, profile->header_sz);
+			frame_size += profile->header_sz;
+		}
 		bool cb_succ = video_receiver->session->video_sample_cb(frame, frame_size, video_receiver->frames_lost, recovered, video_receiver->session->video_sample_cb_user);
+		if(cb_succ)
+			video_receiver->profile_header_pending = false;
 		chiaki_mutex_lock(&video_receiver->frames_lost_mutex);
 		video_receiver->frames_lost = 0;
 		chiaki_mutex_unlock(&video_receiver->frames_lost_mutex);
