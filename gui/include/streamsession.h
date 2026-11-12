@@ -50,6 +50,9 @@
 
 class QKeyEvent;
 class Settings;
+#ifdef Q_OS_LINUX
+class SoftapScanInhibitor;
+#endif
 
 class ChiakiException: public Exception
 {
@@ -242,6 +245,9 @@ class StreamSession : public QObject
 		RumbleHapticsIntensity rumble_haptics_intensity;
 		bool start_mic_unmuted;
 		bool session_started;
+#ifdef Q_OS_LINUX
+		SoftapScanInhibitor *scan_inhibitor = nullptr;
+#endif
 
 		ChiakiFfmpegDecoder *ffmpeg_decoder;
 		void TriggerFfmpegFrameAvailable();

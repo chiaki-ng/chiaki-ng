@@ -3,6 +3,9 @@
 #include <streamsession.h>
 #include <settings.h>
 #include <controllermanager.h>
+#ifdef Q_OS_LINUX
+#include <softapscaninhibitor.h>
+#endif
 
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>
@@ -709,10 +712,21 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	});
 
 	StartAudioOutDrainThread();
+#ifdef Q_OS_LINUX
+	// SessionQuit originates on the session thread; run cleanup on our Qt thread.
+	connect(this, &StreamSession::SessionQuit, this, [this]() {
+		if(scan_inhibitor)
+			scan_inhibitor->Stop();
+	});
+#endif
 }
 
 StreamSession::~StreamSession()
 {
+#ifdef Q_OS_LINUX
+	if(scan_inhibitor)
+		scan_inhibitor->Stop();
+#endif
 	mic_active.storeRelaxed(false);
 	StopAudioOutDrainThread();
 	if(audio_out)
@@ -828,10 +842,19 @@ void StreamSession::Start()
 		throw ChiakiException("Chiaki Session Start failed");
 	}
 	session_started = true;
+#ifdef Q_OS_LINUX
+	if(!scan_inhibitor)
+		scan_inhibitor = new SoftapScanInhibitor(this);
+	scan_inhibitor->Start();
+#endif
 }
 
 void StreamSession::Stop()
 {
+#ifdef Q_OS_LINUX
+	if(scan_inhibitor)
+		scan_inhibitor->Stop();
+#endif
 	mic_active.storeRelaxed(false);
 	chiaki_session_stop(&session);
 }
