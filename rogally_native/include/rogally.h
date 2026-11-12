@@ -12,7 +12,6 @@ extern "C" {
 
 typedef struct rogally_t Rogally;
 
-/* Event types currently only motion, but extensible for future */
 typedef enum {
     /* Event will have motion set (accel, gyro) */
     ROGALLY_EVENT_MOTION,
@@ -39,13 +38,13 @@ typedef struct rogally_event_t {
 
 typedef void (*RogallyEventCb)(RogallyEvent *event, void *user);
 
-/* Create a new Rogally instance. Returns NULL if sensors are not available. */
+/* Start asynchronous sensor polling. Returns NULL if the worker cannot be started. */
 Rogally *rogally_new(void);
 
 /* Free a Rogally instance */
 void rogally_free(Rogally *rogally);
 
-/* Poll for new sensor data and invoke callback for each event */
+/* Deliver the latest pending sensor event on the caller's thread, if available. */
 void rogally_read(Rogally *rogally, RogallyEventCb cb, void *user);
 
 #ifdef __cplusplus

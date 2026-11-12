@@ -681,37 +681,38 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	rogally_vertical = connect_info.rogally_vertical;
 	rogally_gyro_deadzone = connect_info.rogally_gyro_deadzone;
 	rogally_calibrated = false;
+	rogally_orient_dirty = false;
 
-	rogally = rogally_new();
-	// no concept of hotplug for ROG Ally so turn off if not detected immediately
-	if(!rogally || !rogally_enabled)
+	rogally = nullptr;
+	if(!rogally_enabled)
 	{
-		if(!rogally)
-			CHIAKI_LOGI(GetChiakiLog(), "ROG Ally IMU not found ... ROG Ally motion controls disabled\n\n");
-		else if(!rogally_enabled)
-			CHIAKI_LOGI(GetChiakiLog(), "ROG Ally IMU disabled by user setting ... motion controls disabled\n\n");
-		rogally_free(rogally);
-		rogally = nullptr;
+		CHIAKI_LOGI(GetChiakiLog(), "ROG Ally IMU disabled by user setting ... motion controls disabled\n\n");
 	}
 	else
 	{
-		CHIAKI_LOGI(GetChiakiLog(), "Connected ROG Ally IMU ... gyro/accel online\n\n");
-		chiaki_accel_new_zero_set_inactive(&rogally_accel_zero, false);
-		chiaki_accel_new_zero_set_inactive(&rogally_real_accel, true);
-		chiaki_orientation_tracker_init(&rogally_orient_tracker);
-		rogally_orient_dirty = true;
+		rogally = rogally_new();
+		if(!rogally)
+		{
+			CHIAKI_LOGE(GetChiakiLog(), "Failed to start ROG Ally sensor worker\n\n");
+		}
+		else
+		{
+			chiaki_accel_new_zero_set_inactive(&rogally_accel_zero, false);
+			chiaki_accel_new_zero_set_inactive(&rogally_real_accel, true);
+			chiaki_orientation_tracker_init(&rogally_orient_tracker);
 
-		auto rogally_timer = new QTimer(this);
-		connect(rogally_timer, &QTimer::timeout, this, [this]{
-			rogally_read(rogally, SessionROGAllyCb, this);
-			if(rogally_orient_dirty)
-			{
-				chiaki_orientation_tracker_apply_to_controller_state(&rogally_orient_tracker, &rogally_state);
-				SendFeedbackState();
-				rogally_orient_dirty = false;
-			}
-		});
-		rogally_timer->start(STEAMDECK_UPDATE_INTERVAL_MS);
+			auto rogally_timer = new QTimer(this);
+			connect(rogally_timer, &QTimer::timeout, this, [this]{
+				rogally_read(rogally, SessionROGAllyCb, this);
+				if(rogally_orient_dirty)
+				{
+					chiaki_orientation_tracker_apply_to_controller_state(&rogally_orient_tracker, &rogally_state);
+					SendFeedbackState();
+					rogally_orient_dirty = false;
+				}
+			});
+			rogally_timer->start(STEAMDECK_UPDATE_INTERVAL_MS);
+		}
 	}
 #endif
 	key_map = connect_info.key_map;
@@ -2695,6 +2696,7 @@ void StreamSession::HandleRogallyEvent(RogallyEvent *event)
 			// Tomar las primeras lecturas como referencia de "dispositivo quieto"
 			if(!rogally_calibrated)
 			{
+				CHIAKI_LOGI(GetChiakiLog(), "Connected ROG Ally IMU ... gyro/accel online\n\n");
 				rogally_accel_offset.accel_x = ax;
 				rogally_accel_offset.accel_y = ay;
 				rogally_accel_offset.accel_z = az;
@@ -2730,7 +2732,9 @@ void StreamSession::HandleRogallyEvent(RogallyEvent *event)
 			break;
 		}
 		case ROGALLY_EVENT_ERROR:
-			CHIAKI_LOGE(GetChiakiLog(), "ROG Ally IMU error\n");
+			CHIAKI_LOGE(GetChiakiLog(), "ROG Ally IMU initialization failed; motion controls disabled\n");
+			rogally_free(rogally);
+			rogally = nullptr;
 			break;
 	}
 }
