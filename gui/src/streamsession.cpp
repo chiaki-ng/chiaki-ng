@@ -3,6 +3,9 @@
 #include <streamsession.h>
 #include <settings.h>
 #include <controllermanager.h>
+#ifdef Q_OS_LINUX
+#include <softapscaninhibitor.h>
+#endif
 
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>
@@ -386,6 +389,9 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	rumble_haptics_connected(false),
 	rumble_haptics_on(false)
 {
+#ifdef Q_OS_LINUX
+	wifi_scan_inhibition_enabled = connect_info.settings->GetWiFiScanInhibition();
+#endif
 	mic_buf.buf = nullptr;
 	connected = false;
 	muted = true;
@@ -709,10 +715,21 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	});
 
 	StartAudioOutDrainThread();
+#ifdef Q_OS_LINUX
+	// SessionQuit originates on the session thread; run cleanup on our Qt thread.
+	connect(this, &StreamSession::SessionQuit, this, [this]() {
+		if(scan_inhibitor)
+			scan_inhibitor->Stop();
+	});
+#endif
 }
 
 StreamSession::~StreamSession()
 {
+#ifdef Q_OS_LINUX
+	if(scan_inhibitor)
+		scan_inhibitor->Stop();
+#endif
 	mic_active.storeRelaxed(false);
 	StopAudioOutDrainThread();
 	if(audio_out)
@@ -818,6 +835,13 @@ StreamSession::~StreamSession()
 #endif
 }
 
+#ifdef Q_OS_LINUX
+QString StreamSession::GetWiFiScanInhibitionStatus() const
+{
+	return scan_inhibitor ? scan_inhibitor->GetStatusText() : QStringLiteral("OFF");
+}
+#endif
+
 void StreamSession::Start()
 {
 	if(!connect_timer.isValid())
@@ -828,10 +852,26 @@ void StreamSession::Start()
 		throw ChiakiException("Chiaki Session Start failed");
 	}
 	session_started = true;
+#ifdef Q_OS_LINUX
+	if(wifi_scan_inhibition_enabled)
+	{
+		if(!scan_inhibitor)
+		{
+			scan_inhibitor = new SoftapScanInhibitor(this);
+			connect(scan_inhibitor, &SoftapScanInhibitor::StatusChanged,
+				this, &StreamSession::WiFiScanInhibitionStatusChanged);
+		}
+		scan_inhibitor->Start();
+	}
+#endif
 }
 
 void StreamSession::Stop()
 {
+#ifdef Q_OS_LINUX
+	if(scan_inhibitor)
+		scan_inhibitor->Stop();
+#endif
 	mic_active.storeRelaxed(false);
 	chiaki_session_stop(&session);
 }

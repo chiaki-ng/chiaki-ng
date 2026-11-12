@@ -445,6 +445,25 @@ Item {
                         font.pixelSize: 18
                     }
                 }
+
+                Label {
+                    Layout.alignment: Qt.AlignRight
+                    text: qsTr("Wi-Fi scan")
+                    font.pixelSize: 15
+                    visible: Chiaki.session && typeof Chiaki.session.wifiScanInhibitionStatus !== "undefined"
+
+                    Label {
+                        anchors {
+                            right: parent.left
+                            baseline: parent.baseline
+                            rightMargin: 5
+                        }
+                        text: parent.visible ? Chiaki.session.wifiScanInhibitionStatus : ""
+                        color: "#90caf9"
+                        font.bold: true
+                        font.pixelSize: 18
+                    }
+                }
             }
         }
     }

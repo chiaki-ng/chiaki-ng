@@ -50,6 +50,9 @@
 
 class QKeyEvent;
 class Settings;
+#ifdef Q_OS_LINUX
+class SoftapScanInhibitor;
+#endif
 
 class ChiakiException: public Exception
 {
@@ -159,6 +162,9 @@ class StreamSession : public QObject
 	Q_PROPERTY(bool muted READ GetMuted WRITE SetMuted NOTIFY MutedChanged)
 	Q_PROPERTY(bool cantDisplay READ GetCantDisplay NOTIFY CantDisplayChanged)
 	Q_PROPERTY(int framesLost READ GetFramesLost NOTIFY FramesLostChanged)
+#ifdef Q_OS_LINUX
+	Q_PROPERTY(QString wifiScanInhibitionStatus READ GetWiFiScanInhibitionStatus NOTIFY WiFiScanInhibitionStatusChanged)
+#endif
 
 	private:
 		SessionLog log;
@@ -242,6 +248,10 @@ class StreamSession : public QObject
 		RumbleHapticsIntensity rumble_haptics_intensity;
 		bool start_mic_unmuted;
 		bool session_started;
+#ifdef Q_OS_LINUX
+		bool wifi_scan_inhibition_enabled;
+		SoftapScanInhibitor *scan_inhibitor = nullptr;
+#endif
 
 		ChiakiFfmpegDecoder *ffmpeg_decoder;
 		void TriggerFfmpegFrameAvailable();
@@ -339,6 +349,9 @@ class StreamSession : public QObject
 		bool IsConnected()	{ return connected; }
 		bool IsConnecting()	{ return connect_timer.isValid(); }
 
+#ifdef Q_OS_LINUX
+		QString GetWiFiScanInhibitionStatus() const;
+#endif
 		void Start();
 		void Stop();
 		void GoToBed();
@@ -387,6 +400,9 @@ class StreamSession : public QObject
 		void SdeckHapticPushed(haptic_packet_t packetl, haptic_packet_t packetr);
 #endif
 		void DualSenseIntensityChanged(uint8_t intensity);
+#ifdef Q_OS_LINUX
+		void WiFiScanInhibitionStatusChanged();
+#endif
 		void SessionQuit(ChiakiQuitReason reason, const QString &reason_str);
 		void LoginPINRequested(bool incorrect);
 		void DataHolepunchProgress(bool finished);

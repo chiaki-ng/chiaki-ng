@@ -30,6 +30,9 @@ class QmlSettings : public QObject
     Q_PROPERTY(int noiseSuppressLevel READ noiseSuppressLevel WRITE setNoiseSuppressLevel NOTIFY noiseSuppressLevelChanged)
     Q_PROPERTY(int echoSuppressLevel READ echoSuppressLevel WRITE setEchoSuppressLevel NOTIFY echoSuppressLevelChanged)
 #endif
+#ifdef Q_OS_LINUX
+    Q_PROPERTY(bool wifiScanInhibition READ wifiScanInhibition WRITE setWiFiScanInhibition NOTIFY wifiScanInhibitionChanged)
+#endif
     Q_PROPERTY(bool showStreamStats READ showStreamStats WRITE setShowStreamStats NOTIFY showStreamStatsChanged)
     Q_PROPERTY(bool streamerMode READ streamerMode WRITE setStreamerMode NOTIFY streamerModeChanged)
     Q_PROPERTY(float hapticOverride READ hapticOverride WRITE setHapticOverride NOTIFY hapticOverrideChanged)
@@ -176,6 +179,11 @@ public:
 
     int audioVideoDisabled() const;
     void setAudioVideoDisabled(int disabled);
+
+#ifdef Q_OS_LINUX
+    bool wifiScanInhibition() const;
+    void setWiFiScanInhibition(bool enabled);
+#endif
 
     bool showStreamStats() const;
     void setShowStreamStats(bool enabled);
@@ -640,6 +648,9 @@ signals:
     void hideCursorChanged();
     void hapticOverrideChanged();
     void audioVideoDisabledChanged();
+#ifdef Q_OS_LINUX
+    void wifiScanInhibitionChanged();
+#endif
     void showStreamStatsChanged();
     void streamerModeChanged();
     void fpsLocalPS4Changed();

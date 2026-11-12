@@ -173,6 +173,9 @@ public:
         packetLossRow = makeRow(tr("packet loss"), QColor(QStringLiteral("#ef9a9a")), titleFont, valueFont, packetLossValue);
         droppedFramesRow = makeRow(tr("dropped frames"), QColor(QStringLiteral("#ef9a9a")), titleFont, valueFont, droppedFramesValue);
         lostFramesRow = makeRow(tr("lost frames"), QColor(QStringLiteral("#ef9a9a")), titleFont, valueFont, lostFramesValue);
+#ifdef Q_OS_LINUX
+        wifiScanInhibitionRow = makeRow(tr("Wi-Fi scan"), QColor(QStringLiteral("#90caf9")), titleFont, valueFont, wifiScanInhibitionValue);
+#endif
 
         outer->addWidget(panel, 0, Qt::AlignRight | Qt::AlignVCenter);
 
@@ -236,6 +239,9 @@ public:
             connect(current_session, &StreamSession::AveragePacketLossChanged, this, &StatsOverlayWidget::refresh);
             connect(current_session, &StreamSession::FramesLostChanged, this, &StatsOverlayWidget::refresh);
             connect(current_session, &StreamSession::ConnectedChanged, this, &StatsOverlayWidget::refresh);
+#ifdef Q_OS_LINUX
+            connect(current_session, &StreamSession::WiFiScanInhibitionStatusChanged, this, &StatsOverlayWidget::refresh);
+#endif
         }
     }
 
@@ -243,6 +249,14 @@ public:
     {
         StreamSession *session = current_session;
         const bool hasSession = session != nullptr;
+
+#ifdef Q_OS_LINUX
+        wifiScanInhibitionRow->setVisible(hasSession);
+        if (hasSession)
+            wifiScanInhibitionValue->setText(session->GetWiFiScanInhibitionStatus());
+        else
+            wifiScanInhibitionValue->clear();
+#endif
 
         bitrateRow->setVisible(hasSession);
         if (hasSession)
@@ -290,6 +304,10 @@ private:
     QLabel *packetLossValue = nullptr;
     QLabel *droppedFramesValue = nullptr;
     QLabel *lostFramesValue = nullptr;
+#ifdef Q_OS_LINUX
+    QWidget *wifiScanInhibitionRow = nullptr;
+    QLabel *wifiScanInhibitionValue = nullptr;
+#endif
 };
 
 class DeferredPresentPacerThread final : public QThread
