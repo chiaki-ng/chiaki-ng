@@ -23,6 +23,7 @@ typedef struct chiaki_video_receiver_t
 	ChiakiLog *log;
 	ChiakiVideoProfile profiles[CHIAKI_VIDEO_PROFILES_MAX];
 	size_t profiles_count;
+	bool profile_header_pending;
 	int profile_cur; // < 1 if no profile selected yet, else index in profiles
 
 	int32_t frame_index_cur; // frame that is currently being filled

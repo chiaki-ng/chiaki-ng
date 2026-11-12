@@ -4,6 +4,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/pixdesc.h>
 #include <math.h>
+#include <string.h>
 
 static enum AVCodecID chiaki_codec_av_codec_id(ChiakiCodec codec)
 {
@@ -26,7 +27,8 @@ static double chiaki_ffmpeg_decoder_default_frame_duration_us(unsigned int max_f
 }
 
 CHIAKI_EXPORT ChiakiErrorCode chiaki_ffmpeg_decoder_init(ChiakiFfmpegDecoder *decoder, ChiakiLog *log,
-		ChiakiCodec codec, unsigned int max_fps, const char *hw_decoder_name, AVBufferRef *hw_device_ctx,
+		ChiakiCodec codec, unsigned int max_fps, unsigned int width, unsigned int height,
+		const char *hw_decoder_name, AVBufferRef *hw_device_ctx,
 		ChiakiFfmpegFrameAvailable frame_available_cb, void *frame_available_cb_user)
 {
 	ChiakiErrorCode err = chiaki_mutex_init(&decoder->mutex, false);
@@ -54,7 +56,15 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_ffmpeg_decoder_init(ChiakiFfmpegDecoder *de
 	avcodec_register_all();
 #endif
 	enum AVCodecID av_codec = chiaki_codec_av_codec_id(codec);
-	decoder->av_codec = avcodec_find_decoder(av_codec);
+	const bool use_v4l2 = hw_decoder_name && strcmp(hw_decoder_name, "v4l2m2m") == 0;
+	if(use_v4l2 && codec == CHIAKI_CODEC_H265_HDR)
+	{
+		CHIAKI_LOGE(log, "V4L2 HDR decoding is not supported by this experimental backend");
+		goto error_mutex;
+	}
+	decoder->av_codec = use_v4l2
+		? avcodec_find_decoder_by_name(av_codec == AV_CODEC_ID_H264 ? "h264_v4l2m2m" : "hevc_v4l2m2m")
+		: avcodec_find_decoder(av_codec);
 	if(!decoder->av_codec)
 	{
 		CHIAKI_LOGE(log, "%s Codec not available", chiaki_codec_name(codec));
@@ -68,7 +78,14 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_ffmpeg_decoder_init(ChiakiFfmpegDecoder *de
 		goto error_mutex;
 	}
 
-	if(hw_decoder_name)
+	if(use_v4l2)
+	{
+		decoder->codec_context->width = width;
+		decoder->codec_context->height = height;
+		decoder->codec_context->pix_fmt = AV_PIX_FMT_NV12;
+		CHIAKI_LOGI(log, "Using V4L2 decoder %s (%ux%u, NV12)", decoder->av_codec->name, width, height);
+	}
+	else if(hw_decoder_name)
 	{
 		CHIAKI_LOGI(log, "Trying to use hardware decoder \"%s\"", hw_decoder_name);
 		enum AVHWDeviceType type = av_hwdevice_find_type_by_name(hw_decoder_name);
@@ -188,6 +205,11 @@ CHIAKI_EXPORT bool chiaki_ffmpeg_decoder_video_sample_cb(uint8_t *buf, size_t bu
 		decoder->synthetic_packet_pts += synthetic_duration_pts * (int64_t)frames_lost;
 
 	AVPacket *packet = av_packet_alloc();
+	if(!packet)
+	{
+		chiaki_mutex_unlock(&decoder->mutex);
+		return false;
+	}
 	packet->data = buf;
 	packet->size = buf_size;
 	packet->pts = decoder->synthetic_packet_pts;
