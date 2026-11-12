@@ -319,6 +319,11 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
 	this->enable_steamdeck_haptics = settings->GetSteamDeckHapticsEnabled();
 	this->vertical_sdeck = settings->GetVerticalDeckEnabled();
 #endif
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+	this->rogally_enabled = settings->GetRogallyEnabled();
+	this->rogally_vertical = settings->GetRogallyVerticalEnabled();
+	this->rogally_gyro_deadzone = settings->GetRogallyGyroDeadzone();
+#endif
 #if CHIAKI_GUI_ENABLE_SPEEX
 	this->speech_processing_enabled = settings->GetSpeechProcessingEnabled();
 	this->noise_suppress_level = settings->GetNoiseSuppressLevel();
@@ -356,6 +361,9 @@ static void SessionSetsuCb(SetsuEvent *event, void *user);
 #endif
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 static void SessionSDeckCb(SDeckEvent *event, void *user);
+#endif
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+static void SessionROGAllyCb(RogallyEvent *event, void *user);
 #endif
 static void FfmpegFrameCb(ChiakiFfmpegDecoder *decoder, void *user);
 
@@ -665,6 +673,47 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 		sdeck_timer->start(STEAMDECK_UPDATE_INTERVAL_MS);
 	}
 #endif
+
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+	chiaki_controller_state_set_idle(&rogally_state);
+	chiaki_accel_new_zero_set_inactive(&rogally_accel_offset, false);
+	rogally_enabled = connect_info.rogally_enabled;
+	rogally_vertical = connect_info.rogally_vertical;
+	rogally_gyro_deadzone = connect_info.rogally_gyro_deadzone;
+	rogally_calibrated = false;
+
+	rogally = rogally_new();
+	// no concept of hotplug for ROG Ally so turn off if not detected immediately
+	if(!rogally || !rogally_enabled)
+	{
+		if(!rogally)
+			CHIAKI_LOGI(GetChiakiLog(), "ROG Ally IMU not found ... ROG Ally motion controls disabled\n\n");
+		else if(!rogally_enabled)
+			CHIAKI_LOGI(GetChiakiLog(), "ROG Ally IMU disabled by user setting ... motion controls disabled\n\n");
+		rogally_free(rogally);
+		rogally = nullptr;
+	}
+	else
+	{
+		CHIAKI_LOGI(GetChiakiLog(), "Connected ROG Ally IMU ... gyro/accel online\n\n");
+		chiaki_accel_new_zero_set_inactive(&rogally_accel_zero, false);
+		chiaki_accel_new_zero_set_inactive(&rogally_real_accel, true);
+		chiaki_orientation_tracker_init(&rogally_orient_tracker);
+		rogally_orient_dirty = true;
+
+		auto rogally_timer = new QTimer(this);
+		connect(rogally_timer, &QTimer::timeout, this, [this]{
+			rogally_read(rogally, SessionROGAllyCb, this);
+			if(rogally_orient_dirty)
+			{
+				chiaki_orientation_tracker_apply_to_controller_state(&rogally_orient_tracker, &rogally_state);
+				SendFeedbackState();
+				rogally_orient_dirty = false;
+			}
+		});
+		rogally_timer->start(STEAMDECK_UPDATE_INTERVAL_MS);
+	}
+#endif
 	key_map = connect_info.key_map;
 	if (connect_info.enable_dualsense)
 	{
@@ -769,6 +818,9 @@ StreamSession::~StreamSession()
 #endif
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 	sdeck_free(sdeck);
+#endif
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+	rogally_free(rogally);
 #endif
 #if CHIAKI_LIB_ENABLE_PI_DECODER
 	if(pi_decoder)
@@ -1339,6 +1391,10 @@ void StreamSession::SendFeedbackState()
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+	chiaki_controller_state_or(&state, &state, &rogally_state);
+#endif
+
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
@@ -2609,6 +2665,78 @@ void StreamSession::HandleSDeckEvent(SDeckEvent *event)
 }
 #endif
 
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+static float applyGyroDeadzone(float value, float deadzone)
+{
+	if(value > -deadzone && value < deadzone)
+		return 0.0f;
+	return value;
+}
+
+void StreamSession::HandleRogallyEvent(RogallyEvent *event)
+{
+	if(!rogally)
+	{
+		CHIAKI_LOGI(GetChiakiLog(), "ROG Ally IMU was disconnected! Skipping stale events...\n");
+		return;
+	}
+	switch(event->type)
+	{
+		case ROGALLY_EVENT_MOTION:
+		{
+			float ax = event->motion.accel_x;
+			float ay = event->motion.accel_y;
+			float az = event->motion.accel_z;
+			float gx = event->motion.gyro_x;
+			float gy = event->motion.gyro_y;
+			float gz = event->motion.gyro_z;
+
+			// --- Auto-calibración del acelerómetro ---
+			// Tomar las primeras lecturas como referencia de "dispositivo quieto"
+			if(!rogally_calibrated)
+			{
+				rogally_accel_offset.accel_x = ax;
+				rogally_accel_offset.accel_y = ay;
+				rogally_accel_offset.accel_z = az;
+				rogally_calibrated = true;
+				CHIAKI_LOGI(GetChiakiLog(), "ROG Ally accelerometer calibrated (offset: %.3f, %.3f, %.3f)\n",
+							ax, ay, az);
+			}
+
+			// Restar offset de calibración (gravedad estática)
+			ax -= rogally_accel_offset.accel_x;
+			ay -= rogally_accel_offset.accel_y;
+			az -= rogally_accel_offset.accel_z;
+
+			// --- Ajuste de ejes (igual que vertical_sdeck) ---
+			if(rogally_vertical)
+			{
+				// swap y con z para usar roll en lugar de yaw
+				float tmp = ay; ay = -az; az = tmp;
+				tmp = gy; gy = -gz; gz = tmp;
+			}
+
+			// --- Deadzone del giroscopio ---
+			gx = applyGyroDeadzone(gx, rogally_gyro_deadzone);
+			gy = applyGyroDeadzone(gy, rogally_gyro_deadzone);
+			gz = applyGyroDeadzone(gz, rogally_gyro_deadzone);
+
+			chiaki_accel_new_zero_set_active(&rogally_real_accel, ax, ay, az, true);
+			chiaki_orientation_tracker_update(&rogally_orient_tracker,
+											  gx, gy, gz,
+											  ax, ay, az,
+											  &rogally_accel_zero, false, event->motion.timestamp_us);
+			rogally_orient_dirty = true;
+			break;
+		}
+		case ROGALLY_EVENT_ERROR:
+			CHIAKI_LOGE(GetChiakiLog(), "ROG Ally IMU error\n");
+			break;
+	}
+}
+#endif
+
+
 void StreamSession::CantDisplayMessage(bool cant_display)
 {
 	this->cant_display = cant_display;
@@ -2854,6 +2982,10 @@ class StreamSessionPrivate
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 		static void HandleSDeckEvent(StreamSession *session, SDeckEvent *event)					{ session->HandleSDeckEvent(event); }
 #endif
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+                static void HandleRogallyEvent(StreamSession *session, RogallyEvent *event)            { session->HandleRogallyEvent(event); }
+#endif
+
 		static void TriggerFfmpegFrameAvailable(StreamSession *session)							{ session->TriggerFfmpegFrameAvailable(); }
 };
 
@@ -2882,6 +3014,15 @@ static void HapticsFrameCb(uint8_t *buf, size_t buf_size, void *user)
 	auto session = reinterpret_cast<StreamSession *>(user);
 	StreamSessionPrivate::PushHapticsFrame(session, buf, buf_size);
 }
+
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+static void SessionROGAllyCb(RogallyEvent *event, void *user)
+{
+	auto session = reinterpret_cast<StreamSession *>(user);
+	StreamSessionPrivate::HandleRogallyEvent(session, event);
+}
+#endif
+
 
 static void CantDisplayCb(void *user, bool cant_display)
 {

@@ -293,6 +293,17 @@ class Settings : public QObject
 		void SetSteamDeckHapticsEnabled(bool enabled) { settings.setValue("settings/steamdeck_haptics", enabled); }
 #endif
 
+#ifdef CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+		bool GetRogallyEnabled() const            { return settings.value("settings/rogally_enabled", true).toBool(); }
+		void SetRogallyEnabled(bool enabled)      { settings.setValue("settings/rogally_enabled", enabled); }
+
+		bool GetRogallyVerticalEnabled() const    { return settings.value("settings/rogally_gyro_inverted", false).toBool(); }
+		void SetRogallyVerticalEnabled(bool enabled) { settings.setValue("settings/rogally_gyro_inverted", enabled); }
+
+		float GetRogallyGyroDeadzone() const      { return settings.value("settings/rogally_gyro_deadzone", 0.02f).toFloat(); }
+		void SetRogallyGyroDeadzone(float dz)     { settings.setValue("settings/rogally_gyro_deadzone", dz); }
+#endif
+
 		bool GetAutomaticConnect() const         { return settings.value("settings/automatic_connect", false).toBool(); }
 		void SetAutomaticConnect(bool autoconnect)    { settings.setValue("settings/automatic_connect", autoconnect); }
 
