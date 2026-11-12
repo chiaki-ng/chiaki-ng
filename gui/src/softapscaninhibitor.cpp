@@ -14,22 +14,48 @@ SoftapScanInhibitor::SoftapScanInhibitor(QObject *parent, const QString &socket_
 	timer.setTimerType(Qt::PreciseTimer);
 	connect(&timer, &QTimer::timeout, this, &SoftapScanInhibitor::SendNextInterface);
 	connect(&socket, &QLocalSocket::connected, this, &SoftapScanInhibitor::SendNextInterface);
-	connect(&socket, &QLocalSocket::errorOccurred, this, [this](QLocalSocket::LocalSocketError) {
+	connect(&socket, &QLocalSocket::bytesWritten, this, &SoftapScanInhibitor::UpdateRequested);
+	connect(&socket, &QLocalSocket::errorOccurred, this, [this](QLocalSocket::LocalSocketError error) {
 		if(!active)
 			return;
 		qWarning("Wi-Fi scan inhibition unavailable: %s", qPrintable(socket.errorString()));
-		Stop();
+		const Status failure = error == QLocalSocket::ServerNotFoundError ? Status::Unavailable
+			: error == QLocalSocket::SocketAccessError ? Status::Denied : Status::Error;
+		Fail(failure);
 	});
 	connect(&socket, &QLocalSocket::disconnected, this, [this]() {
-		if(active)
-			qWarning("Wi-Fi scan inhibition socket disconnected");
-		Stop();
+		if(!active)
+			return;
+		qWarning("Wi-Fi scan inhibition socket disconnected");
+		Fail(Status::Error);
 	});
 }
 
 SoftapScanInhibitor::~SoftapScanInhibitor()
 {
-	Stop();
+	Close();
+}
+
+QString SoftapScanInhibitor::GetStatusText() const
+{
+	switch(status)
+	{
+		case Status::Off: return QStringLiteral("OFF");
+		case Status::Waiting: return QStringLiteral("WAIT");
+		case Status::Requested: return QStringLiteral("SENT");
+		case Status::Unavailable: return QStringLiteral("N/A");
+		case Status::Denied: return QStringLiteral("DENIED");
+		case Status::Error: return QStringLiteral("ERROR");
+	}
+	return QStringLiteral("ERROR");
+}
+
+void SoftapScanInhibitor::SetStatus(Status value)
+{
+	if(status == value)
+		return;
+	status = value;
+	emit StatusChanged();
 }
 
 void SoftapScanInhibitor::Start()
@@ -52,10 +78,16 @@ void SoftapScanInhibitor::Start()
 		}
 	}
 	if(interfaces.isEmpty())
+	{
+		qWarning("Wi-Fi scan inhibition unavailable: no Wi-Fi interfaces");
+		SetStatus(Status::Unavailable);
 		return;
+	}
 
 	active = true;
-	socket.connectToServer(socket_path);
+	SetStatus(Status::Waiting);
+	if(active)
+		socket.connectToServer(socket_path);
 }
 
 void SoftapScanInhibitor::SendNextInterface()
@@ -63,17 +95,21 @@ void SoftapScanInhibitor::SendNextInterface()
 	if(!active || socket.state() != QLocalSocket::ConnectedState || interfaces.isEmpty())
 		return;
 
-	const QByteArray command = "streamon\t" + interfaces.takeFirst().toLocal8Bit() + "\n";
+	const QByteArray command = "streamon\t" + interfaces.first().toLocal8Bit() + "\n";
 	if(socket.write(command) != command.size())
 	{
 		if(active)
 		{
 			qWarning("Wi-Fi scan inhibition write failed: %s", qPrintable(socket.errorString()));
-			Stop();
+			Fail(Status::Error);
 		}
 		return;
 	}
+	if(!active)
+		return;
+	interfaces.removeFirst();
 	socket.flush();
+	UpdateRequested();
 
 	// The daemon parses one command per read and sends no acknowledgements.
 	// Pace separate writes; Unix streams do not guarantee read boundaries.
@@ -81,7 +117,15 @@ void SoftapScanInhibitor::SendNextInterface()
 		timer.start(100);
 }
 
-void SoftapScanInhibitor::Stop()
+void SoftapScanInhibitor::UpdateRequested()
+{
+	// SENT describes local writes only: the daemon never confirms its scan mask.
+	if(active && interfaces.isEmpty() && socket.state() == QLocalSocket::ConnectedState
+			&& socket.bytesToWrite() == 0)
+		SetStatus(Status::Requested);
+}
+
+void SoftapScanInhibitor::Close()
 {
 	// Cancel before abort(), which can emit socket signals synchronously.
 	attempted = true;
@@ -89,4 +133,16 @@ void SoftapScanInhibitor::Stop()
 	timer.stop();
 	interfaces.clear();
 	socket.abort();
+}
+
+void SoftapScanInhibitor::Fail(Status failure)
+{
+	Close();
+	SetStatus(failure);
+}
+
+void SoftapScanInhibitor::Stop()
+{
+	Close();
+	SetStatus(Status::Off);
 }

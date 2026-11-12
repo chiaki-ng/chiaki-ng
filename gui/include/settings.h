@@ -270,6 +270,11 @@ class Settings : public QObject
 		RumbleHapticsIntensity GetRumbleHapticsIntensity() const;
 		void SetRumbleHapticsIntensity(RumbleHapticsIntensity intensity);
 
+#ifdef Q_OS_LINUX
+		bool GetWiFiScanInhibition() const         { return settings.value("settings/wifi_scan_inhibition", true).toBool(); }
+		void SetWiFiScanInhibition(bool enabled)   { settings.setValue("settings/wifi_scan_inhibition", enabled); }
+#endif
+
 		bool GetShowStreamStats() const            { return settings.value("settings/show_stream_stats", false).toBool(); }
 		void SetShowStreamStats(bool enabled)      { settings.setValue("settings/show_stream_stats", enabled); }
 

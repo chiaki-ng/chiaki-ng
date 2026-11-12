@@ -389,6 +389,9 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	rumble_haptics_connected(false),
 	rumble_haptics_on(false)
 {
+#ifdef Q_OS_LINUX
+	wifi_scan_inhibition_enabled = connect_info.settings->GetWiFiScanInhibition();
+#endif
 	mic_buf.buf = nullptr;
 	connected = false;
 	muted = true;
@@ -832,6 +835,13 @@ StreamSession::~StreamSession()
 #endif
 }
 
+#ifdef Q_OS_LINUX
+QString StreamSession::GetWiFiScanInhibitionStatus() const
+{
+	return scan_inhibitor ? scan_inhibitor->GetStatusText() : QStringLiteral("OFF");
+}
+#endif
+
 void StreamSession::Start()
 {
 	if(!connect_timer.isValid())
@@ -843,9 +853,16 @@ void StreamSession::Start()
 	}
 	session_started = true;
 #ifdef Q_OS_LINUX
-	if(!scan_inhibitor)
-		scan_inhibitor = new SoftapScanInhibitor(this);
-	scan_inhibitor->Start();
+	if(wifi_scan_inhibition_enabled)
+	{
+		if(!scan_inhibitor)
+		{
+			scan_inhibitor = new SoftapScanInhibitor(this);
+			connect(scan_inhibitor, &SoftapScanInhibitor::StatusChanged,
+				this, &StreamSession::WiFiScanInhibitionStatusChanged);
+		}
+		scan_inhibitor->Start();
+	}
 #endif
 }
 

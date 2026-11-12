@@ -100,6 +100,19 @@ void QmlSettings::setHideCursor(bool enabled)
     emit hideCursorChanged();
 }
 
+#ifdef Q_OS_LINUX
+bool QmlSettings::wifiScanInhibition() const
+{
+    return settings->GetWiFiScanInhibition();
+}
+
+void QmlSettings::setWiFiScanInhibition(bool enabled)
+{
+    settings->SetWiFiScanInhibition(enabled);
+    emit wifiScanInhibitionChanged();
+}
+#endif
+
 bool QmlSettings::showStreamStats() const
 {
     return settings->GetShowStreamStats();
@@ -1897,6 +1910,9 @@ void QmlSettings::refreshAllKeys()
     emit buttonsByPositionChanged();
     emit allowJoystickBackgroundEventsChanged();
     emit startMicUnmutedChanged();
+#ifdef Q_OS_LINUX
+    emit wifiScanInhibitionChanged();
+#endif
     emit showStreamStatsChanged();
     emit streamerModeChanged();
 #ifdef CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE

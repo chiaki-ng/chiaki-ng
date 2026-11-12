@@ -10,15 +10,29 @@
 
 class SoftapScanInhibitor : public QObject
 {
+	Q_OBJECT
+
 	public:
+		enum class Status { Off, Waiting, Requested, Unavailable, Denied, Error };
+		Q_ENUM(Status)
+
 		explicit SoftapScanInhibitor(QObject *parent = nullptr,
 			const QString &socket_path = QStringLiteral("/var/run/softapmanager.streaming.socket"));
 		~SoftapScanInhibitor() override;
 		void Start();
 		void Stop();
+		Status GetStatus() const { return status; }
+		QString GetStatusText() const;
+
+	signals:
+		void StatusChanged();
 
 	private:
 		void SendNextInterface();
+		void UpdateRequested();
+		void Close();
+		void Fail(Status failure);
+		void SetStatus(Status value);
 
 		const QString socket_path;
 		QLocalSocket socket;
@@ -26,6 +40,7 @@ class SoftapScanInhibitor : public QObject
 		QStringList interfaces;
 		bool attempted = false;
 		bool active = false;
+		Status status = Status::Off;
 };
 
 #endif

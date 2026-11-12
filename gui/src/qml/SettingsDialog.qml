@@ -1833,6 +1833,27 @@ DialogView {
 
                         Label {
                             Layout.alignment: Qt.AlignRight
+                            text: qsTr("Wi-Fi Scan Suppression:")
+                            visible: typeof Chiaki.settings.wifiScanInhibition !== "undefined"
+                        }
+
+                        C.CheckBox {
+                            text: qsTr("Prevent background Wi-Fi scans while streaming (next stream)")
+                            checked: typeof Chiaki.settings.wifiScanInhibition !== "undefined" && Chiaki.settings.wifiScanInhibition
+                            onToggled: Chiaki.settings.wifiScanInhibition = checked
+                            visible: typeof Chiaki.settings.wifiScanInhibition !== "undefined"
+                            ToolTip.visible: hovered || activeFocus
+                            ToolTip.text: qsTr("SENT in stream stats means all requests were sent; the service does not confirm scan suppression.")
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignRight
+                            text: qsTr("(Checked)")
+                            visible: typeof Chiaki.settings.wifiScanInhibition !== "undefined"
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignRight
                             text: qsTr("Show Stream Stats During Gameplay")
                         }
 
