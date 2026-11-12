@@ -22,6 +22,11 @@
 #include <chiaki/orientation.h>
 #endif
 
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+#include <rogally.h>
+#include <chiaki/orientation.h>
+#endif
+
 // Using Q_OS_MACOS instead of __APPLE__ doesn't work for the necessary enums to be included
 #ifdef __APPLE__
 #include <macMicPermission.h>
@@ -109,6 +114,11 @@ class SdeckHapticsWorker;
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 		bool vertical_sdeck;
 		bool enable_steamdeck_haptics;
+#endif
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+		bool rogally_enabled;
+		bool rogally_vertical;
+		float rogally_gyro_deadzone;
 #endif
 #if CHIAKI_GUI_ENABLE_SPEEX
 		bool speech_processing_enabled;
@@ -215,6 +225,20 @@ class StreamSession : public QObject
 		bool sdeck_orient_dirty;
 		bool vertical_sdeck;
 #endif
+
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+	Rogally *rogally;
+	ChiakiControllerState rogally_state;
+	ChiakiOrientationTracker rogally_orient_tracker;
+	ChiakiAccelNewZero rogally_accel_zero, rogally_real_accel;
+	ChiakiAccelNewZero rogally_accel_offset;
+	bool rogally_orient_dirty;
+	bool rogally_enabled;
+	bool rogally_vertical;
+	float rogally_gyro_deadzone;
+	bool rogally_calibrated;
+#endif
+
 		QQueue<uint16_t> rumble_haptics;
 		bool rumble_haptics_connected;
 		bool rumble_haptics_on;
@@ -367,6 +391,9 @@ class StreamSession : public QObject
 #endif
 		void HandleKeyboardEvent(QKeyEvent *event);
 		void HandleTouchEvent(QTouchEvent *event, qreal width, qreal height);
+#if CHIAKI_GUI_ENABLE_ROGALLY_NATIVE
+		void HandleRogallyEvent(RogallyEvent *event);
+#endif
 		void HandleDpadTouchEvent(ChiakiControllerState *state, bool placeholder = false);
 		void HandleMouseReleaseEvent(QMouseEvent *event);
 		void HandleMousePressEvent(QMouseEvent *event);
