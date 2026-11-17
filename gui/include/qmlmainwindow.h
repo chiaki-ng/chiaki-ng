@@ -168,6 +168,8 @@ public slots:
     void presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, qint64 decoder_delivery_us = 0);
 
     AVBufferRef *vulkanHwDeviceCtx();
+    // Window size in device pixels. Safe to call from any thread.
+    QSize presentationPixelSize() const { return QSize(presentation_pixel_w.load(std::memory_order_relaxed), presentation_pixel_h.load(std::memory_order_relaxed)); }
 
 signals:
     void hasVideoChanged();
@@ -328,6 +330,8 @@ private:
     StreamSession *session = {};
     AVBufferRef *vulkan_hw_dev_ctx = nullptr;
     std::atomic<double> queue_depth_average{0.0};
+    std::atomic<int> presentation_pixel_w{0};
+    std::atomic<int> presentation_pixel_h{0};
     QAtomicInteger<int> queue_depth_cached = 0;
     double pending_frame_age = 0.0;
     uint64_t last_placebo_reset_ts = 0;

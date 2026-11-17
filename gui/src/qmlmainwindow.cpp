@@ -64,6 +64,7 @@ extern "C" {
 #if defined(Q_OS_MACOS)
 #include <objc/message.h>
 #include <objc/runtime.h>
+#include "metalfxupscaler.h"
 #endif
 
 Q_LOGGING_CATEGORY(chiakiGui, "chiaki.gui", QtInfoMsg);
@@ -2199,6 +2200,91 @@ static void placebo_log_cb(void *user, pl_log_level level, const char *msg)
     }
 }
 
+#if defined(Q_OS_MACOS)
+namespace {
+// A frame mapped by map_iosurface_frame(). pl_unmap_avframe() must never see
+// this user_data, so every unmap goes through unmap_any_frame().
+struct IOSurfaceMappedFrame {
+    uint64_t magic;
+    AVFrame *ref;
+};
+constexpr uint64_t kIOSurfaceMappedMagic = 0x494f53464d415050ull; // "IOSFMAPP"
+
+// Zero-copy path for MetalFX output: import its IOSurface as a texture
+// instead of uploading the pixels. Returns false when not applicable, and
+// the caller then uses pl_map_avframe_ex() as usual.
+bool map_iosurface_frame(pl_gpu gpu, struct pl_frame *out, const AVFrame *frame)
+{
+    size_t alloc_size = 0;
+    void *surface = MetalFXUpscaler::FrameIOSurface(frame, &alloc_size);
+    if (!surface || !gpu || !(gpu->import_caps.tex & PL_HANDLE_IOSURFACE))
+        return false;
+    const bool bgra = frame->format == AV_PIX_FMT_BGRA;
+    struct pl_tex_params params = {};
+    params.w = frame->width;
+    params.h = frame->height;
+    params.format = pl_find_named_fmt(gpu, bgra ? "bgra8" : "rgba16");
+    params.sampleable = true;
+    params.import_handle = PL_HANDLE_IOSURFACE;
+    params.shared_mem.handle.handle = surface;
+    params.shared_mem.size = alloc_size;
+    if (!params.format)
+        return false;
+    pl_tex tex = pl_tex_create(gpu, &params);
+    if (!tex)
+        return false;
+    auto *mapped = static_cast<IOSurfaceMappedFrame *>(calloc(1, sizeof(IOSurfaceMappedFrame)));
+    AVFrame *ref = mapped ? av_frame_clone(frame) : nullptr;
+    if (!ref) {
+        free(mapped);
+        pl_tex_destroy(gpu, &tex);
+        return false;
+    }
+    mapped->magic = kIOSurfaceMappedMagic;
+    mapped->ref = ref;
+    pl_frame_from_avframe(out, frame);
+    out->num_planes = 1;
+    out->planes[0] = {};
+    out->planes[0].texture = tex;
+    out->planes[0].components = 4;
+    // The imported texture samples in memory order, so swap R and B for BGRA.
+    out->planes[0].component_mapping[0] = bgra ? 2 : 0;
+    out->planes[0].component_mapping[1] = 1;
+    out->planes[0].component_mapping[2] = bgra ? 0 : 2;
+    out->planes[0].component_mapping[3] = 3;
+    out->user_data = mapped;
+    return true;
+}
+} // namespace
+#endif
+
+// Unmaps a frame from either pl_map_avframe_ex() or map_iosurface_frame().
+static void unmap_any_frame(pl_gpu gpu, struct pl_frame *frame)
+{
+#if defined(Q_OS_MACOS)
+    auto *mapped = static_cast<IOSurfaceMappedFrame *>(frame->user_data);
+    if (mapped && mapped->magic == kIOSurfaceMappedMagic) {
+        pl_tex_destroy(gpu, &frame->planes[0].texture);
+        av_frame_free(&mapped->ref);
+        free(mapped);
+        *frame = {};
+        return;
+    }
+#endif
+    pl_unmap_avframe(gpu, frame);
+}
+
+// pl_map_avframe_ex(), with the MetalFX zero-copy path tried first on macOS.
+static bool map_any_frame(pl_gpu gpu, struct pl_frame *out, const pl_avframe_params *params)
+{
+#if defined(Q_OS_MACOS)
+    MetalFXUpscaler::WaitFrameReady(params->frame);
+    if (map_iosurface_frame(gpu, out, params->frame))
+        return true;
+#endif
+    return pl_map_avframe_ex(gpu, out, params);
+}
+
 static bool map_frame(pl_gpu gpu, pl_tex *tex,
                       const struct pl_source_frame *src,
                       struct pl_frame *out_frame)
@@ -2209,8 +2295,7 @@ static bool map_frame(pl_gpu gpu, pl_tex *tex,
         .frame      = frame,
         .tex        = tex,};
     const qint64 map_begin_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
-    bool ok = pl_map_avframe_ex(gpu, out_frame, &av_params
-    );
+    bool ok = map_any_frame(gpu, out_frame, &av_params);
     const qint64 map_end_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
     if (map_end_us >= map_begin_us && map_end_us - map_begin_us >= 500) {
         CHIAKI_NOISY_DEBUG().nospace()
@@ -2232,7 +2317,7 @@ static bool map_frame(pl_gpu gpu, pl_tex *tex,
     }
     if (out_frame->num_planes <= 0) {
         qCInfo(chiakiGui) << "Mapped frame contains no planes, dropping";
-        pl_unmap_avframe(gpu, out_frame);
+        unmap_any_frame(gpu, out_frame);
         av_frame_free(&frame);
         return false;
     }
@@ -2242,7 +2327,7 @@ static bool map_frame(pl_gpu gpu, pl_tex *tex,
 static void unmap_frame(pl_gpu gpu, struct pl_frame *frame,
                         const struct pl_source_frame *src)
 {
-    pl_unmap_avframe(gpu, frame);
+    unmap_any_frame(gpu, frame);
     AVFrame *av_frame = reinterpret_cast<AVFrame *>(src->frame_data);
     av_frame_free(&av_frame);
 }
@@ -2619,7 +2704,7 @@ QmlMainWindow::~QmlMainWindow()
 #endif
 
     if (pl_gpu gpu = placeboGpu()) {
-        pl_unmap_avframe(gpu, &direct_frame);
+        unmap_any_frame(gpu, &direct_frame);
         if (quick_tex)
             pl_tex_destroy(gpu, &quick_tex);
         for (auto &tex : placebo_tex)
@@ -6097,6 +6182,15 @@ void QmlMainWindow::resizeSwapchain()
         return;
 
     const QSize window_size(width() * devicePixelRatio(), height() * devicePixelRatio());
+    {
+        double native_scale = 1.0;
+#if defined(Q_OS_MACOS)
+        const QPoint center = mapToGlobal(QPoint(width() / 2, height() / 2));
+        native_scale = MetalFXUpscaler::NativePixelScaleAt(center.x(), center.y());
+#endif
+        presentation_pixel_w.store(int(window_size.width() * native_scale), std::memory_order_relaxed);
+        presentation_pixel_h.store(int(window_size.height() * native_scale), std::memory_order_relaxed);
+    }
     const bool swapchain_ready = quick_tex &&
                                  (render_backend != RenderBackend::OpenGL || quick_fbo) &&
                                  (render_backend != RenderBackend::Vulkan || quick_vk_image);
@@ -6791,18 +6885,18 @@ void QmlMainWindow::render()
             reset_direct_frame = direct_frame_reset.fetchAndStoreRelaxed(0) != 0;
         }
         if (reset_direct_frame) {
-            pl_unmap_avframe(placeboGpu(), &direct_frame);
+            unmap_any_frame(placeboGpu(), &direct_frame);
             direct_frame = {};
         }
         if (incoming) {
-            pl_unmap_avframe(placeboGpu(), &direct_frame);
+            unmap_any_frame(placeboGpu(), &direct_frame);
             direct_frame = {};
             pl_avframe_params avparams = {};
             avparams.frame = incoming;
             avparams.tex = placebo_tex.data();
-            if (!pl_map_avframe_ex(placeboGpu(), &direct_frame, &avparams)) {
+            if (!map_any_frame(placeboGpu(), &direct_frame, &avparams)) {
                 qCWarning(chiakiGui) << "Failed to map direct video frame";
-                pl_unmap_avframe(placeboGpu(), &direct_frame);
+                unmap_any_frame(placeboGpu(), &direct_frame);
                 direct_frame = {};
                 if (backend && backend->zeroCopy())
                     backend->disableZeroCopy();

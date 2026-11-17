@@ -15,6 +15,9 @@
 #include <QFutureWatcher>
 #include <QFuture>
 #include <QAtomicInteger>
+#include <QVariantMap>
+#include <atomic>
+#include <deque>
 #ifdef CHIAKI_HAVE_WEBENGINE
 #include <QQuickWebEngineProfile>
 #include <QWebEngineUrlRequestInterceptor>
@@ -23,6 +26,8 @@
 class SystemdInhibit;
 #ifdef Q_OS_MACOS
     class MacWakeSleep;
+    class MetalFXUpscaler;
+    class FrameInterpolator;
 #elif defined(Q_OS_WINDOWS)
     class WindowsWakeSleep;
 #endif
@@ -171,7 +176,14 @@ public:
     void setIsAppActive();
 
     void profileChanged();
-    bool prepareFrameForPresentation(ChiakiFfmpegFrame &frame, bool use_opengl_renderer);
+    bool prepareFrameForPresentation(ChiakiFfmpegFrame &frame, bool use_opengl_renderer, bool interpolated = false);
+    void deliverFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, bool use_opengl_renderer, bool interpolated = false);
+#ifdef Q_OS_MACOS
+    void flushInterpolationUpTo(quint64 seq, bool use_opengl_renderer);
+    void onFrameInterpolated(quint64 seq, std::vector<AVFrame *> frames, bool use_opengl_renderer);
+    void resetFrameInterpolation();
+    QSize metalFxTargetSize() const;
+#endif
     void prepareStartupPresentation(bool present_warmup);
     void applyStartupWindowSizing();
 
@@ -181,6 +193,12 @@ public:
     void disableZeroCopy() { disable_zero_copy = true; };
     void enableZeroCopy()  { disable_zero_copy = false; };
 
+    /**
+     * Frame rates since the previous call, for the on-screen FPS counter:
+     * "display" counts every frame sent to the window (interpolated ones too),
+     * "stream" only frames from the console, "mode" names the active interpolation.
+     */
+    Q_INVOKABLE QVariantMap sampleFrameRates();
     Q_INVOKABLE void deleteHost(int index);
     Q_INVOKABLE void wakeUpHost(int index, QString nickname = QString());
     Q_INVOKABLE void addManualHost(int index, const QString &address);
@@ -303,6 +321,32 @@ private:
     SystemdInhibit *sleep_inhibit = {};
 #ifdef Q_OS_MACOS
     MacWakeSleep *mac_wake_sleep = {};
+    // Created lazily and used only on the frame thread; deleted after it stops.
+    MetalFXUpscaler *metalfx_upscaler = {};
+    std::atomic<bool> metalfx_upscaling{false};
+    std::atomic<int> metalfx_upscale_target{0}; // 0 window, 1 2K, 2 4K
+    bool metalfx_logged = false;
+    // Frame interpolation state; used only on the frame thread.
+    FrameInterpolator *frame_interpolator = {};
+    int frame_interpolator_engine = -1;
+    std::atomic<bool> frame_interpolation{false};
+    std::atomic<int> frame_interpolation_engine{0};
+    // Requested multiplier, already capped by the display refresh rate at session start.
+    std::atomic<int> frame_interpolation_multiplier{2};
+    // FPS counter
+    std::atomic<quint64> fps_frames_total{0};
+    std::atomic<quint64> fps_frames_real{0};
+    quint64 fps_last_total = 0, fps_last_real = 0;
+    qint64 fps_last_us = 0;
+    // Real frames held back until their interpolated predecessor has been shown, oldest first.
+    struct InterpPending {
+        quint64 seq;
+        ChiakiFfmpegFrame frame;
+        int32_t frames_lost;
+    };
+    std::deque<InterpPending> interp_pending;
+    quint64 interp_seq = 0;
+    bool interp_logged = false;
 #elif defined(Q_OS_WINDOWS)
     WindowsWakeSleep *windows_wake_sleep = {};
 #endif

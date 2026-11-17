@@ -782,7 +782,7 @@ DialogView {
                             KeyNavigation.priority: KeyNavigation.BeforeItem
                             KeyNavigation.up: zeroCopyCheck
                             KeyNavigation.left: hwDecoderCombo
-                            KeyNavigation.down: windowTypeCombo
+                            KeyNavigation.down: metalFxCheck.visible ? metalFxCheck : fpsOverlayCheck
                             checked: Chiaki.settings.useZeroCopy
                             onToggled: Chiaki.settings.useZeroCopy = checked
                         }
@@ -791,6 +791,108 @@ DialogView {
                     Label {
                         Layout.alignment: Qt.AlignRight
                         text: qsTr("(Auto)")
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("MetalFX Upscaling:")
+                        visible: Chiaki.settings.metalFxSupported
+                    }
+
+                    // Off / window size / 2K / 4K (VideoToolbox decoder only). With 2K or 4K the
+                    // renderer then scales the result to the window.
+                    C.ComboBox {
+                        id: metalFxCheck
+                        Layout.preferredWidth: 400
+                        visible: Chiaki.settings.metalFxSupported
+                        model: [qsTr("Off"), qsTr("Window size"), qsTr("2K (2560 × 1440)"), qsTr("4K (3840 × 2160)")]
+                        currentIndex: Chiaki.settings.metalFxUpscaling ? 1 + Chiaki.settings.metalFxUpscaleTarget : 0
+                        KeyNavigation.priority: KeyNavigation.BeforeItem
+                        KeyNavigation.up: zeroCopyCheck
+                        KeyNavigation.down: frameInterpolationCheck.visible ? frameInterpolationCheck : fpsOverlayCheck
+                        onActivated: (index) => {
+                            Chiaki.settings.metalFxUpscaling = index > 0;
+                            if (index > 0)
+                                Chiaki.settings.metalFxUpscaleTarget = index - 1;
+                        }
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("(Off)")
+                        visible: Chiaki.settings.metalFxSupported
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("Frame Interpolation:")
+                        visible: Chiaki.settings.frameInterpolationSupported
+                    }
+
+                    // One list for engine and multiplier. 3x/4x need a display that many times faster
+                    // than the stream (for example 30 fps on 120 Hz); the app caps the multiplier to
+                    // the display at stream start. MetalFX makes only the middle frame, so it is 2x only.
+                    C.ComboBox {
+                        id: frameInterpolationCheck
+                        Layout.preferredWidth: 400
+                        visible: Chiaki.settings.frameInterpolationSupported
+                        readonly property var options: {
+                            let o = [{ text: qsTr("Off"), on: false, engine: 0, mult: 2 },
+                                     { text: qsTr("VideoToolbox 2x"), on: true, engine: 0, mult: 2 },
+                                     { text: qsTr("VideoToolbox 3x"), on: true, engine: 0, mult: 3 },
+                                     { text: qsTr("VideoToolbox 4x"), on: true, engine: 0, mult: 4 }];
+                            if (Chiaki.settings.metalFxInterpolationSupported)
+                                o.push({ text: qsTr("MetalFX 2x"), on: true, engine: 1, mult: 2 });
+                            return o;
+                        }
+                        model: options.map(o => o.text)
+                        currentIndex: {
+                            if (!Chiaki.settings.frameInterpolation)
+                                return 0;
+                            for (let i = 1; i < options.length; i++) {
+                                if (options[i].engine === Chiaki.settings.frameInterpolationEngine
+                                        && (options[i].engine === 1 || options[i].mult === Chiaki.settings.frameInterpolationMultiplier))
+                                    return i;
+                            }
+                            return 1;
+                        }
+                        KeyNavigation.priority: KeyNavigation.BeforeItem
+                        KeyNavigation.up: metalFxCheck.visible ? metalFxCheck : zeroCopyCheck
+                        KeyNavigation.down: fpsOverlayCheck
+                        onActivated: (index) => {
+                            const o = options[index];
+                            Chiaki.settings.frameInterpolation = o.on;
+                            if (o.on) {
+                                Chiaki.settings.frameInterpolationEngine = o.engine;
+                                Chiaki.settings.frameInterpolationMultiplier = o.mult;
+                            }
+                        }
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("(Off; +1 frame latency)")
+                        visible: Chiaki.settings.frameInterpolationSupported
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("FPS Counter:")
+                    }
+
+                    C.CheckBox {
+                        id: fpsOverlayCheck
+                        text: qsTr("Show the frame rate in the top-left corner while streaming")
+                        KeyNavigation.priority: KeyNavigation.BeforeItem
+                        KeyNavigation.up: frameInterpolationCheck.visible ? frameInterpolationCheck : zeroCopyCheck
+                        KeyNavigation.down: windowTypeCombo
+                        checked: Chiaki.settings.showFpsOverlay
+                        onToggled: Chiaki.settings.showFpsOverlay = checked
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("(Checked)")
                     }
 
                     Label {
@@ -3293,4 +3395,5 @@ DialogView {
             }
         }
     }
+
 }

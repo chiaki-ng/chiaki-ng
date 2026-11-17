@@ -54,6 +54,15 @@ class QmlSettings : public QObject
     Q_PROPERTY(QString audioOutDevice READ audioOutDevice WRITE setAudioOutDevice NOTIFY audioOutDeviceChanged)
     Q_PROPERTY(QString decoder READ decoder WRITE setDecoder NOTIFY decoderChanged)
     Q_PROPERTY(bool useZeroCopy READ useZeroCopy WRITE setUseZeroCopy NOTIFY useZeroCopyChanged)
+    Q_PROPERTY(bool metalFxUpscaling READ metalFxUpscaling WRITE setMetalFxUpscaling NOTIFY metalFxUpscalingChanged)
+    Q_PROPERTY(bool metalFxSupported READ metalFxSupported CONSTANT)
+    Q_PROPERTY(int metalFxUpscaleTarget READ metalFxUpscaleTarget WRITE setMetalFxUpscaleTarget NOTIFY metalFxUpscaleTargetChanged)
+    Q_PROPERTY(bool frameInterpolation READ frameInterpolation WRITE setFrameInterpolation NOTIFY frameInterpolationChanged)
+    Q_PROPERTY(bool frameInterpolationSupported READ frameInterpolationSupported CONSTANT)
+    Q_PROPERTY(int frameInterpolationEngine READ frameInterpolationEngine WRITE setFrameInterpolationEngine NOTIFY frameInterpolationEngineChanged)
+    Q_PROPERTY(bool metalFxInterpolationSupported READ metalFxInterpolationSupported CONSTANT)
+    Q_PROPERTY(int frameInterpolationMultiplier READ frameInterpolationMultiplier WRITE setFrameInterpolationMultiplier NOTIFY frameInterpolationMultiplierChanged)
+    Q_PROPERTY(bool showFpsOverlay READ showFpsOverlay WRITE setShowFpsOverlay NOTIFY showFpsOverlayChanged)
     Q_PROPERTY(bool vulkanDeferredSwap READ vulkanDeferredSwap WRITE setVulkanDeferredSwap NOTIFY vulkanDeferredSwapChanged)
     Q_PROPERTY(int windowType READ windowType WRITE setWindowType NOTIFY windowTypeChanged)
     Q_PROPERTY(uint customResolutionWidth READ customResolutionWidth WRITE setCustomResolutionWidth NOTIFY customResolutionWidthChanged)
@@ -295,6 +304,21 @@ public:
     void setDecoder(const QString &decoder);
     bool useZeroCopy() const;
     void setUseZeroCopy(bool enabled);
+    bool metalFxUpscaling() const;
+    void setMetalFxUpscaling(bool enabled);
+    bool metalFxSupported() const;
+    int metalFxUpscaleTarget() const;
+    void setMetalFxUpscaleTarget(int target);
+    bool frameInterpolation() const;
+    void setFrameInterpolation(bool enabled);
+    bool frameInterpolationSupported() const;
+    int frameInterpolationEngine() const;
+    void setFrameInterpolationEngine(int engine);
+    bool metalFxInterpolationSupported() const;
+    int frameInterpolationMultiplier() const;
+    void setFrameInterpolationMultiplier(int m);
+    bool showFpsOverlay() const;
+    void setShowFpsOverlay(bool show);
     bool vulkanDeferredSwap() const;
     void setVulkanDeferredSwap(bool enabled);
 
@@ -667,6 +691,12 @@ signals:
     void portGuessSocketCountChanged();
     void decoderChanged();
     void useZeroCopyChanged();
+    void metalFxUpscalingChanged();
+    void metalFxUpscaleTargetChanged();
+    void frameInterpolationChanged();
+    void frameInterpolationEngineChanged();
+    void frameInterpolationMultiplierChanged();
+    void showFpsOverlayChanged();
     void windowTypeChanged();
     void customResolutionWidthChanged();
     void customResolutionHeightChanged();

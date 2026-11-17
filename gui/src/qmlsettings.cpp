@@ -1,4 +1,9 @@
 #include "qmlsettings.h"
+#ifdef Q_OS_MACOS
+#include "metalfxupscaler.h"
+#include "vtframeinterpolator.h"
+#include "metalfxinterpolator.h"
+#endif
 #include "sessionlog.h"
 
 #include <QSet>
@@ -586,6 +591,102 @@ void QmlSettings::setUseZeroCopy(bool enabled)
 {
     settings->SetUseZeroCopy(enabled);
     emit useZeroCopyChanged();
+}
+
+bool QmlSettings::metalFxUpscaling() const
+{
+    return settings->GetMetalFXUpscaling();
+}
+
+void QmlSettings::setMetalFxUpscaling(bool enabled)
+{
+    settings->SetMetalFXUpscaling(enabled);
+    emit metalFxUpscalingChanged();
+}
+
+bool QmlSettings::frameInterpolation() const
+{
+    return settings->GetFrameInterpolation();
+}
+
+void QmlSettings::setFrameInterpolation(bool enabled)
+{
+    settings->SetFrameInterpolation(enabled);
+    emit frameInterpolationChanged();
+}
+
+bool QmlSettings::frameInterpolationSupported() const
+{
+#ifdef Q_OS_MACOS
+    static const bool supported = VTFrameInterpolator::IsSupported() || MetalFXFrameInterpolator::IsSupported();
+    return supported;
+#else
+    return false;
+#endif
+}
+
+int QmlSettings::frameInterpolationEngine() const
+{
+    return settings->GetFrameInterpolationEngine();
+}
+
+void QmlSettings::setFrameInterpolationEngine(int engine)
+{
+    settings->SetFrameInterpolationEngine(engine);
+    emit frameInterpolationEngineChanged();
+}
+
+bool QmlSettings::showFpsOverlay() const
+{
+    return settings->GetShowFpsOverlay();
+}
+
+void QmlSettings::setShowFpsOverlay(bool show)
+{
+    settings->SetShowFpsOverlay(show);
+    emit showFpsOverlayChanged();
+}
+
+int QmlSettings::frameInterpolationMultiplier() const
+{
+    return settings->GetFrameInterpolationMultiplier();
+}
+
+void QmlSettings::setFrameInterpolationMultiplier(int m)
+{
+    settings->SetFrameInterpolationMultiplier(m);
+    emit frameInterpolationMultiplierChanged();
+}
+
+bool QmlSettings::metalFxInterpolationSupported() const
+{
+#ifdef Q_OS_MACOS
+    static const bool supported = MetalFXFrameInterpolator::IsSupported();
+    return supported;
+#else
+    return false;
+#endif
+}
+
+int QmlSettings::metalFxUpscaleTarget() const
+{
+    return settings->GetMetalFXUpscaleTarget();
+}
+
+void QmlSettings::setMetalFxUpscaleTarget(int target)
+{
+    settings->SetMetalFXUpscaleTarget(target);
+    emit metalFxUpscaleTargetChanged();
+}
+
+bool QmlSettings::metalFxSupported() const
+{
+#ifdef Q_OS_MACOS
+    static const bool supported = MetalFXUpscaler::IsSupported();
+    return supported;
+#else
+    return false;
+#endif
 }
 
 bool QmlSettings::vulkanDeferredSwap() const

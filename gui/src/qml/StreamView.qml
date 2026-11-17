@@ -141,6 +141,57 @@ Item {
         }
     }
 
+    // Translucent frame-rate counter in the top-left corner.
+    Rectangle {
+        id: fpsOverlay
+        property real displayFps: 0
+        property real streamFps: 0
+        property string mode: ""
+        anchors {
+            top: parent.top
+            left: parent.left
+            topMargin: 12
+            leftMargin: 12
+        }
+        z: 5
+        visible: Chiaki.settings.showFpsOverlay && !!Chiaki.session && !loadingView.visible
+        width: fpsColumn.implicitWidth + 18
+        height: fpsColumn.implicitHeight + 10
+        radius: 8
+        color: Qt.rgba(0, 0, 0, 0.45)
+
+        Timer {
+            interval: 1000
+            repeat: true
+            running: fpsOverlay.visible
+            triggeredOnStart: true
+            onTriggered: {
+                const r = Chiaki.sampleFrameRates();
+                fpsOverlay.displayFps = r.display;
+                fpsOverlay.streamFps = r.stream;
+                fpsOverlay.mode = r.mode;
+            }
+        }
+
+        Column {
+            id: fpsColumn
+            anchors.centerIn: parent
+            spacing: 0
+            Label {
+                text: qsTr("%1 FPS").arg(Math.round(fpsOverlay.displayFps))
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+                color: "white"
+            }
+            Label {
+                visible: fpsOverlay.mode.length > 0
+                text: qsTr("stream %1 · %2").arg(Math.round(fpsOverlay.streamFps)).arg(fpsOverlay.mode)
+                font.pixelSize: 11
+                color: Qt.rgba(1, 1, 1, 0.7)
+            }
+        }
+    }
+
     Rectangle {
         id: loadingView
         anchors.fill: parent
