@@ -82,6 +82,26 @@ int real_main(int argc, char *argv[])
 	// live resize, but our swapchain presents from the render thread, so every resize step
 	// stalled and resizing the window became very slow.
 	qputenv("QT_MTL_NO_TRANSACTION", "1");
+	// Qt looks for a library named "vulkan". Release bundles ship a symlink with that name, but a
+	// build-tree app (or one started from a terminal) finds nothing and falls back to OpenGL.
+	// Point Qt at a Vulkan loader we can see. Setting QT_VULKAN_LIB yourself keeps your choice.
+	if(!qEnvironmentVariableIsSet("QT_VULKAN_LIB"))
+	{
+		const QString app_dir = QFileInfo(QString::fromLocal8Bit(argv[0])).canonicalPath();
+		const QStringList vulkan_candidates = {
+			app_dir + "/../Frameworks/libvulkan.1.dylib",
+			QStringLiteral("/opt/homebrew/lib/libvulkan.1.dylib"),
+			QStringLiteral("/usr/local/lib/libvulkan.1.dylib"),
+		};
+		for(const QString &candidate : vulkan_candidates)
+		{
+			if(QFileInfo::exists(candidate))
+			{
+				qputenv("QT_VULKAN_LIB", QFileInfo(candidate).canonicalFilePath().toLocal8Bit());
+				break;
+			}
+		}
+	}
 	// The Vulkan loader also reads Homebrew's driver folder, so with Homebrew's molten-vk installed
 	// the app loaded a second MoltenVK beside its own and listed every GPU twice. Use only the
 	// bundled one. Setting any of these variables yourself keeps your choice.
