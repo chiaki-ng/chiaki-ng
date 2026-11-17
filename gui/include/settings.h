@@ -193,6 +193,12 @@ enum class PlaceboToneMappingMetadata {
 	CieY
 };
 
+#if defined(Q_OS_MACOS)
+static constexpr bool kIDROnFECFailureDefault = true;
+#else
+static constexpr bool kIDROnFECFailureDefault = false;
+#endif
+
 class Settings : public QObject
 {
 	Q_OBJECT
@@ -299,7 +305,9 @@ class Settings : public QObject
 		bool GetFullscreenDoubleClickEnabled() const	   { return settings.value("settings/fullscreen_doubleclick", false).toBool(); }
 		void SetFullscreenDoubleClickEnabled(bool enabled) { settings.setValue("settings/fullscreen_doubleclick", enabled); }
 
-		bool GetIDROnFECFailureEnabled() const	   { return settings.value("settings/idr_on_fec_failure", false).toBool(); }
+		// On by default on macOS: after a lost frame the VideoToolbox decoder outputs nothing until the
+		// next keyframe, and the console does not send one unless asked, so the picture froze for good.
+		bool GetIDROnFECFailureEnabled() const	   { return settings.value("settings/idr_on_fec_failure", kIDROnFECFailureDefault).toBool(); }
 		void SetIDROnFECFailureEnabled(bool enabled) { settings.setValue("settings/idr_on_fec_failure", enabled); }
 
 		float GetHapticOverride() const 			{ return settings.value("settings/haptic_override", 1.0).toFloat(); }

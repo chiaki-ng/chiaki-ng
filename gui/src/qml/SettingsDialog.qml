@@ -1828,7 +1828,7 @@ DialogView {
 
                         Label {
                             Layout.alignment: Qt.AlignRight
-                            text: qsTr("(Unchecked)")
+                            text: Qt.platform.os === "osx" ? qsTr("(Checked)") : qsTr("(Unchecked)")
                         }
 
                         Label {
