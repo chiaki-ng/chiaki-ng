@@ -41,8 +41,10 @@ Item {
     function autoRegister(auto, host, ps5) {
         if(auto)
             Chiaki.autoRegister()
-        else
+        else if(host)
             showRegistDialog(host, ps5);
+        else
+            showInfoDialog(qsTr("PIN Registration"), qsTr("PIN registration needs a console address on your local network. Use automatic registration for remote PSN pairing, or register by IP from Settings → Consoles."));
     }
 
     function openDisplaySettings() {

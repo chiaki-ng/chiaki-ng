@@ -361,6 +361,12 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
         connect(psn_auto_connect_timer, &QTimer::timeout, this, [this]
         {
             int i = 0;
+            size_t registered_discovered_ps4s = 0;
+            for (const auto &discovered_host : discovery_manager.GetHosts())
+            {
+                if(!discovered_host.ps5 && this->settings->GetRegisteredHostRegistered(discovered_host.GetHostMAC()))
+                    registered_discovered_ps4s++;
+            }
             for (const auto &host : std::as_const(psn_hosts))
             {
                 bool hidden = false;
@@ -372,6 +378,10 @@ QmlBackend::QmlBackend(Settings *settings, QmlMainWindow *window)
                         break;
                     }
                 }
+                if(!hidden && host.GetName() == QString("Main PS4 Console")
+                    && this->settings->GetPS4RegisteredHostsRegistered() > 0
+                    && registered_discovered_ps4s >= this->settings->GetPS4RegisteredHostsRegistered())
+                    hidden = true;
                 if(hidden)
                     continue;
                 bool registered = host.IsPS5()
@@ -670,6 +680,12 @@ void QmlBackend::profileChanged()
         connect(psn_auto_connect_timer, &QTimer::timeout, this, [this]
         {
             int i = 0;
+            size_t registered_discovered_ps4s = 0;
+            for (const auto &discovered_host : discovery_manager.GetHosts())
+            {
+                if(!discovered_host.ps5 && this->settings->GetRegisteredHostRegistered(discovered_host.GetHostMAC()))
+                    registered_discovered_ps4s++;
+            }
             for (const auto &host : std::as_const(psn_hosts))
             {
                 bool hidden = false;
@@ -681,6 +697,10 @@ void QmlBackend::profileChanged()
                         break;
                     }
                 }
+                if(!hidden && host.GetName() == QString("Main PS4 Console")
+                    && this->settings->GetPS4RegisteredHostsRegistered() > 0
+                    && registered_discovered_ps4s >= this->settings->GetPS4RegisteredHostsRegistered())
+                    hidden = true;
                 if(hidden)
                     continue;
                 bool registered = host.IsPS5()
@@ -883,7 +903,11 @@ QVariantList QmlBackend::hosts() const
         }
         out.append(m);
     }
-    if(registered_discovered_ps4s >= settings->GetPS4RegisteredHostsRegistered())
+    // Only hide the synthetic PSN "Main PS4 Console" entry when registered PS4s
+    // are already represented via local discovery. Do not hide it when zero PS4s
+    // are registered, or remote pinless auto-registration cannot be offered.
+    if(settings->GetPS4RegisteredHostsRegistered() > 0
+        && registered_discovered_ps4s >= settings->GetPS4RegisteredHostsRegistered())
         discovered_nicknames.append(QString("Main PS4 Console"));
     for (const auto &host : psn_hosts) {
         QVariantMap m;
@@ -1511,12 +1535,13 @@ void QmlBackend::finishAutoRegister(const ChiakiRegisteredHost &host)
 {
     QString nickname(host.server_nickname);
     const bool is_ps5 = regist_dialog_server.IsPS5();
-    const QString console_name = regist_dialog_server.discovered
-            ? regist_dialog_server.discovery_host.host_name
-            : regist_dialog_server.psn_host.GetName();
-    if(!is_ps5 && console_name != nickname)
+    // PSN-only PS4 hosts use the synthetic name "Main PS4 Console"; the regist
+    // response returns the real nickname, so only enforce the primary-console
+    // check for locally discovered PS4s.
+    if(!is_ps5 && regist_dialog_server.discovered
+        && regist_dialog_server.discovery_host.host_name != nickname)
     {
-        emit error(tr("PS4 Console Not Main"), tr("Can't proceed...%1 is not your main PS4 console in PSN").arg(console_name));
+        emit error(tr("PS4 Console Not Main"), tr("Can't proceed...%1 is not your main PS4 console in PSN").arg(regist_dialog_server.discovery_host.host_name));
         return;
     }
     settings->AddRegisteredHost(host);
@@ -1832,6 +1857,12 @@ QmlBackend::DisplayServer QmlBackend::displayServerAt(int index) const
 
         QMapIterator<QString, PsnHost> i(psn_hosts);
         size_t j = 0;
+        size_t registered_discovered_ps4s = 0;
+        for (const auto &host : discovery_manager.GetHosts())
+        {
+            if(!host.ps5 && settings->GetRegisteredHostRegistered(host.GetHostMAC()))
+                registered_discovered_ps4s++;
+        }
         while (i.hasNext())
         {
             i.next();
@@ -1842,6 +1873,11 @@ QmlBackend::DisplayServer QmlBackend::displayServerAt(int index) const
                 if(host.host_name == psn_host.GetName())
                     hidden = true;
             }
+            // Keep index in sync with hosts(): hide synthetic Main PS4 when covered by discovery
+            if(!hidden && psn_host.GetName() == QString("Main PS4 Console")
+                && settings->GetPS4RegisteredHostsRegistered() > 0
+                && registered_discovered_ps4s >= settings->GetPS4RegisteredHostsRegistered())
+                hidden = true;
             if(hidden)
                 continue;
             if(j == index)
