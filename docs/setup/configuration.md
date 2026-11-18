@@ -83,11 +83,15 @@
 
             === "Automatic (pinless) Registration"
 
-                1. Make sure you have registered `chiaki-ng` with PSN following the previous step.
+                Automatic (pinless) registration uses your PSN login and works on the local network **or remotely** (console in Rest Mode / reachable via PSN). You do not need the 8-digit Link Device PIN.
+
+                1. Make sure you have registered `chiaki-ng` with PSN following the previous step. For remote registration, also use **Refresh PSN Hosts** (or wait for hosts to refresh) so your console appears from PSN even when you are not on the same Wi‑Fi.
 
                 2. Click on the pane of the console you want to register that includes the label *Automatic Registration Available*
 
                     ![Automatic Registration Available](images/AutomaticRegistrationAvailable.png)
+
+                    Locally discovered consoles show this label when a PSN `duid` is available. Off-LAN, an unregistered console listed via PSN shows the same label.
 
                 3. Select yes in the dialog box asking if you would like to use automatic registration
 
@@ -96,6 +100,14 @@
                 4. Wait for the console to be successfully registered and then see your registered console in the main menu
 
                     ![Automatic Registration Succeeded](images/AutomaticallyRegisteredConsole.png)
+
+                !!! Note "Console login PIN"
+
+                    If your PSN account has a 4-digit console login PIN enabled, Sony may refuse third-party automatic registration. Remove that PIN in your PlayStation account settings, or fall back to registration via the 8-digit Remote Play PIN below.
+
+                !!! Note "PS4 primary console"
+
+                    Automatic registration for PS4 requires that console to be the main PS4 registered to your PSN account.
 
             === "Registration via Pin"
 

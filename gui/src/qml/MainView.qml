@@ -268,7 +268,7 @@ Pane {
                             t += "\n" + qsTr("ID: %1 (%2)").arg(Chiaki.settings.streamerMode ? "hidden" : modelData.mac).arg(modelData.registered ? qsTr("registered") : qsTr("unregistered"));
                         if (modelData.duid)
                         {
-                            if(modelData.discovered)
+                            if(modelData.discovered || !modelData.registered)
                                 t += "\n" + qsTr("Automatic Registration Available");
                             else
                                 t += "\n" + qsTr("Remote Connection via PSN");
