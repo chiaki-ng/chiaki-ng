@@ -8,6 +8,7 @@
 #include <QWindow>
 #include <QQuickWindow>
 #include <QLoggingCategory>
+#include <QTranslator>
 #include <deque>
 #include <atomic>
 
@@ -194,6 +195,7 @@ private:
     void doneOpenGLContextCurrent();
 
     void init(Settings *settings, bool exit_app_on_stream_exit = false);
+    void applyLanguage();
     pl_gpu placeboGpu() const;
     void update();
     void scheduleUpdate(bool force = false);
@@ -415,6 +417,7 @@ private:
     QVulkanInstance *qt_vk_inst = {};
     QOpenGLContext *qt_gl_context = {};
     QOffscreenSurface *qt_gl_offscreen_surface = {};
+    QTranslator language_translator;
     QQmlEngine *qml_engine = {};
     QQuickWindow *quick_window = {};
     QQuickRenderControl *quick_render = {};

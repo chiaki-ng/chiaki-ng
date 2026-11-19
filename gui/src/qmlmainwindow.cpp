@@ -30,6 +30,7 @@ extern "C" {
 #include <QStandardPaths>
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QLocale>
 #include <QFile>
 #include <QWidget>
 #include <QLabel>
@@ -4832,8 +4833,37 @@ void QmlMainWindow::doneOpenGLContextCurrent()
     }, Qt::BlockingQueuedConnection);
 }
 
+void QmlMainWindow::applyLanguage()
+{
+    auto *application = QCoreApplication::instance();
+    if (!application || !settings)
+        return;
+
+    application->removeTranslator(&language_translator);
+    QString language = settings->GetLanguage();
+    if (language == QStringLiteral("system")) {
+        const QString locale = QLocale::system().name();
+        if (locale.startsWith(QStringLiteral("pt"), Qt::CaseInsensitive))
+            language = QStringLiteral("pt_BR");
+        else if (locale.startsWith(QStringLiteral("es"), Qt::CaseInsensitive))
+            language = QStringLiteral("es");
+        else
+            return;
+    }
+
+    if (language != QStringLiteral("pt_BR") && language != QStringLiteral("es"))
+        return;
+
+    const QString resource = QStringLiteral(":/i18n/chiaki_%1.qm").arg(language);
+    if (language_translator.load(resource))
+        application->installTranslator(&language_translator);
+    else
+        qCWarning(chiakiGui) << "Could not load UI translation resource:" << resource;
+}
+
 void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
 {
+    applyLanguage();
     bypass_frame_queue = settings->GetDirectFrameMapping();
     render_backend = settings->GetRenderBackend();
     setSurfaceType(render_backend == RenderBackend::Vulkan ? QWindow::VulkanSurface : QWindow::OpenGLSurface);
@@ -5157,6 +5187,11 @@ renderer_backend_ready:
     connect(qml_engine, &QQmlEngine::quit, this, &QWindow::close);
 
     backend = new QmlBackend(settings, this);
+    connect(backend->qmlSettings(), &QmlSettings::languageChanged, this, [this]() {
+        applyLanguage();
+        if (qml_engine)
+            qml_engine->retranslate();
+    });
     stats_overlay_widget = new StatsOverlayWidget(this, backend);
     connect(backend, &QmlBackend::sessionChanged, this, [this, exit_app_on_stream_exit](StreamSession *s) {
         const bool preserve_startup_warmup = s && startup_warmup_preserve_next_session_change;

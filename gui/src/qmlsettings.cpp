@@ -122,6 +122,21 @@ void QmlSettings::setStreamerMode(bool enabled)
     emit streamerModeChanged();
 }
 
+QString QmlSettings::language() const
+{
+    return settings->GetLanguage();
+}
+
+void QmlSettings::setLanguage(const QString &language)
+{
+    if (language != QStringLiteral("en") && language != QStringLiteral("system") && language != QStringLiteral("pt_BR") && language != QStringLiteral("es"))
+        return;
+    if (settings->GetLanguage() == language)
+        return;
+    settings->SetLanguage(language);
+    emit languageChanged();
+}
+
 float QmlSettings::hapticOverride() const
 {
     return settings->GetHapticOverride();
@@ -1899,6 +1914,7 @@ void QmlSettings::refreshAllKeys()
     emit startMicUnmutedChanged();
     emit showStreamStatsChanged();
     emit streamerModeChanged();
+    emit languageChanged();
 #ifdef CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
     emit verticalDeckChanged();
     emit steamDeckHapticsChanged();

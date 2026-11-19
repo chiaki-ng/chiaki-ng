@@ -276,6 +276,9 @@ class Settings : public QObject
 		bool GetStreamerMode() const		{ return settings.value("settings/streamer_mode", false).toBool(); }
 		void SetStreamerMode(bool enabled)	{ settings.setValue("settings/streamer_mode", enabled); }
 
+		QString GetLanguage() const { return settings.value("settings/language", QStringLiteral("system")).toString(); }
+		void SetLanguage(const QString &language) { settings.setValue("settings/language", language); }
+
 		bool GetButtonsByPosition() const 		{ return settings.value("settings/buttons_by_pos", false).toBool(); }
 		void SetButtonsByPosition(bool enabled) { settings.setValue("settings/buttons_by_pos", enabled); }
 

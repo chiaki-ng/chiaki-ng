@@ -838,12 +838,14 @@ void StreamSession::Stop()
 
 void StreamSession::GoToBed()
 {
+	if(viewer_mode)
+		return;
 	chiaki_session_goto_bed(&session);
 }
 
 void StreamSession::ToggleMute()
 {
-	if(!allow_unmute)
+	if(viewer_mode || !allow_unmute)
 		return;
 	if(!mic_connected)
 	{
@@ -887,6 +889,19 @@ void StreamSession::ToggleMute()
 	emit MutedChanged();
 }
 
+void StreamSession::SetViewerMode(bool enabled)
+{
+	if(viewer_mode == enabled)
+		return;
+	if(enabled && !muted)
+		ToggleMute();
+	viewer_mode = enabled;
+	input_block = enabled ? 1 : 2;
+	SendFeedbackState();
+	DpadSendFeedbackState();
+	emit ViewerModeChanged();
+}
+
 void StreamSession::SetLoginPIN(const QString &pin)
 {
 	QByteArray data = pin.toUtf8();
@@ -895,6 +910,8 @@ void StreamSession::SetLoginPIN(const QString &pin)
 
 void StreamSession::GoHome()
 {
+	if(viewer_mode)
+		return;
 	chiaki_session_go_home(&session);
 }
 
@@ -1286,7 +1303,12 @@ void StreamSession::DpadSendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
-	if(input_block)
+	if(viewer_mode)
+	{
+		chiaki_controller_state_set_idle(&state);
+		chiaki_controller_state_set_idle(&keyboard_state);
+	}
+	else if(input_block)
 	{
 		// Only unblock input after all buttons were released
 		if(input_block == 2 && !state.buttons)
@@ -1342,7 +1364,12 @@ void StreamSession::SendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
-	if(input_block)
+	if(viewer_mode)
+	{
+		chiaki_controller_state_set_idle(&state);
+		chiaki_controller_state_set_idle(&keyboard_state);
+	}
+	else if(input_block)
 	{
 		// Only unblock input after all buttons were released
 		if(input_block == 2 && !state.buttons)

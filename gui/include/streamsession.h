@@ -157,6 +157,7 @@ class StreamSession : public QObject
 	Q_PROPERTY(double measuredBitrate READ GetMeasuredBitrate NOTIFY MeasuredBitrateChanged)
 	Q_PROPERTY(double averagePacketLoss READ GetAveragePacketLoss NOTIFY AveragePacketLossChanged)
 	Q_PROPERTY(bool muted READ GetMuted WRITE SetMuted NOTIFY MutedChanged)
+	Q_PROPERTY(bool viewerMode READ GetViewerMode WRITE SetViewerMode NOTIFY ViewerModeChanged)
 	Q_PROPERTY(bool cantDisplay READ GetCantDisplay NOTIFY CantDisplayChanged)
 	Q_PROPERTY(int framesLost READ GetFramesLost NOTIFY FramesLostChanged)
 
@@ -176,6 +177,7 @@ class StreamSession : public QObject
 #endif
 		bool allow_unmute;
 		int input_block;
+		bool viewer_mode = false;
 		QString host;
 		int audio_volume;
 		double measured_bitrate = 0;
@@ -342,6 +344,8 @@ class StreamSession : public QObject
 		void Start();
 		void Stop();
 		void GoToBed();
+		bool GetViewerMode() const { return viewer_mode; }
+		void SetViewerMode(bool enabled);
 	Q_INVOKABLE bool RequestIDR();
 		void ToggleMute();
 		void SetLoginPIN(const QString &pin);
@@ -397,6 +401,7 @@ class StreamSession : public QObject
 		void AveragePacketLossChanged();
 		void FramesLostChanged();
 		void MutedChanged();
+		void ViewerModeChanged();
 		void CantDisplayChanged(bool cant_display);
 		void FecFailure();
 

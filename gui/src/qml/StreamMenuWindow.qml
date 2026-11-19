@@ -152,10 +152,24 @@ Window {
                 text: qsTr("Mic")
                 padding: 10
                 checkable: true
-                enabled: Chiaki.session && Chiaki.session.connected
+                enabled: Chiaki.session && Chiaki.session.connected && !Chiaki.session.viewerMode
                 checked: Chiaki.session && !Chiaki.session.muted
                 onToggled: Chiaki.session.muted = !Chiaki.session.muted
                 KeyNavigation.left: volumeSlider
+                KeyNavigation.right: viewerModeButton
+                Keys.onReturnPressed: toggled()
+                Keys.onEscapePressed: streamMenuWindow.closeRequested()
+            }
+
+            ToolButton {
+                id: viewerModeButton
+                Layout.rightMargin: 20
+                text: qsTr("View Only")
+                padding: 10
+                checkable: true
+                checked: Chiaki.session && Chiaki.session.viewerMode
+                onToggled: if (Chiaki.session) Chiaki.session.viewerMode = checked
+                KeyNavigation.left: muteButton
                 KeyNavigation.right: zoomButton
                 Keys.onReturnPressed: toggled()
                 Keys.onEscapePressed: streamMenuWindow.closeRequested()
@@ -168,7 +182,7 @@ Window {
                 checkable: true
                 checked: Chiaki.window.videoMode == ChiakiWindow.VideoMode.Zoom
                 onToggled: Chiaki.window.videoMode = Chiaki.window.videoMode == ChiakiWindow.VideoMode.Zoom ? ChiakiWindow.VideoMode.Normal : ChiakiWindow.VideoMode.Zoom
-                KeyNavigation.left: muteButton
+                KeyNavigation.left: viewerModeButton
                 KeyNavigation.right: Chiaki.window.videoMode == ChiakiWindow.VideoMode.Zoom ? zoomFactor : stretchButton
                 Keys.onReturnPressed: toggled()
                 Keys.onEscapePressed: streamMenuWindow.closeRequested()
