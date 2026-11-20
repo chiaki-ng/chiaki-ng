@@ -2767,7 +2767,7 @@ DialogView {
                                     else
                                         dpadTouch;
                                 }
-                                KeyNavigation.down: rumbleHaptics
+                                KeyNavigation.down: touchpadTouch
                                 KeyNavigation.left: posButtons
                                 KeyNavigation.right: posButtons
                             }
@@ -2775,6 +2775,31 @@ DialogView {
                             Label {
                                 Layout.alignment: Qt.AlignRight
                                 text: qsTr("(Unchecked)")
+                            }
+                        }
+                        RowLayout {
+                            spacing: 10
+                            Layout.alignment: Qt.AlignHCenter
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Touchpad Touch:")
+                            }
+
+                            C.CheckBox {
+                                id: touchpadTouch
+                                text: qsTr("Send finger position on the touchpad (the click is always sent)")
+                                checked: Chiaki.settings.touchpadTouchEnabled
+                                onToggled: Chiaki.settings.touchpadTouchEnabled = checked
+                                KeyNavigation.priority: KeyNavigation.BeforeItem
+                                KeyNavigation.up: posButtons
+                                KeyNavigation.down: rumbleHaptics
+                                KeyNavigation.left: touchpadTouch
+                                KeyNavigation.right: touchpadTouch
+                            }
+
+                            Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("(Checked)")
                             }
                         }
                         RowLayout {

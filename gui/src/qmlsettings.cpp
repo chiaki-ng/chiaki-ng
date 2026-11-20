@@ -312,6 +312,17 @@ void QmlSettings::setButtonsByPosition(bool buttonsByPosition)
     emit buttonsByPositionChanged();
 }
 
+bool QmlSettings::touchpadTouchEnabled() const
+{
+    return settings->GetTouchpadTouchEnabled();
+}
+
+void QmlSettings::setTouchpadTouchEnabled(bool enabled)
+{
+    settings->SetTouchpadTouchEnabled(enabled);
+    emit touchpadTouchEnabledChanged();
+}
+
 bool QmlSettings::startMicUnmuted() const
 {
     return settings->GetStartMicUnmuted();
@@ -1895,6 +1906,7 @@ void QmlSettings::refreshAllKeys()
     emit hapticOverrideChanged();
     emit rumbleHapticsIntensityChanged();
     emit buttonsByPositionChanged();
+    emit touchpadTouchEnabledChanged();
     emit allowJoystickBackgroundEventsChanged();
     emit startMicUnmutedChanged();
     emit showStreamStatsChanged();

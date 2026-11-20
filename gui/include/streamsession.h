@@ -101,6 +101,7 @@ class SdeckHapticsWorker;
 		ChiakiDisableAudioVideo audio_video_disabled;
 		RumbleHapticsIntensity rumble_haptics_intensity;
 		bool buttons_by_pos;
+		bool touchpad_touch_enabled;
 		bool enable_idr_on_fec_failure;
 		bool start_mic_unmuted;
 		bool port_guessing_enabled;
@@ -229,6 +230,7 @@ class StreamSession : public QObject
 		float haptic_override;
 		bool keyboard_controller_enabled;
 		bool mouse_touch_enabled;
+		bool touchpad_touch_enabled;
 		bool dpad_regular;
 		bool dpad_regular_touch_switched;
 		uint dpad_touch_shortcut1;
