@@ -9,17 +9,11 @@ import com.metallic.chiaki.lib.CreateError
 import com.metallic.chiaki.lib.DiscoveryHost
 import com.metallic.chiaki.lib.DiscoveryService
 import com.metallic.chiaki.lib.DiscoveryServiceOptions
-import io.reactivex.Observable
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.rxkotlin.addTo
-import io.reactivex.subjects.BehaviorSubject
-import io.reactivex.subjects.Subject
-import java.lang.NumberFormatException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.net.InetSocketAddress
-import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
-import java.util.concurrent.TimeUnit
 
 val DiscoveryHost.serverMac get() = this.hostId?.hexToByteArray()?.let {
 	if(it.size == MacAddress.LENGTH)
@@ -36,43 +30,23 @@ class DiscoveryManager
 		const val DROP_PINGS: ULong = 3U
 		const val PING_MS: ULong = 500U
 		const val PORT = 987
-
-		const val DEBOUNCE_EMPTY_MS = 1000L
 	}
 
 	private var discoveryService: DiscoveryService? = null
 
-	private val discoveryActiveSubject: Subject<Boolean> = BehaviorSubject.create<Boolean>().also { it.onNext(false) }
-	val discoveryActive: Observable<Boolean> get() = discoveryActiveSubject
+	private val _discoveryActive = MutableStateFlow(false)
+	val discoveryActive: StateFlow<Boolean> get() = _discoveryActive.asStateFlow()
 	var active = false
 		set(value)
 		{
 			field = value
-			discoveryActiveSubject.onNext(value)
+			_discoveryActive.value = value
 			updateService()
 		}
 	private var paused = false
 
-	private val disposable = CompositeDisposable()
-
-	private var discoveredHostsSubjectDebounced: Subject<List<DiscoveryHost>> = BehaviorSubject.create<List<DiscoveryHost>>().also {
-		it.onNext(listOf())
-	}.toSerialized()
-
-	private var discoveredHostsSubjectRaw: Subject<List<DiscoveryHost>> = BehaviorSubject.create<List<DiscoveryHost>>().also { subject ->
-		subject.debounce { hosts ->
-				if(hosts.isEmpty())
-					Observable.timer(DEBOUNCE_EMPTY_MS, TimeUnit.MILLISECONDS)
-				else
-					Observable.empty()
-			}
-			.subscribe { hosts ->
-				discoveredHostsSubjectDebounced.onNext(hosts)
-			}
-			.addTo(disposable)
-	}
-
-	val discoveredHosts: Observable<List<DiscoveryHost>> get() = discoveredHostsSubjectDebounced
+	private val _discoveredHosts = MutableStateFlow<List<DiscoveryHost>>(listOf())
+	val discoveredHosts: StateFlow<List<DiscoveryHost>> get() = _discoveredHosts.asStateFlow()
 
 	fun resume()
 	{
@@ -89,7 +63,6 @@ class DiscoveryManager
 	fun dispose()
 	{
 		active = false
-		disposable.dispose()
 	}
 
 	fun sendWakeup(host: String, registKey: ByteArray, ps5: Boolean)
@@ -106,12 +79,12 @@ class DiscoveryManager
 	{
 		if(active && !paused && discoveryService == null)
 		{
-			discoveredHostsSubjectRaw.onNext(listOf())
+			_discoveredHosts.value = listOf()
 			try
 			{
 				discoveryService = DiscoveryService(DiscoveryServiceOptions(
 					HOSTS_MAX, DROP_PINGS, PING_MS, InetSocketAddress("255.255.255.255", PORT)
-				), discoveredHostsSubjectRaw::onNext)
+				)) { hosts -> _discoveredHosts.value = hosts }
 			}
 			catch(e: CreateError)
 			{
@@ -124,7 +97,7 @@ class DiscoveryManager
 			service.dispose()
 			discoveryService = null
 			if(!active)
-				discoveredHostsSubjectRaw.onNext(listOf())
+				_discoveredHosts.value = listOf()
 		}
 	}
 }

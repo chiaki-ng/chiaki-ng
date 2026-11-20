@@ -3,33 +3,25 @@
 package com.metallic.chiaki.settings
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.asLiveData
+import androidx.lifecycle.viewModelScope
 import com.metallic.chiaki.common.AppDatabase
 import com.metallic.chiaki.common.RegisteredHost
-import com.metallic.chiaki.common.ext.toLiveData
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.rxkotlin.addTo
-import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class SettingsRegisteredHostsViewModel(val database: AppDatabase): ViewModel()
 {
-	private val disposable = CompositeDisposable()
-
 	val registeredHosts by lazy {
-		database.registeredHostDao().getAll().toLiveData()
+		database.registeredHostDao().getAll().asLiveData()
 	}
 
 	fun deleteHost(host: RegisteredHost)
 	{
-		database.registeredHostDao()
-			.delete(host)
-			.subscribeOn(Schedulers.io())
-			.subscribe()
-			.addTo(disposable)
-	}
-
-	override fun onCleared()
-	{
-		super.onCleared()
-		disposable.dispose()
+		viewModelScope.launch(Dispatchers.IO) {
+			try {
+				database.registeredHostDao().delete(host)
+			} catch(_: Exception) {}
+		}
 	}
 }

@@ -1,0 +1,83 @@
+diff --git a/include/curl/curl.h b/include/curl/curl.h
+index 21a552bc0..e0796bf82 100644
+--- a/include/curl/curl.h
++++ b/include/curl/curl.h
+@@ -941,6 +941,9 @@ typedef enum {
+ /* If possible, send data using TLS 1.3 early data */
+ #define CURLSSLOPT_EARLYDATA (1<<6)
+ 
++/* Chiaki extension: Schannel CAINFO_BLOB contains untrusted issuers, not roots. */
++#define CURLSSLOPT_SCHANNEL_AIA (1<<7)
++
+ /* The default connection attempt delay in milliseconds for happy eyeballs.
+    CURLOPT_HAPPY_EYEBALLS_TIMEOUT_MS.3 and happy-eyeballs-timeout-ms.d document
+    this value, keep them in sync. */
+diff --git a/lib/vtls/schannel_verify.c b/lib/vtls/schannel_verify.c
+index 4b52b8e8a..d3a54add4 100644
+--- a/lib/vtls/schannel_verify.c
++++ b/lib/vtls/schannel_verify.c
+@@ -684,6 +684,9 @@ CURLcode Curl_verify_certificate(struct Curl_cfilter *cf,
+   HCERTCHAINENGINE cert_chain_engine = NULL;
+   HCERTSTORE trust_store = NULL;
+   HCERTSTORE own_trust_store = NULL;
++  HCERTSTORE issuer_store = NULL;
++  HCERTSTORE additional_store = NULL;
++  bool aia_issuers = !!(conn_config->ssl_options & CURLSSLOPT_SCHANNEL_AIA);
+ 
+   DEBUGASSERT(BACKEND);
+ 
+@@ -699,7 +702,31 @@ CURLcode Curl_verify_certificate(struct Curl_cfilter *cf,
+     result = CURLE_PEER_FAILED_VERIFICATION;
+   }
+ 
+-  if(result == CURLE_OK &&
++  if(result == CURLE_OK && aia_issuers) {
++    /* Recovered issuers never enter the trusted-root store or its cache. */
++    if(!conn_config->ca_info_blob || conn_config->CAfile)
++      result = CURLE_SSL_CACERT_BADFILE;
++    else {
++      issuer_store = CertOpenStore(CERT_STORE_PROV_MEMORY, 0, 0,
++                                  CERT_STORE_CREATE_NEW_FLAG, NULL);
++      additional_store = CertOpenStore(CERT_STORE_PROV_COLLECTION, 0, 0,
++                                      CERT_STORE_CREATE_NEW_FLAG, NULL);
++      if(!issuer_store || !additional_store)
++        result = CURLE_OUT_OF_MEMORY;
++      else {
++        result = add_certs_data_to_store(issuer_store,
++                      (const char *)conn_config->ca_info_blob->data,
++                      conn_config->ca_info_blob->len, "(AIA issuers)", data);
++        if(result == CURLE_OK &&
++           (!CertAddStoreToCollection(additional_store, issuer_store, 0, 0) ||
++            !CertAddStoreToCollection(additional_store,
++                                     pCertContextServer->hCertStore, 0, 0)))
++          result = CURLE_SSL_CACERT_BADFILE;
++      }
++    }
++  }
++
++  if(result == CURLE_OK && !aia_issuers &&
+       (conn_config->CAfile || conn_config->ca_info_blob) &&
+       BACKEND->use_manual_cred_validation) {
+     /*
+@@ -793,7 +820,8 @@ CURLcode Curl_verify_certificate(struct Curl_cfilter *cf,
+     if(!CertGetCertificateChain(cert_chain_engine,
+                                 pCertContextServer,
+                                 NULL,
+-                                pCertContextServer->hCertStore,
++                                additional_store ? additional_store :
++                                  pCertContextServer->hCertStore,
+                                 &ChainPara,
+                                 (ssl_config->no_revoke ? 0 :
+                                  CERT_CHAIN_REVOCATION_CHECK_CHAIN),
+@@ -860,6 +888,11 @@ CURLcode Curl_verify_certificate(struct Curl_cfilter *cf,
+   if(pChainContext)
+     CertFreeCertificateChain(pChainContext);
+ 
++  if(additional_store)
++    CertCloseStore(additional_store, 0);
++  if(issuer_store)
++    CertCloseStore(issuer_store, 0);
++
+   if(pCertContextServer)
+     CertFreeCertificateContext(pCertContextServer);
+ 

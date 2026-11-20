@@ -11,6 +11,13 @@
 
 #include "test_log.h"
 
+#ifndef _WIN32
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#endif
+
 
 static MunitResult test_av_packet_parse(const MunitParameter params[], void *user)
 {
@@ -195,6 +202,130 @@ static MunitResult test_takion_format_congestion(const MunitParameter params[], 
 	return MUNIT_OK;
 }
 
+#ifndef _WIN32
+typedef struct takion_teardown_test_t
+{
+	ChiakiTakion takion;
+	ChiakiMutex mutex;
+	ChiakiCond cond;
+	bool connected;
+	bool disconnected;
+} TakionTeardownTest;
+
+static void takion_teardown_test_cb(ChiakiTakionEvent *event, void *user)
+{
+	TakionTeardownTest *test = user;
+	chiaki_mutex_lock(&test->mutex);
+	if(event->type == CHIAKI_TAKION_EVENT_TYPE_CONNECTED)
+		test->connected = true;
+	else if(event->type == CHIAKI_TAKION_EVENT_TYPE_DISCONNECT)
+		test->disconnected = true;
+	chiaki_cond_broadcast(&test->cond);
+	chiaki_mutex_unlock(&test->mutex);
+}
+
+static bool takion_teardown_test_connected(void *user)
+{
+	return ((TakionTeardownTest *)user)->connected;
+}
+
+static bool takion_teardown_test_disconnected(void *user)
+{
+	return ((TakionTeardownTest *)user)->disconnected;
+}
+
+static void takion_test_write_header(uint8_t *buf, uint32_t tag, uint8_t chunk_type, size_t payload_size)
+{
+	memset(buf, 0, 1 + 0x10);
+	buf[0] = 0; // control packet
+	*((chiaki_unaligned_uint32_t *)(buf + 1)) = htonl(tag);
+	buf[1 + 0xc] = chunk_type;
+	*((chiaki_unaligned_uint16_t *)(buf + 1 + 0xe)) = htons((uint16_t)(payload_size + 4));
+}
+#endif
+
+static MunitResult test_takion_send_after_receive_error(const MunitParameter params[], void *user)
+{
+#ifdef _WIN32
+	return MUNIT_SKIP;
+#else
+	// Fake console: a UDP socket on localhost that completes the Takion handshake
+	int peer = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	munit_assert_int(peer, >=, 0);
+	struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
+	setsockopt(peer, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+	struct sockaddr_in peer_addr = { 0 };
+	peer_addr.sin_family = AF_INET;
+	peer_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	munit_assert_int(bind(peer, (struct sockaddr *)&peer_addr, sizeof(peer_addr)), ==, 0);
+	socklen_t peer_addr_len = sizeof(peer_addr);
+	munit_assert_int(getsockname(peer, (struct sockaddr *)&peer_addr, &peer_addr_len), ==, 0);
+
+	TakionTeardownTest test = { 0 };
+	munit_assert_int(chiaki_mutex_init(&test.mutex, false), ==, CHIAKI_ERR_SUCCESS);
+	munit_assert_int(chiaki_cond_init(&test.cond), ==, CHIAKI_ERR_SUCCESS);
+
+	ChiakiTakionConnectInfo info = { 0 };
+	info.log = get_test_log();
+	info.sa = (struct sockaddr *)&peer_addr;
+	info.sa_len = sizeof(peer_addr);
+	info.cb = takion_teardown_test_cb;
+	info.cb_user = &test;
+	info.enable_crypt = false;
+	info.protocol_version = 12;
+	info.close_socket = false; // the caller owns the socket (like Senkusha on a PSN connection), so later sends reach the send buffer
+	munit_assert_int(chiaki_takion_connect(&test.takion, &info, NULL), ==, CHIAKI_ERR_SUCCESS);
+
+	uint8_t buf[0x100];
+	struct sockaddr_in client_addr;
+	socklen_t client_addr_len = sizeof(client_addr);
+	ssize_t r = recvfrom(peer, buf, sizeof(buf), 0, (struct sockaddr *)&client_addr, &client_addr_len);
+	munit_assert_int(r, ==, 1 + 0x10 + 0x10); // INIT
+	uint32_t tag_local = ntohl(*((chiaki_unaligned_uint32_t *)(buf + 1 + 0x10)));
+
+	uint8_t init_ack[1 + 0x10 + 0x10 + 0x20] = { 0 };
+	takion_test_write_header(init_ack, tag_local, 2, 0x10 + 0x20);
+	uint8_t *pl = init_ack + 1 + 0x10;
+	*((chiaki_unaligned_uint32_t *)(pl + 0)) = htonl(0x1337);
+	*((chiaki_unaligned_uint32_t *)(pl + 4)) = htonl(0x19000);
+	*((chiaki_unaligned_uint16_t *)(pl + 8)) = htons(0x64);
+	*((chiaki_unaligned_uint16_t *)(pl + 0xa)) = htons(0x64);
+	*((chiaki_unaligned_uint32_t *)(pl + 0xc)) = htonl(0x1337);
+	munit_assert_int(sendto(peer, init_ack, sizeof(init_ack), 0, (struct sockaddr *)&client_addr, client_addr_len), ==, sizeof(init_ack));
+
+	r = recvfrom(peer, buf, sizeof(buf), 0, NULL, NULL);
+	munit_assert_int(r, ==, 1 + 0x10 + 0x20); // COOKIE
+
+	uint8_t cookie_ack[1 + 0x10];
+	takion_test_write_header(cookie_ack, tag_local, 0xb, 0);
+	munit_assert_int(sendto(peer, cookie_ack, sizeof(cookie_ack), 0, (struct sockaddr *)&client_addr, client_addr_len), ==, sizeof(cookie_ack));
+
+	chiaki_mutex_lock(&test.mutex);
+	munit_assert_int(chiaki_cond_timedwait_pred(&test.cond, &test.mutex, 5000, takion_teardown_test_connected, &test), ==, CHIAKI_ERR_SUCCESS);
+	chiaki_mutex_unlock(&test.mutex);
+
+	// An empty datagram makes recv() return 0, so the Takion receive loop ends with an error
+	munit_assert_int(sendto(peer, buf, 0, 0, (struct sockaddr *)&client_addr, client_addr_len), ==, 0);
+
+	chiaki_mutex_lock(&test.mutex);
+	munit_assert_int(chiaki_cond_timedwait_pred(&test.cond, &test.mutex, 5000, takion_teardown_test_disconnected, &test), ==, CHIAKI_ERR_SUCCESS);
+	chiaki_mutex_unlock(&test.mutex);
+
+	// The send buffer has been finalized now, but the socket is still open
+	uint8_t msg[8] = { 0 };
+	ChiakiErrorCode err = chiaki_takion_send_message_data(&test.takion, 1, 1, msg, sizeof(msg), NULL);
+
+	chiaki_takion_close(&test.takion);
+	CHIAKI_SOCKET_CLOSE(test.takion.sock);
+	CHIAKI_SOCKET_CLOSE(peer);
+	chiaki_cond_fini(&test.cond);
+	chiaki_mutex_fini(&test.mutex);
+
+	munit_assert_int(err, ==, CHIAKI_ERR_DISCONNECTED);
+	return MUNIT_OK;
+#endif
+}
+
 MunitTest tests_takion[] = {
 	{
 		"/av_packet_parse",
@@ -215,6 +346,14 @@ MunitTest tests_takion[] = {
 	{
 		"/send_buffer",
 		test_takion_send_buffer,
+		NULL,
+		NULL,
+		MUNIT_TEST_OPTION_NONE,
+		NULL
+	},
+	{
+		"/send_after_receive_error",
+		test_takion_send_after_receive_error,
 		NULL,
 		NULL,
 		MUNIT_TEST_OPTION_NONE,

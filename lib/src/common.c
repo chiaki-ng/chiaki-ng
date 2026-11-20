@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 
 #include <chiaki/common.h>
+
+#include "aia.h"
 #include <chiaki/fec.h>
 #include <chiaki/random.h>
 
@@ -102,6 +104,10 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_lib_init()
 			return CHIAKI_ERR_NETWORK;
 	}
 #endif
+
+	ChiakiErrorCode aia_err = chiaki_aia_init();
+	if(aia_err != CHIAKI_ERR_SUCCESS)
+		return aia_err;
 
 	return CHIAKI_ERR_SUCCESS;
 }

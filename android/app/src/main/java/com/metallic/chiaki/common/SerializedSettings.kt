@@ -14,17 +14,12 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.metallic.chiaki.R
 import com.metallic.chiaki.lib.Target
 import com.squareup.moshi.*
-import io.reactivex.Completable
-import io.reactivex.Flowable
-import io.reactivex.Single
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.disposables.Disposable
-import io.reactivex.rxkotlin.Singles
-import io.reactivex.rxkotlin.addTo
-import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okio.Buffer
-import okio.Okio
 import okio.buffer
 import okio.source
 import java.io.File
@@ -71,20 +66,21 @@ data class SerializedSettings(
 {
 	companion object
 	{
-		fun fromDatabase(db: AppDatabase) = Singles.zip(
-			db.registeredHostDao().getAll().firstOrError(),
-			db.manualHostDao().getAll().firstOrError()
-		) { registeredHosts, manualHosts ->
-			SerializedSettings(
+		suspend fun fromDatabase(db: AppDatabase): SerializedSettings
+		{
+			val registeredHosts = db.registeredHostDao().getAll().first()
+			val manualHosts = db.manualHostDao().getAll().first()
+			return SerializedSettings(
 				registeredHosts.map { SerializedRegisteredHost(it) },
-				manualHosts.map {  manualHost ->
+				manualHosts.map { manualHost ->
 					SerializedManualHost(
 						manualHost.host,
 						manualHost.registeredHost?.let { registeredHostId ->
 							registeredHosts.firstOrNull { it.id == registeredHostId }
 						}?.serverMac
 					)
-				})
+				}
+			)
 		}
 	}
 }
@@ -111,48 +107,45 @@ private const val KEY_VERSION = "version"
 private const val VERSION = 2
 private const val KEY_SETTINGS = "settings"
 
-fun exportAllSettings(db: AppDatabase) = SerializedSettings.fromDatabase(db)
-	.subscribeOn(Schedulers.io())
-	.map {
-		val buffer = Buffer()
-		val writer = JsonWriter.of(buffer)
-		val adapter = moshi().serializedSettingsAdapter()
-		writer.indent = "  "
-		writer.
-			beginObject()
-			.name(KEY_FORMAT).value(FORMAT)
-			.name(KEY_VERSION).value(VERSION)
-		writer.name(KEY_SETTINGS)
-		adapter.toJson(writer, it)
-		writer.endObject()
-		buffer.readUtf8()
-	}
+suspend fun exportAllSettings(db: AppDatabase): String = withContext(Dispatchers.IO) {
+	val settings = SerializedSettings.fromDatabase(db)
+	val buffer = Buffer()
+	val writer = JsonWriter.of(buffer)
+	val adapter = moshi().serializedSettingsAdapter()
+	writer.indent = "  "
+	writer.
+		beginObject()
+		.name(KEY_FORMAT).value(FORMAT)
+		.name(KEY_VERSION).value(VERSION)
+	writer.name(KEY_SETTINGS)
+	adapter.toJson(writer, settings)
+	writer.endObject()
+	buffer.readUtf8()
+}
 
-fun exportAndShareAllSettings(activity: Activity): Disposable
+fun exportAndShareAllSettings(activity: Activity, scope: CoroutineScope)
 {
 	val db = getDatabase(activity)
 	val dir = File(activity.cacheDir, "export_settings")
 	dir.mkdirs()
 	val file = File(dir, "chiaki-settings.json")
-	return exportAllSettings(db)
-		.map {
-			file.writeText(it, Charsets.UTF_8)
-			file
+	scope.launch {
+		val json = exportAllSettings(db)
+		withContext(Dispatchers.IO) {
+			file.writeText(json, Charsets.UTF_8)
 		}
-		.observeOn(AndroidSchedulers.mainThread())
-		.subscribe { _ ->
-			val uri = FileProvider.getUriForFile(activity, fileProviderAuthority, file)
-			Intent(Intent.ACTION_SEND).also {
-				it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-				it.type = "application/json"
-				it.putExtra(Intent.EXTRA_STREAM, uri)
-				it.clipData = ClipData.newRawUri("", uri)
-				activity.startActivity(Intent.createChooser(it, activity.getString(R.string.action_share_log)))
-			}
+		val uri = FileProvider.getUriForFile(activity, fileProviderAuthority, file)
+		Intent(Intent.ACTION_SEND).also {
+			it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+			it.type = "application/json"
+			it.putExtra(Intent.EXTRA_STREAM, uri)
+			it.clipData = ClipData.newRawUri("", uri)
+			activity.startActivity(Intent.createChooser(it, activity.getString(R.string.action_share_log)))
 		}
+	}
 }
 
-fun importSettingsFromUri(activity: Activity, uri: Uri, disposable: CompositeDisposable)
+fun importSettingsFromUri(activity: Activity, uri: Uri, scope: CoroutineScope)
 {
 	fun loadFail(msg: String)
 	{
@@ -214,12 +207,9 @@ fun importSettingsFromUri(activity: Activity, uri: Uri, disposable: CompositeDis
 			.setTitle(R.string.alert_title_import)
 			.setNegativeButton(R.string.action_import_cancel) { _, _ ->  }
 			.setPositiveButton(R.string.action_import_import) { _, _ ->
-				getDatabase(activity).importDao()
-					.importCompletable(settings)
-					.subscribeOn(Schedulers.io())
-					.observeOn(AndroidSchedulers.mainThread())
-					.subscribe()
-					.addTo(disposable)
+				scope.launch(Dispatchers.IO) {
+					getDatabase(activity).importDao().import(settings)
+				}
 			}
 			.create()
 			.show()
@@ -285,5 +275,3 @@ abstract class ImportDao
 		})
 	}
 }
-
-private fun ImportDao.importCompletable(settings: SerializedSettings) = Completable.fromCallable { import(settings) }

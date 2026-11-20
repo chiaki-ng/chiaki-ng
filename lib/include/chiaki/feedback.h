@@ -86,6 +86,19 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_feedback_history_buffer_format(ChiakiFeedba
  */
 CHIAKI_EXPORT void chiaki_feedback_history_buffer_push(ChiakiFeedbackHistoryBuffer *feedback_history_buffer, ChiakiFeedbackHistoryEvent *event);
 
+typedef void (*ChiakiFeedbackHistoryEventPushedCallback)(void *user);
+
+/**
+ * Push the events for the change from state_prev to state_now, in the order a real controller produces them:
+ * button releases, then touch changes, then button presses.
+ * event_pushed is called after each push: the console applies only one new event per history packet,
+ * so every event needs a packet of its own.
+ * @return true if any event was pushed
+ */
+CHIAKI_EXPORT bool chiaki_feedback_history_buffer_record_state(ChiakiFeedbackHistoryBuffer *feedback_history_buffer, ChiakiLog *log,
+		const ChiakiControllerState *state_prev, const ChiakiControllerState *state_now,
+		ChiakiFeedbackHistoryEventPushedCallback event_pushed, void *event_pushed_user);
+
 #ifdef __cplusplus
 }
 #endif

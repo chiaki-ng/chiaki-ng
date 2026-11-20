@@ -65,6 +65,7 @@ class ControllerManager : public QObject
 	signals:
 		void AvailableControllersUpdated();
 		void ControllerMoved();
+		void AudioOutputDeviceAdded(const QString &name);
 };
 
 class Controller : public QObject
@@ -142,6 +143,7 @@ class Controller : public QObject
 		bool IsSteamVirtual();
 		bool IsSteamVirtualUnmasked();
 		bool IsDualSenseEdge();
+		bool IsWireless();
 		void resetMotionControls();
 
 	signals:

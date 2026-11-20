@@ -11,10 +11,10 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
 import com.metallic.chiaki.databinding.FragmentControlsBinding
 import com.metallic.chiaki.lib.ControllerState
-import io.reactivex.Observable
-import io.reactivex.rxkotlin.Observables.combineLatest
-import io.reactivex.subjects.BehaviorSubject
-import io.reactivex.subjects.Subject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 
 abstract class TouchControlsFragment : Fragment()
 {
@@ -24,17 +24,18 @@ abstract class TouchControlsFragment : Fragment()
 			val diff = field != value
 			field = value
 			if(diff)
-				ownControllerStateSubject.onNext(ownControllerState)
+				_ownControllerStateFlow.value = ownControllerState
 		}
 
-	protected val ownControllerStateSubject: Subject<ControllerState>
-			= BehaviorSubject.create<ControllerState>().also { it.onNext(ownControllerState) }
+	protected val _ownControllerStateFlow = MutableStateFlow(ControllerState())
 
-	// to delay attaching to the touchpadView until it's available
-	protected val controllerStateProxy: Subject<Observable<ControllerState>>
-			= BehaviorSubject.create<Observable<ControllerState>>().also { it.onNext(ownControllerStateSubject) }
-	val controllerState: Observable<ControllerState> get() =
-		controllerStateProxy.flatMap { it }
+	// Proxy to delay attaching to the touchpadView until it's available.
+	// Starts emitting ownControllerState, then switches to combined flow when touchpad is ready.
+	protected val _controllerStateSource = MutableStateFlow<Flow<ControllerState>>(_ownControllerStateFlow)
+
+	@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+	val controllerState: Flow<ControllerState> get() =
+		_controllerStateSource.flatMapLatest { it }
 
 	var onScreenControlsEnabled: LiveData<Boolean>? = null
 }
@@ -47,9 +48,8 @@ class DefaultTouchControlsFragment : TouchControlsFragment()
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
 		FragmentControlsBinding.inflate(inflater, container, false).let {
 			_binding = it
-			controllerStateProxy.onNext(
-				combineLatest(ownControllerStateSubject, binding.touchpadView.controllerState) { a, b -> a or b }
-			)
+			_controllerStateSource.value =
+				combine(_ownControllerStateFlow, binding.touchpadView.controllerState) { a, b -> a or b }
 			it.root
 		}
 

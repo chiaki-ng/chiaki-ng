@@ -590,7 +590,9 @@ JNIEXPORT void JNICALL JNI_FCN(discoveryServiceCreate)(JNIEnv *env, jobject obj,
 	options.cb = android_discovery_service_cb;
 	options.cb_user = service;
 
-	err = sockaddr_from_java(env, E->GetObjectField(env, options_obj, E->GetFieldID(env, options_class, "sendAddr", "Ljava/net/InetSocketAddress;")), &options.send_addr, &options.send_addr_size);
+	struct sockaddr *send_addr_tmp = NULL;
+	err = sockaddr_from_java(env, E->GetObjectField(env, options_obj, E->GetFieldID(env, options_class, "sendAddr", "Ljava/net/InetSocketAddress;")), &send_addr_tmp, &options.send_addr_size);
+	options.send_addr = (struct sockaddr_storage *)send_addr_tmp;
 	if(err != CHIAKI_ERR_SUCCESS)
 	{
 		CHIAKI_LOGE(&global_log, "Failed to get sockaddr from InetSocketAddress");

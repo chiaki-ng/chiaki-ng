@@ -7,10 +7,10 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>AGPL-3.0-only</project_license>
   <developer_name>Street Pea</developer_name>
-  <url type="homepage">https://streetpea.github.io/chiaki-ng</url>
+  <url type="homepage">https://chiaki-ng.github.io/chiaki-ng/</url>
   <url type="donation">https://buymeacoffee.com/streetpea</url>
-  <url type="help">https://streetpea.github.io/chiaki-ng/setup/</url>
-  <url type="bugtracker">https://github.com/streetpea/chiaki-ng/issues</url>
+  <url type="help">https://chiaki-ng.github.io/chiaki-ng/setup/</url>
+  <url type="bugtracker">https://github.com/chiaki-ng/chiaki-ng/issues</url>
   <url type="contact">https://discord.gg/tAMbRuwXDH</url>
   <description>
     <p>
@@ -19,12 +19,28 @@
   </description>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/streetpea/chiaki-ng/main/assets/screenshot.png</image>
+      <image>https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/assets/screenshot.png</image>
     </screenshot>
   </screenshots>
   <update_contact>streetpea@proton.me</update_contact>
   <content_rating type="oars-1.1" />
   <releases>
+    <release date="2026-11-03" version="1.10.1">
+      <description>
+        <p>This release provides the following improvements:</p>
+        <ul>
+          <li>fix controller buttons that could stop working or stay held mid-stream, and get adaptive trigger effects from more PS5 games</li>
+          <li>improve stream stability: recover from a lost keyframe instead of freezing, keep PSN connections open through bad packets, resend more lost packets, and fix dropped frames after packet loss</li>
+          <li>add direct frame mapping (on by default) along with frame pacing and renderer fixes, and fix crashes when a session ends or the video queue resets and a VRAM leak while the session is locked</li>
+          <li>keep DualSense rumble working after switching between Bluetooth and USB, start wired haptics as soon as the controller's audio device appears, and keep haptics in step after network stalls</li>
+          <li>fix the microphone cutting out, mostly with quieter mics, and resend each mic frame in the next two packets</li>
+          <li>fix the AppImage crashing at PSN login on distros with a different NSS version and make it use its own SDL3</li>
+          <li>resend the wakeup while the console wakes, fix UPnP discovery, connecting by ports and renaming consoles, and recover incomplete certificate chains for PSN</li>
+          <li>stop writing the login PIN to the session log</li>
+          <li>update libplacebo, SDL, curl and other libraries, move every package to FFmpeg 9.0.2, and move the Flatpak to KDE runtime 6.11 and the AppImages to Qt 6.9.3</li>
+        </ul>
+      </description>
+    </release>
     <release date="2026-04-02" version="1.10.0">
       <description>
         <p>This release provides the following improvements:</p>
@@ -38,7 +54,7 @@
         </ul>
       </description>
     </release>
-    <release date="2025-8-10" version="1.9.9">
+    <release date="2025-08-10" version="1.9.9">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -47,7 +63,7 @@
         </ul>
       </description>
     </release>
-    <release date="2025-5-10" version="1.9.7">
+    <release date="2025-05-10" version="1.9.7">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -62,7 +78,7 @@
         </ul>
       </description>
     </release>
-    <release date="2025-2-25" version="1.9.6">
+    <release date="2025-02-25" version="1.9.6">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -91,7 +107,7 @@
         </ul>
       </description>
     </release>
-    <release date="2025-1-19" version="1.9.5">
+    <release date="2025-01-19" version="1.9.5">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -104,7 +120,7 @@
         </ul>
       </description>
     </release>
-    <release date="2025-1-12" version="1.9.4">
+    <release date="2025-01-12" version="1.9.4">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -178,7 +194,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-9-19" version="1.9.0">
+    <release date="2024-09-19" version="1.9.0">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -197,7 +213,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-8-12" version="1.8.1">
+    <release date="2024-08-12" version="1.8.1">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -208,7 +224,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-7-29" version="1.8.0">
+    <release date="2024-07-29" version="1.8.0">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -217,7 +233,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-7-22" version="1.7.4">
+    <release date="2024-07-22" version="1.7.4">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -227,7 +243,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-6-25" version="1.7.3">
+    <release date="2024-06-25" version="1.7.3">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -235,7 +251,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-6-09" version="1.7.2">
+    <release date="2024-06-09" version="1.7.2">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -247,7 +263,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-5-26" version="1.7.1">
+    <release date="2024-05-26" version="1.7.1">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -256,7 +272,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-5-12" version="1.7.0">
+    <release date="2024-05-12" version="1.7.0">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -270,7 +286,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-4-06" version="1.6.6">
+    <release date="2024-04-06" version="1.6.6">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -284,7 +300,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-3-20" version="1.6.5">
+    <release date="2024-03-20" version="1.6.5">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -294,7 +310,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-3-15" version="1.6.4">
+    <release date="2024-03-15" version="1.6.4">
       <description>
         <p>This release provides the following improvements:</p>
         <ul>
@@ -306,7 +322,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-2-2" version="1.6.3">
+    <release date="2024-02-02" version="1.6.3">
       <description>
         <p>This release provides the following bug fixes:</p>
         <ul>
@@ -320,7 +336,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-1-21" version="1.6.2">
+    <release date="2024-01-21" version="1.6.2">
       <description>
         <p>This release provides the following bug fixes:</p>
         <ul>
@@ -331,7 +347,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-1-17" version="1.6.1">
+    <release date="2024-01-17" version="1.6.1">
       <description>
         <p>This release provides the following bug fixes:</p>
         <ul>
@@ -341,7 +357,7 @@
         </ul>
       </description>
     </release>
-    <release date="2024-1-15" version="1.6.0">
+    <release date="2024-01-15" version="1.6.0">
       <description>
         <p>This release brings a new user interface to chiaki-ng including:</p>
         <ul>
@@ -385,12 +401,13 @@
       </description>
     </release>
     <release date="2023-10-12" version="1.4.0" />
-    <release date="2023-9-30" version="1.3.4" />
-    <release date="2023-7-16" version="1.3.3" />
-    <release date="2023-6-14" version="1.3.2" />
-    <release date="2023-1-17" version="1.3.1" />
-    <release date="2023-1-08" version="1.3.0" />
+    <release date="2023-09-30" version="1.3.4" />
+    <release date="2023-07-16" version="1.3.3" />
+    <release date="2023-06-14" version="1.3.2" />
+    <release date="2023-01-17" version="1.3.1" />
+    <release date="2023-01-08" version="1.3.0" />
     <release date="2022-10-13" version="1.2.0" />
     <release date="2022-09-14" version="1.1.0" />
     <release date="2022-08-25" version="1.0.0" />
   </releases>
+</component>

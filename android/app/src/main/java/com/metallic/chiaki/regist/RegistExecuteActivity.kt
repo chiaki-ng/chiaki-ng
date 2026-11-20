@@ -9,6 +9,7 @@ import android.text.method.ScrollingMovementMethod
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.IntentCompat
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -90,7 +91,7 @@ class RegistExecuteActivity: AppCompatActivity()
 			}
 		}
 
-		val registInfo = intent.getParcelableExtra<RegistInfo>(EXTRA_REGIST_INFO)
+		val registInfo = IntentCompat.getParcelableExtra(intent, EXTRA_REGIST_INFO, RegistInfo::class.java)
 		if(registInfo == null)
 		{
 			finish()

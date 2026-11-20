@@ -3,64 +3,59 @@
 package com.metallic.chiaki.main
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.asLiveData
+import androidx.lifecycle.viewModelScope
 import com.metallic.chiaki.common.*
-import com.metallic.chiaki.common.ext.toLiveData
 import com.metallic.chiaki.discovery.DiscoveryManager
 import com.metallic.chiaki.discovery.serverMac
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.rxkotlin.Observables
-import io.reactivex.rxkotlin.addTo
-import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 class MainViewModel(val database: AppDatabase, val preferences: Preferences): ViewModel()
 {
-	private val disposable = CompositeDisposable()
-
 	val discoveryManager = DiscoveryManager().also {
 		it.active = preferences.discoveryEnabled
-		it.discoveryActive
-			.observeOn(AndroidSchedulers.mainThread())
-			.subscribe { preferences.discoveryEnabled = it }
-			.addTo(disposable)
+		viewModelScope.launch {
+			it.discoveryActive.collect { active ->
+				preferences.discoveryEnabled = active
+			}
+		}
 	}
 
 	val displayHosts by lazy {
-		Observables.combineLatest(
-			database.manualHostDao().getAll().toObservable(),
-			database.registeredHostDao().getAll().toObservable(),
-			discoveryManager.discoveredHosts)
-			{ manualHosts, registeredHosts, discoveredHosts ->
-				val macRegisteredHosts = registeredHosts.associateBy { it.serverMac }
-				val idRegisteredHosts = registeredHosts.associateBy { it.id }
-				discoveredHosts.map {
-					DiscoveredDisplayHost(it.serverMac?.let { mac -> macRegisteredHosts[mac] }, it)
-				} +
-				manualHosts.map {
-					ManualDisplayHost(it.registeredHost?.let { id -> idRegisteredHosts[id] }, it)
-				}
+		combine(
+			database.manualHostDao().getAll(),
+			database.registeredHostDao().getAll(),
+			discoveryManager.discoveredHosts
+		) { manualHosts, registeredHosts, discoveredHosts ->
+			val macRegisteredHosts = registeredHosts.associateBy { it.serverMac }
+			val idRegisteredHosts = registeredHosts.associateBy { it.id }
+			discoveredHosts.map {
+				DiscoveredDisplayHost(it.serverMac?.let { mac -> macRegisteredHosts[mac] }, it)
+			} +
+			manualHosts.map {
+				ManualDisplayHost(it.registeredHost?.let { id -> idRegisteredHosts[id] }, it)
 			}
-			.toLiveData()
+		}.asLiveData()
 	}
 
 	val discoveryActive by lazy {
-		discoveryManager.discoveryActive.toLiveData()
+		discoveryManager.discoveryActive.asLiveData()
 	}
 
 	fun deleteManualHost(manualHost: ManualHost)
 	{
-		database.manualHostDao()
-			.delete(manualHost)
-			.onErrorComplete()
-			.subscribeOn(Schedulers.io())
-			.subscribe()
-			.addTo(disposable)
+		viewModelScope.launch(Dispatchers.IO) {
+			try {
+				database.manualHostDao().delete(manualHost)
+			} catch(_: Exception) {}
+		}
 	}
 
 	override fun onCleared()
 	{
 		super.onCleared()
-		disposable.dispose()
 		discoveryManager.dispose()
 	}
 }

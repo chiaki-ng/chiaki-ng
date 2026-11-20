@@ -158,6 +158,12 @@ typedef struct chiaki_takion_t
 	int64_t video_queue_head_wait_start_us;
 	uint64_t video_queue_head_wait_seq_num;
 	ChiakiTakionSendBuffer send_buffer;
+	/**
+	 * send_buffer only exists from the end of the handshake until the receive loop ends.
+	 * Senders may only push into it while send_buffer_active is true.
+	 */
+	bool send_buffer_active;
+	ChiakiMutex send_buffer_active_mutex;
 
 	ChiakiTakionCallback cb;
 	void *cb_user;
@@ -248,8 +254,9 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_send_feedback_state(ChiakiTakion *ta
 CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_send_mic_packet(ChiakiTakion *takion, uint8_t *audio_packet, size_t packet_size, bool ps5);
 /**
  * Thread-safe while Takion is running.
+ * @param event_count number of history events contained in payload
  */
-CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_send_feedback_history(ChiakiTakion *takion, ChiakiSeqNum16 seq_num, uint8_t *payload, size_t payload_size);
+CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_send_feedback_history(ChiakiTakion *takion, ChiakiSeqNum16 seq_num, uint8_t event_count, uint8_t *payload, size_t payload_size);
 
 #define CHIAKI_TAKION_V9_AV_HEADER_SIZE_VIDEO 0x17
 #define CHIAKI_TAKION_V9_AV_HEADER_SIZE_AUDIO 0x12

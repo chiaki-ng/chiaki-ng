@@ -3,6 +3,9 @@ name: Build chiaki-ng Appimage x86_64
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-appimage_x64:
     name: Build chiaki-ng appimage_x64
@@ -15,7 +18,7 @@ jobs:
           sudo apt-get -y install podman
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
@@ -34,12 +37,12 @@ jobs:
             -w "/build/chiaki" \
             --device /dev/fuse \
             --cap-add SYS_ADMIN \
-            -t docker.io/streetpea/chiaki-ng-builder:qt6.9 \
+            -t docker.io/streetpea/chiaki-ng-builder:qt6.9.3 \
             /bin/bash -c "sudo -E scripts/build-appimage.sh /build/appdir"
           
 
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng.AppImage_x86_64
           path: chiaki-ng/appimage/chiaki-ng.AppImage

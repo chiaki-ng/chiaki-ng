@@ -59,6 +59,15 @@ CHIAKI_EXPORT void chiaki_opus_encoder_header(ChiakiAudioHeader *header, ChiakiO
 		return;
 	}
 
+	// The sender only sends 40-byte frames, so encode at the constant bitrate that fills one
+	// exactly; with the default variable bitrate most quieter frames came out smaller and were dropped
+	opus_int32 bitrate = header->frame_size ? (opus_int32)(40 * 8 * header->rate / header->frame_size) : 32000;
+	if(opus_encoder_ctl(encoder->opus_encoder, OPUS_SET_BITRATE(bitrate)) != OPUS_OK
+		|| opus_encoder_ctl(encoder->opus_encoder, OPUS_SET_VBR(0)) != OPUS_OK
+		|| opus_encoder_ctl(encoder->opus_encoder, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC)) != OPUS_OK
+		|| opus_encoder_ctl(encoder->opus_encoder, OPUS_SET_PHASE_INVERSION_DISABLED(1)) != OPUS_OK)
+		CHIAKI_LOGW(encoder->log, "ChiakiOpusEncoder failed to configure opus encoder");
+
 	CHIAKI_LOGI(encoder->log, "ChiakiOpusEncoder initialized");
 
 	size_t opus_frame_buf_size_required = 40;

@@ -2,7 +2,7 @@
 
 !!! warning "For Documentation Contributors Only"
 
-    This is for people who want to update the documentation of `chiaki-ng` and see the updates locally or if you are a regular user and are curious on how to do it. In most cases, just accessing the documentation via the site https://streetpea.github.io/chiaki-ng/ is best. If you want to access the documentation without internet access, instead of following this documentation, you should navigate to the print page (which displays the documentation in printable format). Then, Print->Save to pdf in your web browser and access the PDF freely offline.
+    This is for people who want to update the documentation of `chiaki-ng` and see the updates locally or if you are a regular user and are curious on how to do it. In most cases, just accessing the documentation via the site https://chiaki-ng.github.io/chiaki-ng/ is best. If you want to access the documentation without internet access, instead of following this documentation, you should navigate to the print page (which displays the documentation in printable format). Then, Print->Save to pdf in your web browser and access the PDF freely offline.
 
 ## Installing Pre-requisites
 
@@ -10,12 +10,12 @@
     1. Install the devel flatpak and sdk
 
         ```bash
-        flatpak install -y --user https://raw.githubusercontent.com/streetpea/chiaki-ng/main/scripts/flatpak/io.github.streetpea.Chiaki4deck-devel.flatpakref
+        flatpak install -y --user https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/flatpak/io.github.streetpea.Chiaki4deck-devel.flatpakref
         ```
     2. Install the sdk
 
         ```bash
-        flatpak install -y --user org.kde.Sdk//6.9
+        flatpak install -y --user org.kde.Sdk//6.11
         ```
 
     3. Run the devel flatpak
@@ -41,19 +41,19 @@
     === "HTTPS"
 
         ``` bash
-        git clone https://github.com/streetpea/chiaki-ng.git
+        git clone https://github.com/chiaki-ng/chiaki-ng.git
         ```
 
     === "SSH"
 
         ``` bash
-        git clone git@github.com:streetpea/chiaki-ng.git
+        git clone git@github.com:chiaki-ng/chiaki-ng.git
         ```
 
     === "GitHub cli"
 
         ``` bash
-        gh repo clone streetpea/chiaki-ng
+        gh repo clone chiaki-ng/chiaki-ng
         ```
 
 2. Change into the source code directory in your terminal

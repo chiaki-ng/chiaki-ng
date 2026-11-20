@@ -976,6 +976,19 @@ int QmlSettings::placeboFrameMixer() const
 {
     return static_cast<int>(settings->GetPlaceboFrameMixer());
 }
+bool QmlSettings::directFrameMapping() const
+{
+    return settings->GetDirectFrameMapping();
+}
+
+void QmlSettings::setDirectFrameMapping(bool enabled)
+{
+    if (enabled == settings->GetDirectFrameMapping())
+        return;
+    settings->SetDirectFrameMapping(enabled);
+    emit directFrameMappingChanged();
+}
+
 void QmlSettings::setPlaceboFrameMixer(int mixer)
 {
     settings->SetPlaceboFrameMixer(static_cast<PlaceboFrameMixer>(mixer));
@@ -1852,6 +1865,7 @@ QString QmlSettings::changeControllerKey(int button, int key)
 {
     Qt::Key qt_key = Qt::Key(key);
     settings->SetControllerButtonMapping(button, qt_key);
+    emit controllerMappingChanged(); // Refresh the list, otherwise it still holds the old mapping and "Reset All Keys" may not update it
     return QKeySequence(qt_key).toString();
 }
 
@@ -1955,6 +1969,7 @@ void QmlSettings::refreshAllKeys()
 
 void QmlSettings::refreshAllPlaceboKeys()
 {
+    emit directFrameMappingChanged();
     emit placeboUpscalerChanged();
     emit placeboPlaneUpscalerChanged();
     emit placeboDownscalerChanged();

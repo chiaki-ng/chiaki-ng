@@ -252,6 +252,14 @@ void ControllerManager::HandleEvents()
 			case SDL_JOYDEVICEREMOVED:
 				UpdateAvailableControllers();
 				break;
+			case SDL_AUDIODEVICEADDED:
+				// a DualSense's haptics audio device can appear well after the controller
+				if(!event.adevice.iscapture)
+				{
+					const char *name = SDL_GetAudioDeviceName(static_cast<int>(event.adevice.which), 0);
+					emit AudioOutputDeviceAdded(name ? QString::fromUtf8(name) : QString());
+				}
+				break;
 			case SDL_JOYAXISMOTION:
 			case SDL_JOYBUTTONDOWN:
 			case SDL_JOYBUTTONUP:
@@ -775,6 +783,30 @@ ChiakiControllerState Controller::GetState()
 	return state;
 }
 
+bool Controller::IsWireless()
+{
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(!controller)
+		return false;
+	SDL_Joystick *joystick = SDL_GameControllerGetJoystick(controller);
+	if(!joystick)
+		return false;
+	// a battery level means it runs on battery; wired and unknown don't rule out a cable
+	switch(SDL_JoystickCurrentPowerLevel(joystick))
+	{
+		case SDL_JOYSTICK_POWER_EMPTY:
+		case SDL_JOYSTICK_POWER_LOW:
+		case SDL_JOYSTICK_POWER_MEDIUM:
+		case SDL_JOYSTICK_POWER_FULL:
+			return true;
+		default:
+			return false;
+	}
+#else
+	return false;
+#endif
+}
+
 void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
@@ -784,7 +816,9 @@ void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 		return;
 	DS5EffectsState_t state;
 	SDL_zero(state);
-	if(firmware_version < 0x0224)
+	// Match SDL's DualSense driver: the Edge and firmware 0 (often all that is read over
+	// Bluetooth) take the current rumble bits, which newer firmware needs to rumble at all
+	if(!is_dualsense_edge && firmware_version != 0 && firmware_version < 0x0224)
 	{
 		state.ucEnableBits1 |= 0x01;
 		state.ucRumbleLeft = left >> 1;

@@ -6,10 +6,7 @@ import androidx.room.*
 import androidx.room.ColumnInfo.Companion.BLOB
 import com.metallic.chiaki.lib.RegistHost
 import com.metallic.chiaki.lib.Target
-import io.reactivex.Completable
-import io.reactivex.Flowable
-import io.reactivex.Maybe
-import io.reactivex.Single
+import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "registered_host")
 data class RegisteredHost(
@@ -82,20 +79,20 @@ data class RegisteredHost(
 interface RegisteredHostDao
 {
 	@Query("SELECT * FROM registered_host")
-	fun getAll(): Flowable<List<RegisteredHost>>
+	fun getAll(): Flow<List<RegisteredHost>>
 
 	@Query("SELECT * FROM registered_host WHERE server_mac == :mac LIMIT 1")
-	fun getByMac(mac: MacAddress): Maybe<RegisteredHost>
+	suspend fun getByMac(mac: MacAddress): RegisteredHost?
 
 	@Query("DELETE FROM registered_host WHERE server_mac == :mac")
-	fun deleteByMac(mac: MacAddress): Completable
+	suspend fun deleteByMac(mac: MacAddress)
 
 	@Delete
-	fun delete(host: RegisteredHost): Completable
+	suspend fun delete(host: RegisteredHost)
 
 	@Query("SELECT COUNT(*) FROM registered_host")
-	fun count(): Flowable<Int>
+	fun count(): Flow<Int>
 
 	@Insert
-	fun insert(host: RegisteredHost): Single<Long>
+	suspend fun insert(host: RegisteredHost): Long
 }

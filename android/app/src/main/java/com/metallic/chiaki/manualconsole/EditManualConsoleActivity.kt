@@ -17,9 +17,6 @@ import com.metallic.chiaki.common.ext.RevealActivity
 import com.metallic.chiaki.common.ext.viewModelFactory
 import com.metallic.chiaki.common.getDatabase
 import com.metallic.chiaki.databinding.ActivityEditManualBinding
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.rxkotlin.addTo
 
 class EditManualConsoleActivity: AppCompatActivity(), RevealActivity
 {
@@ -34,8 +31,6 @@ class EditManualConsoleActivity: AppCompatActivity(), RevealActivity
 	override val revealIntent: Intent get() = intent
 	override val revealRootLayout: View get() = binding.rootLayout
 	override val revealWindow: Window get() = window
-
-	private val disposable = CompositeDisposable()
 
 	override fun onCreate(savedInstanceState: Bundle?)
 	{
@@ -95,10 +90,6 @@ class EditManualConsoleActivity: AppCompatActivity(), RevealActivity
 
 		binding.saveButton.isEnabled = false
 		viewModel.saveHost(host)
-			.observeOn(AndroidSchedulers.mainThread())
-			.subscribe {
-				finish()
-			}
-			.addTo(disposable)
+		finish()
 	}
 }

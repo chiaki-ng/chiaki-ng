@@ -6,7 +6,7 @@ cd $(dirname "${BASH_SOURCE[0]}")/..
 cd "./$1"
 ROOT="`pwd`"
 
-SDL_VER=2.30.8
+SDL_VER=2.32.10
 URL=https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VER}/SDL2-${SDL_VER}.tar.gz
 FILE=SDL2-${SDL_VER}.tar.gz
 DIR=SDL2-${SDL_VER}

@@ -91,7 +91,7 @@
 1. Install the necessary [flatpak runtime](https://docs.flatpak.org/en/latest/basic-concepts.html#runtimes){target="_blank" rel="noopener"}, associated [sdk](https://docs.flatpak.org/en/latest/building-introduction.html#software-development-kits-sdks){target="_blank" rel="noopener"}, and base app.
 
     ```bash
-    flatpak install -y flathub org.kde.Platform//6.9 flathub org.kde.Sdk//6.9
+    flatpak install -y flathub org.kde.Platform//6.11 flathub org.kde.Sdk//6.11 flathub io.qt.qtwebengine.BaseApp//6.11
     ```
 
 2. Create a directory for your build files and switch into it
@@ -103,7 +103,7 @@
 3. Get the [flatpak manifest file](https://docs.flatpak.org/en/latest/manifests.html){target="_blank" rel="noopener"} for `chiaki-ng`
 
     ```
-    curl -Lo chiaki-ng.yaml https://raw.githubusercontent.com/streetpea/chiaki-ng/main/scripts/flatpak/chiaki4deck.yaml
+    curl -Lo chiaki-ng.yaml https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/flatpak/chiaki4deck.yaml
     ```
 
 4. Get the patch file
@@ -111,8 +111,14 @@
     1. 0001-vulkan-ignore-frames-without-hw-context.patch
 
         ```
-        curl -LO https://raw.githubusercontent.com/streetpea/chiaki-ng/main/scripts/flatpak/0001-vulkan-ignore-frames-without-hw-context.patch
+        curl -LO https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/flatpak/0001-vulkan-ignore-frames-without-hw-context.patch
         ```
+
+5. Get the Python modules file
+
+    ```
+    curl -LO https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/flatpak/python3-modules.yaml
+    ```
 
 ### Create `gpg` Key for Signing your Builds and Repositories
 

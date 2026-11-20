@@ -32,10 +32,10 @@
 
     === "Automated Instructions (Recommended)"
 
-        1. Run the [gen-launcher script](https://raw.githubusercontent.com/streetpea/chiaki-ng/main/scripts/gen-launcher.sh){target="_blank" rel="noopener"} using the following command in your `konsole` and answer the prompts (you will need your IP address from step 2 above)
+        1. Run the [gen-launcher script](https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/gen-launcher.sh){target="_blank" rel="noopener"} using the following command in your `konsole` and answer the prompts (you will need your IP address from step 2 above)
 
             ``` bash
-            bash <(curl -sLo- https://raw.githubusercontent.com/streetpea/chiaki-ng/main/scripts/gen-launcher.sh)
+            bash <(curl -sLo- https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/gen-launcher.sh)
             ```
 
             !!! Question "What Do the Different Modes (i.e., fullscreen [uses Normal], zoom, stretch) Look Like?"
@@ -49,7 +49,7 @@
             ???- example "Example Output [click to expand me]"
 
                 ``` bash
-                bash <(curl -sLo- https://raw.githubusercontent.com/streetpea/chiaki-ng/main/scripts/gen-launcher.sh)
+                bash <(curl -sLo- https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/gen-launcher.sh)
 
                 1) PlayStation 4
                 2) PlayStation 5

@@ -953,13 +953,38 @@ DialogView {
 
                     Label {
                         Layout.alignment: Qt.AlignRight
+                        text: qsTr("Frame Delivery:")
+                    }
+
+                    C.ComboBox {
+                        Layout.preferredWidth: 400
+                        model: [qsTr("Direct Mapping"), qsTr("Frame Queue")]
+                        currentIndex: Chiaki.settings.directFrameMapping ? 0 : 1
+                        onActivated: (index) => {
+                            const direct = index === 0;
+                            if (direct === Chiaki.settings.directFrameMapping)
+                                return;
+                            Chiaki.settings.directFrameMapping = direct;
+                            if (Chiaki.settings.restartApplication())
+                                Qt.quit();
+                        }
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("(Direct Mapping)")
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
                         text: qsTr("Frame Mixer:")
                     }
 
                     C.ComboBox {
                         Layout.preferredWidth: 400
                         model: [qsTr("None"), qsTr("Oversample"), qsTr("Hermite"), qsTr("Linear"), qsTr("Cubic")]
-                        currentIndex: Chiaki.settings.placeboFrameMixer
+                        enabled: !Chiaki.settings.directFrameMapping
+                        currentIndex: Chiaki.settings.directFrameMapping ? 0 : Chiaki.settings.placeboFrameMixer
                         onActivated: index => Chiaki.settings.placeboFrameMixer = index
                     }
 

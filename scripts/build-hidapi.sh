@@ -13,8 +13,15 @@ fi
 cd hidapi || exit 1
 git checkout $TAG || exit 1
 DIR=./build || exit 1
-cmake  -DCMAKE_BUILD_TYPE=Release \
-       -DCMAKE_INSTALL_PREFIX="/usr" \
+INSTALL_PREFIX="${INSTALL_PREFIX:=/usr}"
+GENERATOR_ARGS=()
+if [ -n "${MSYSTEM:-}" ]; then
+    # MSYS2 has no make in the build environment, only ninja
+    GENERATOR_ARGS=(-G Ninja)
+fi
+cmake  "${GENERATOR_ARGS[@]}" \
+       -DCMAKE_BUILD_TYPE=Release \
+       -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
        -DHIDAPI_WITH_LIBUSB=FALSE \
        -S . \
        -B $DIR

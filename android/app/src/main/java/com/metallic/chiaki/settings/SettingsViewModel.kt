@@ -3,17 +3,17 @@
 package com.metallic.chiaki.settings
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.asLiveData
 import com.metallic.chiaki.common.AppDatabase
 import com.metallic.chiaki.common.Preferences
-import com.metallic.chiaki.common.ext.toLiveData
 
 class SettingsViewModel(val database: AppDatabase, val preferences: Preferences): ViewModel()
 {
 	val registeredHostsCount by lazy {
-		database.registeredHostDao().count().toLiveData()
+		database.registeredHostDao().count().asLiveData()
 	}
 
 	val bitrateAuto by lazy {
-		preferences.bitrateAutoObservable.toLiveData()
+		preferences.bitrateAutoFlow.asLiveData()
 	}
 }

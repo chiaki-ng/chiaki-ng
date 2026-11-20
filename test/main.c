@@ -5,6 +5,7 @@
 
 extern MunitTest tests_seq_num[];
 extern MunitTest tests_key_state[];
+extern MunitTest tests_feedback[];
 extern MunitTest tests_reorder_queue[];
 extern MunitTest tests_http[];
 extern MunitTest tests_rpcrypt[];
@@ -12,6 +13,9 @@ extern MunitTest tests_gkcrypt[];
 extern MunitTest tests_takion[];
 extern MunitTest tests_fec[];
 extern MunitTest tests_regist[];
+#ifndef CHIAKI_LIB_ENABLE_MBEDTLS
+extern MunitTest tests_aia[];
+#endif
 extern MunitTest tests_bitstream[];
 #if CHIAKI_LIB_ENABLE_FFMPEG_DECODER
 extern MunitTest tests_ffmpegdecoder[];
@@ -28,6 +32,13 @@ static MunitSuite suites[] = {
 	{
 		"/key_state",
 		tests_key_state,
+		NULL,
+		1,
+		MUNIT_SUITE_OPTION_NONE
+	},
+	{
+		"/feedback",
+		tests_feedback,
 		NULL,
 		1,
 		MUNIT_SUITE_OPTION_NONE
@@ -81,6 +92,15 @@ static MunitSuite suites[] = {
 		1,
 		MUNIT_SUITE_OPTION_NONE
 	},
+#ifndef CHIAKI_LIB_ENABLE_MBEDTLS
+	{
+		"/aia",
+		tests_aia,
+		NULL,
+		1,
+		MUNIT_SUITE_OPTION_NONE
+	},
+#endif
 	{
 		"/bitstream",
 		tests_bitstream,

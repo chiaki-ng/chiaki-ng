@@ -109,7 +109,5 @@
         <item name="colorAccent">@color/accent</item>
         <item name="materialAlertDialogTheme">@style/AppTheme.AlertDialog</item>
         <item name="android:windowBackground">@color/stream_background</item>
-        <item name="android:windowTranslucentStatus">true</item>
-        <item name="android:windowTranslucentNavigation">true</item>
     </style>
 </resources>

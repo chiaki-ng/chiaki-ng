@@ -6,15 +6,15 @@ import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.asLiveData
+import androidx.lifecycle.viewModelScope
 import com.metallic.chiaki.common.AppDatabase
 import com.metallic.chiaki.common.MacAddress
 import com.metallic.chiaki.common.RegisteredHost
-import com.metallic.chiaki.common.ext.toLiveData
 import com.metallic.chiaki.lib.*
-import io.reactivex.android.schedulers.AndroidSchedulers
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.rxkotlin.addTo
-import io.reactivex.schedulers.Schedulers
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class RegistExecuteViewModel(val database: AppDatabase): ViewModel()
 {
@@ -34,9 +34,7 @@ class RegistExecuteViewModel(val database: AppDatabase): ViewModel()
 	private val log = ChiakiRxLog(ChiakiLog.Level.ALL.value/* and ChiakiLog.Level.VERBOSE.value.inv()*/)
 	private var regist: Regist? = null
 
-	val logText: LiveData<String> = log.logText.toLiveData()
-
-	private val disposable = CompositeDisposable()
+	val logText: LiveData<String> = log.logText.asLiveData()
 
 	var host: RegistHost? = null
 		private set
@@ -78,49 +76,45 @@ class RegistExecuteViewModel(val database: AppDatabase): ViewModel()
 	private fun registSuccess(host: RegistHost)
 	{
 		this.host = host
-		database.registeredHostDao().getByMac(MacAddress(host.serverMac))
-			.subscribeOn(Schedulers.io())
-			.observeOn(AndroidSchedulers.mainThread())
-			.doOnSuccess {
+		viewModelScope.launch {
+			val existing = withContext(Dispatchers.IO) {
+				database.registeredHostDao().getByMac(MacAddress(host.serverMac))
+			}
+			if(existing != null)
+			{
 				_state.value = State.SUCCESSFUL_DUPLICATE
 			}
-			.doOnComplete {
+			else
+			{
 				saveHost()
 			}
-			.subscribe()
-			.addTo(disposable)
+		}
 	}
 
 	fun saveHost()
 	{
 		val host = host ?: return
 		val assignManualHostId = assignManualHostId
-		val dao = database.registeredHostDao()
-		val manualHostDao = database.manualHostDao()
-		val registeredHost = RegisteredHost(host)
-		dao.deleteByMac(registeredHost.serverMac)
-			.andThen(dao.insert(registeredHost))
-			.let {
-				if(assignManualHostId != null)
-					it.flatMapCompletable { registeredHostId ->
-						manualHostDao.assignRegisteredHost(assignManualHostId, registeredHostId)
-					}
-				else
-					it.ignoreElement()
+		viewModelScope.launch(Dispatchers.IO) {
+			val dao = database.registeredHostDao()
+			val manualHostDao = database.manualHostDao()
+			val registeredHost = RegisteredHost(host)
+			dao.deleteByMac(registeredHost.serverMac)
+			val registeredHostId = dao.insert(registeredHost)
+			if(assignManualHostId != null)
+			{
+				manualHostDao.assignRegisteredHost(assignManualHostId, registeredHostId)
 			}
-			.subscribeOn(Schedulers.io())
-			.observeOn(AndroidSchedulers.mainThread())
-			.subscribe {
+			withContext(Dispatchers.Main) {
 				Log.i("RegistExecute", "Registered Host saved in db")
 				_state.value = State.SUCCESSFUL
 			}
-			.addTo(disposable)
+		}
 	}
 
 	override fun onCleared()
 	{
 		super.onCleared()
 		regist?.dispose()
-		disposable.dispose()
 	}
 }

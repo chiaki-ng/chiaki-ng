@@ -85,9 +85,15 @@ set(SOURCE_FILES
 		src/opusencoder.c
 		src/orientation.c
 		src/bitstream.c
+		src/aia.c
+		src/aia.h
 		src/remote/holepunch.c
 		src/remote/rudp.c
 		src/remote/rudpsendbuffer.c)
+
+if(NOT CHIAKI_LIB_ENABLE_MBEDTLS)
+	list(APPEND SOURCE_FILES src/aia_openssl.c)
+endif()
 
 if(CHIAKI_ENABLE_FFMPEG_DECODER)
 	list(APPEND HEADER_FILES include/chiaki/ffmpegdecoder.h)
@@ -112,6 +118,9 @@ if(CHIAKI_LIB_ENABLE_OPUS)
 endif()
 
 add_library(chiaki-lib ${HEADER_FILES} ${SOURCE_FILES} ${CHIAKI_LIB_PROTO_SOURCE_FILES} ${CHIAKI_LIB_PROTO_HEADER_FILES})
+if(WIN32 AND NOT CHIAKI_USE_SYSTEM_CURL AND NOT CHIAKI_LIB_ENABLE_MBEDTLS)
+	target_compile_definitions(chiaki-lib PRIVATE CHIAKI_CURL_SCHANNEL_AIA=1)
+endif()
 configure_file(config.h.in include/chiaki/config.h)
 target_include_directories(chiaki-lib PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/include")
 
@@ -124,6 +133,9 @@ set_target_properties(chiaki-lib PROPERTIES OUTPUT_NAME chiaki)
 
 if(WIN32)
 	target_link_libraries(chiaki-lib wsock32 ws2_32 bcrypt iphlpapi)
+	if(NOT CHIAKI_LIB_ENABLE_MBEDTLS)
+		target_link_libraries(chiaki-lib crypt32)
+	endif()
 endif()
 
 if(APPLE AND NOT IOS AND NOT TVOS)

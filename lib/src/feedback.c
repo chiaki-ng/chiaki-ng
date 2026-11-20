@@ -206,3 +206,92 @@ CHIAKI_EXPORT void chiaki_feedback_history_buffer_push(ChiakiFeedbackHistoryBuff
 		feedback_history_buffer->len = feedback_history_buffer->size;
 	feedback_history_buffer->events[feedback_history_buffer->begin] = *event;
 }
+
+typedef struct history_recorder_t
+{
+	ChiakiFeedbackHistoryBuffer *buffer;
+	ChiakiLog *log;
+	ChiakiFeedbackHistoryEventPushedCallback event_pushed;
+	void *event_pushed_user;
+	bool recorded;
+} HistoryRecorder;
+
+static void history_recorder_push(HistoryRecorder *recorder, ChiakiFeedbackHistoryEvent *event)
+{
+	chiaki_feedback_history_buffer_push(recorder->buffer, event);
+	recorder->recorded = true;
+	if(recorder->event_pushed)
+		recorder->event_pushed(recorder->event_pushed_user);
+}
+
+static void history_recorder_buttons(HistoryRecorder *recorder, uint64_t buttons_prev, uint64_t buttons_now, bool pressed)
+{
+	for(uint8_t i=0; i<CHIAKI_CONTROLLER_BUTTONS_COUNT; i++)
+	{
+		uint64_t button_id = 1 << i;
+		bool prev = buttons_prev & button_id;
+		bool now = buttons_now & button_id;
+		if(prev == now || now != pressed)
+			continue;
+		ChiakiFeedbackHistoryEvent event;
+		ChiakiErrorCode err = chiaki_feedback_history_event_set_button(&event, button_id, now ? 0xff : 0);
+		if(err != CHIAKI_ERR_SUCCESS)
+		{
+			CHIAKI_LOGE(recorder->log, "Feedback Sender failed to format button history event for button id %llu", (unsigned long long)button_id);
+			continue;
+		}
+		history_recorder_push(recorder, &event);
+	}
+}
+
+static void history_recorder_analog(HistoryRecorder *recorder, uint64_t button, uint8_t state_prev, uint8_t state_now)
+{
+	if(state_prev == state_now)
+		return;
+	ChiakiFeedbackHistoryEvent event;
+	ChiakiErrorCode err = chiaki_feedback_history_event_set_button(&event, button, state_now);
+	if(err != CHIAKI_ERR_SUCCESS)
+	{
+		CHIAKI_LOGE(recorder->log, "Feedback Sender failed to format button history event for %s",
+				button == CHIAKI_CONTROLLER_ANALOG_BUTTON_L2 ? "L2" : "R2");
+		return;
+	}
+	history_recorder_push(recorder, &event);
+}
+
+CHIAKI_EXPORT bool chiaki_feedback_history_buffer_record_state(ChiakiFeedbackHistoryBuffer *feedback_history_buffer, ChiakiLog *log,
+		const ChiakiControllerState *state_prev, const ChiakiControllerState *state_now,
+		ChiakiFeedbackHistoryEventPushedCallback event_pushed, void *event_pushed_user)
+{
+	HistoryRecorder recorder = { feedback_history_buffer, log, event_pushed, event_pushed_user, false };
+
+	// Releases go before touch changes: when a touchpad click and its finger are released
+	// in one state change, the finger must not lift while the click is still held.
+	history_recorder_buttons(&recorder, state_prev->buttons, state_now->buttons, false);
+
+	for(size_t i=0; i<CHIAKI_CONTROLLER_TOUCHES_MAX; i++)
+	{
+		if(state_prev->touches[i].id != state_now->touches[i].id && state_prev->touches[i].id >= 0)
+		{
+			ChiakiFeedbackHistoryEvent event;
+			chiaki_feedback_history_event_set_touchpad(&event, false, (uint8_t)state_prev->touches[i].id,
+					state_prev->touches[i].x, state_prev->touches[i].y);
+			history_recorder_push(&recorder, &event);
+		}
+		else if(state_now->touches[i].id >= 0
+				&& (state_prev->touches[i].id != state_now->touches[i].id
+					|| state_prev->touches[i].x != state_now->touches[i].x
+					|| state_prev->touches[i].y != state_now->touches[i].y))
+		{
+			ChiakiFeedbackHistoryEvent event;
+			chiaki_feedback_history_event_set_touchpad(&event, true, (uint8_t)state_now->touches[i].id,
+					state_now->touches[i].x, state_now->touches[i].y);
+			history_recorder_push(&recorder, &event);
+		}
+	}
+
+	history_recorder_buttons(&recorder, state_prev->buttons, state_now->buttons, true);
+	history_recorder_analog(&recorder, CHIAKI_CONTROLLER_ANALOG_BUTTON_L2, state_prev->l2_state, state_now->l2_state);
+	history_recorder_analog(&recorder, CHIAKI_CONTROLLER_ANALOG_BUTTON_R2, state_prev->r2_state, state_now->r2_state);
+	return recorder.recorded;
+}

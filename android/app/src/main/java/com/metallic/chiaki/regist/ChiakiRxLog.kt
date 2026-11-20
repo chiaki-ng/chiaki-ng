@@ -3,23 +3,22 @@
 package com.metallic.chiaki.regist
 
 import com.metallic.chiaki.lib.ChiakiLog
-import io.reactivex.Observable
-import io.reactivex.subjects.BehaviorSubject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
 class ChiakiRxLog(levelMask: Int)
 {
-	private val accSubject: BehaviorSubject<String> = BehaviorSubject.create<String>().also {
-		it.onNext("")
-	}
+	private val _logText = MutableStateFlow("")
 	private val accMutex = ReentrantLock()
-	val logText: Observable<String> get() = accSubject
+	val logText: StateFlow<String> get() = _logText.asStateFlow()
 
 	val log = ChiakiLog(levelMask, callback = { level, text ->
 		accMutex.withLock {
-			val cur = accSubject.value ?: ""
-			accSubject.onNext(cur + (if(cur.isEmpty()) "" else "\n") + ChiakiLog.formatLog(level, text))
+			val cur = _logText.value
+			_logText.value = cur + (if(cur.isEmpty()) "" else "\n") + ChiakiLog.formatLog(level, text)
 		}
 	})
 }

@@ -16,6 +16,10 @@ extern "C" {
 
 typedef struct chiaki_takion_t ChiakiTakion;
 
+// Unacknowledged reliable packets kept for resending: enough for every packet within the
+// console's receive window, so a burst sent during loss is resent rather than sent once untracked
+#define CHIAKI_TAKION_SEND_BUFFER_SIZE 1024
+
 typedef struct chiaki_takion_send_buffer_packet_t ChiakiTakionSendBufferPacket;
 
 typedef struct chiaki_takion_send_buffer_t

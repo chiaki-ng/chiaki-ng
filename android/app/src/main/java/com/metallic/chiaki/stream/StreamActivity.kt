@@ -10,6 +10,12 @@ import android.os.*
 import android.view.*
 import android.widget.EditText
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.IntentCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -25,8 +31,9 @@ import com.metallic.chiaki.session.*
 import com.metallic.chiaki.touchcontrols.DefaultTouchControlsFragment
 import com.metallic.chiaki.touchcontrols.TouchControlsFragment
 import com.metallic.chiaki.touchcontrols.TouchpadOnlyFragment
-import io.reactivex.disposables.CompositeDisposable
-import io.reactivex.rxkotlin.addTo
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlin.math.min
 
 private sealed class DialogContents
@@ -34,7 +41,7 @@ private object StreamQuitDialog: DialogContents()
 private object CreateErrorDialog: DialogContents()
 private object PinRequestDialog: DialogContents()
 
-class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListener
+class StreamActivity : AppCompatActivity()
 {
 	companion object
 	{
@@ -44,6 +51,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private lateinit var viewModel: StreamViewModel
 	private lateinit var binding: ActivityStreamBinding
+	private lateinit var insetsController: WindowInsetsControllerCompat
 
 	private val uiVisibilityHandler = Handler(Looper.getMainLooper())
 
@@ -51,7 +59,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	{
 		super.onCreate(savedInstanceState)
 
-		val connectInfo = intent.getParcelableExtra<ConnectInfo>(EXTRA_CONNECT_INFO)
+		val connectInfo = IntentCompat.getParcelableExtra(intent, EXTRA_CONNECT_INFO, ConnectInfo::class.java)
 		if(connectInfo == null)
 		{
 			finish()
@@ -66,7 +74,19 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 		binding = ActivityStreamBinding.inflate(layoutInflater)
 		setContentView(binding.root)
-		window.decorView.setOnSystemUiVisibilityChangeListener(this)
+
+		WindowCompat.setDecorFitsSystemWindows(window, false)
+		insetsController = WindowCompat.getInsetsController(window, window.decorView)
+		insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+		ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { _, insets ->
+			val systemBars = insets.isVisible(WindowInsetsCompat.Type.systemBars())
+			if(systemBars)
+				showOverlay()
+			else
+				hideOverlay()
+			insets
+		}
 
 		viewModel.onScreenControlsEnabled.observe(this, Observer {
 			if(binding.onScreenControlsSwitch.isChecked != it)
@@ -116,16 +136,17 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 		}
 	}
 
-	private val controlsDisposable = CompositeDisposable()
+	private var controlsJob: Job? = null
 
 	override fun onAttachFragment(fragment: Fragment)
 	{
 		super.onAttachFragment(fragment)
 		if(fragment is TouchControlsFragment)
 		{
-			fragment.controllerState
-				.subscribe { viewModel.input.touchControllerState = it }
-				.addTo(controlsDisposable)
+			controlsJob?.cancel()
+			controlsJob = fragment.controllerState
+				.onEach { viewModel.input.touchControllerState = it }
+				.launchIn(lifecycleScope)
 			fragment.onScreenControlsEnabled = viewModel.onScreenControlsEnabled
 			if(fragment is TouchpadOnlyFragment)
 				fragment.touchpadOnlyEnabled = viewModel.touchpadOnlyEnabled
@@ -148,7 +169,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	override fun onDestroy()
 	{
 		super.onDestroy()
-		controlsDisposable.dispose()
+		controlsJob?.cancel()
 	}
 
 	private fun reconnect()
@@ -158,14 +179,6 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 	}
 
 	private val hideSystemUIRunnable = Runnable { hideSystemUI() }
-
-	override fun onSystemUiVisibilityChange(visibility: Int)
-	{
-		if(visibility and View.SYSTEM_UI_FLAG_FULLSCREEN == 0)
-			showOverlay()
-		else
-			hideOverlay()
-	}
 
 	private fun showOverlay()
 	{
@@ -205,12 +218,7 @@ class StreamActivity : AppCompatActivity(), View.OnSystemUiVisibilityChangeListe
 
 	private fun hideSystemUI()
 	{
-		window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE
-				or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-				or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-				or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-				or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-				or View.SYSTEM_UI_FLAG_FULLSCREEN)
+		insetsController.hide(WindowInsetsCompat.Type.systemBars())
 	}
 
 	private var dialogContents: DialogContents? = null

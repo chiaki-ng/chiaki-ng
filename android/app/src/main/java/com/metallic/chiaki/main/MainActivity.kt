@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
@@ -53,6 +54,8 @@ class MainActivity : AppCompatActivity()
 
 		binding.registerButton.setOnClickListener { showRegistration() }
 		binding.registerLabelButton.setOnClickListener { showRegistration() }
+
+		setupBackNavigation()
 
 		viewModel = ViewModelProvider(this, viewModelFactory { MainViewModel(getDatabase(this), Preferences(this)) })
 			.get(MainViewModel::class.java)
@@ -105,14 +108,19 @@ class MainActivity : AppCompatActivity()
 		viewModel.discoveryManager.pause()
 	}
 
-	override fun onBackPressed()
+	private fun setupBackNavigation()
 	{
-		if(binding.floatingActionButton.isExpanded)
-		{
-			expandFloatingActionButton(false)
-			return
+		onBackPressedDispatcher.addCallback(this) {
+			if(binding.floatingActionButton.isExpanded)
+			{
+				expandFloatingActionButton(false)
+			}
+			else
+			{
+				isEnabled = false
+				onBackPressedDispatcher.onBackPressed()
+			}
 		}
-		super.onBackPressed()
 	}
 
 	override fun onCreateOptionsMenu(menu: Menu): Boolean

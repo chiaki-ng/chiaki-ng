@@ -12,7 +12,6 @@
 #define TAKION_DATA_RESEND_TIMEOUT_MS 200
 #define TAKION_DATA_RESEND_WAKEUP_TIMEOUT_MS (TAKION_DATA_RESEND_TIMEOUT_MS/2)
 #define TAKION_DATA_RESEND_TRIES_MAX 25
-#define TAKION_SEND_BUFFER_SIZE 16
 
 #endif
 
@@ -247,7 +246,7 @@ static void takion_send_buffer_resend(ChiakiTakionSendBuffer *send_buffer)
 			if(packet->tries >= TAKION_DATA_RESEND_TRIES_MAX)
 			{
 				CHIAKI_LOGI(send_buffer->log, "Hit max retries of %d tries... giving up on packet with seqnum %#llx", TAKION_DATA_RESEND_TRIES_MAX, (unsigned long long)packet->seq_num);
-				ChiakiSeqNum32 ack_seq_nums[TAKION_SEND_BUFFER_SIZE];
+				ChiakiSeqNum32 ack_seq_nums[CHIAKI_TAKION_SEND_BUFFER_SIZE];
 				size_t ack_seq_nums_count;
 				chiaki_mutex_unlock(&send_buffer->mutex);
 				chiaki_takion_send_buffer_ack(send_buffer, packet->seq_num, ack_seq_nums, &ack_seq_nums_count);

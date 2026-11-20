@@ -11,7 +11,7 @@ This is for contributors that want to make/test updates to the codebase without 
 1. Install flatpak with debug extension and/or build a new one with any added dependencies following [Building the Flatpak Yourself](buildit.md){target="_blank" rel="noopener"}
 
     ``` bash
-    flatpak install --user --include-debug -y https://raw.githubusercontent.com/streetpea/chiaki-ng/main/scripts/flatpak/io.github.streetpea.Chiaki4deck-devel.flatpakref
+    flatpak install --user --include-debug -y https://raw.githubusercontent.com/chiaki-ng/chiaki-ng/main/scripts/flatpak/io.github.streetpea.Chiaki4deck-devel.flatpakref
     ```
 
     !!! Info "Creating local flatpak builds"
@@ -21,7 +21,7 @@ This is for contributors that want to make/test updates to the codebase without 
         ``` bash
         sources:
         - type: git
-          url: https://github.com/streetpea/chiaki-ng.git
+          url: https://github.com/chiaki-ng/chiaki-ng.git
           branch: main
         ```
 
@@ -42,13 +42,13 @@ This is for contributors that want to make/test updates to the codebase without 
 3. Install the SDK
 
     ``` bash
-    flatpak install --user org.kde.Sdk//6.9
+    flatpak install --user org.kde.Sdk//6.11
     ```
 
 4. Install the `Debug` extensions for the SDK
 
     ``` bash
-    flatpak install --user org.kde.Sdk.Debug//6.9
+    flatpak install --user org.kde.Sdk.Debug//6.11
     ```
 
 5. Clone the project onto your Steam Deck with:
@@ -56,19 +56,19 @@ This is for contributors that want to make/test updates to the codebase without 
     === "HTTPS"
 
         ``` bash
-        git clone --recurse-submodules https://github.com/streetpea/chiaki-ng.git
+        git clone --recurse-submodules https://github.com/chiaki-ng/chiaki-ng.git
         ```
 
     === "SSH"
 
         ``` bash
-        git clone --recurse-submodules git@github.com:streetpea/chiaki-ng.git
+        git clone --recurse-submodules git@github.com:chiaki-ng/chiaki-ng.git
         ```
 
     === "GitHub cli"
 
         ``` bash
-        gh repo clone streetpea/chiaki-ng
+        gh repo clone chiaki-ng/chiaki-ng
         ```
 
     !!! Question "What if I'm testing changes from my branch?"

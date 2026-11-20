@@ -184,6 +184,7 @@ CHIAKI_EXPORT void chiaki_reorder_queue_drop(ChiakiReorderQueue *queue, uint64_t
 
 	if(queue->drop_cb)
 		queue->drop_cb(seq_num, entry->user, queue->drop_cb_user);
+	entry->set = false;
 
 	// reduce count if necessary
 	if(index == queue->count - 1)

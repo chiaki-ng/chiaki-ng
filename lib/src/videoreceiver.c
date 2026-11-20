@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-AGPL-3.0-only-OpenSSL
 
 #include <chiaki/videoreceiver.h>
+#include <chiaki/time.h>
 #include "../include/chiaki/session.h"
 
 #include <string.h>
+
+// While waiting for a requested IDR frame, request it again this often, in case the request
+// or the IDR frame itself was lost; otherwise the picture would stay frozen
+#define VIDEO_IDR_RETRY_INTERVAL_MS 1000
 
 static ChiakiErrorCode chiaki_video_receiver_flush_frame(ChiakiVideoReceiver *video_receiver);
 
@@ -54,6 +59,7 @@ CHIAKI_EXPORT void chiaki_video_receiver_init(ChiakiVideoReceiver *video_receive
 	chiaki_bitstream_init(&video_receiver->bitstream, video_receiver->log, video_receiver->session->connect_info.video_profile.codec);
 	chiaki_mutex_init(&video_receiver->waiting_for_idr_mutex, false);
 	video_receiver->waiting_for_idr = false;
+	video_receiver->idr_request_last_ms = 0;
 	chiaki_mutex_init(&video_receiver->frames_lost_mutex, false);
 }
 
@@ -70,7 +76,32 @@ CHIAKI_EXPORT void chiaki_video_receiver_set_waiting_for_idr(ChiakiVideoReceiver
 {
 	chiaki_mutex_lock(&video_receiver->waiting_for_idr_mutex);
 	video_receiver->waiting_for_idr = waiting_for_idr;
+	if(waiting_for_idr)
+		video_receiver->idr_request_last_ms = chiaki_time_now_monotonic_ms();
 	chiaki_mutex_unlock(&video_receiver->waiting_for_idr_mutex);
+}
+
+/**
+ * While waiting for an IDR frame, request it again once VIDEO_IDR_RETRY_INTERVAL_MS has passed
+ * since it was last requested.
+ */
+static void video_receiver_retry_idr_request(ChiakiVideoReceiver *video_receiver)
+{
+	chiaki_mutex_lock(&video_receiver->waiting_for_idr_mutex);
+	uint64_t now_ms = chiaki_time_now_monotonic_ms();
+	bool due = video_receiver->waiting_for_idr
+		&& now_ms - video_receiver->idr_request_last_ms >= VIDEO_IDR_RETRY_INTERVAL_MS;
+	if(due)
+		video_receiver->idr_request_last_ms = now_ms;
+	chiaki_mutex_unlock(&video_receiver->waiting_for_idr_mutex);
+	if(!due)
+		return;
+
+	ChiakiErrorCode err = stream_connection_send_idr_request(&video_receiver->session->stream_connection);
+	if(err == CHIAKI_ERR_SUCCESS)
+		CHIAKI_LOGI(video_receiver->log, "Still waiting for IDR frame, requested it again");
+	else
+		CHIAKI_LOGW(video_receiver->log, "Still waiting for IDR frame and the request could not be sent again: %s", chiaki_error_string(err));
 }
 
 CHIAKI_EXPORT bool chiaki_video_receiver_get_waiting_for_idr(ChiakiVideoReceiver *video_receiver)
@@ -222,6 +253,7 @@ static ChiakiErrorCode chiaki_video_receiver_flush_frame(ChiakiVideoReceiver *vi
 				else
 				{
 					CHIAKI_LOGW(video_receiver->log, "Video FEC failure, already waiting for requested IDR");
+					video_receiver_retry_idr_request(video_receiver);
 				}
 				ChiakiEvent event = { 0 };
 				event.type = CHIAKI_EVENT_VIDEO_FEC_FAILURE;
@@ -256,6 +288,7 @@ static ChiakiErrorCode chiaki_video_receiver_flush_frame(ChiakiVideoReceiver *vi
 			else
 			{
 				CHIAKI_LOGV(video_receiver->log, "Skipping P-frame %d while waiting for IDR", (int)video_receiver->frame_index_cur);
+				video_receiver_retry_idr_request(video_receiver);
 				video_receiver->frame_index_prev = video_receiver->frame_index_cur;
 				return CHIAKI_ERR_SUCCESS;
 			}

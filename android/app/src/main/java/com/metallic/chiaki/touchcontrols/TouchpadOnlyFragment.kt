@@ -9,7 +9,7 @@ import android.view.ViewGroup
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
 import com.metallic.chiaki.databinding.FragmentTouchpadOnlyBinding
-import io.reactivex.rxkotlin.Observables.combineLatest
+import kotlinx.coroutines.flow.combine
 
 class TouchpadOnlyFragment : TouchControlsFragment()
 {
@@ -21,9 +21,8 @@ class TouchpadOnlyFragment : TouchControlsFragment()
 	override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View =
 		FragmentTouchpadOnlyBinding.inflate(inflater, container, false).let {
 			_binding = it
-			controllerStateProxy.onNext(
-				combineLatest(ownControllerStateSubject, binding.touchpadView.controllerState) { a, b -> a or b }
-			)
+			_controllerStateSource.value =
+				combine(_ownControllerStateFlow, binding.touchpadView.controllerState) { a, b -> a or b }
 			it.root
 		}
 

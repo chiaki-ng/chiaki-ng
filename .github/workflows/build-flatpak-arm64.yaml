@@ -3,6 +3,9 @@ name: Build chiaki-ng flatpak arm64
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-24.04-arm
@@ -10,7 +13,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: 'recursive'
           path: 'chiaki-ng'
@@ -26,14 +29,17 @@ jobs:
       - name: Setup Flatpak Builder Environment
         run: |
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          flatpak install org.kde.Sdk//6.9 -y
-          flatpak install org.kde.Platform//6.9 -y
-          flatpak install io.qt.qtwebengine.BaseApp//6.9 -y
+          flatpak install org.kde.Sdk//6.11 -y
+          flatpak install org.kde.Platform//6.11 -y
+          flatpak install io.qt.qtwebengine.BaseApp//6.11 -y
           flatpak update --appstream --assumeyes
 
       - name: Build Flatpak package
         working-directory: chiaki-ng
         run: |
+          # build the checked-out commit, not the manifest's branch
+          sed -i 's|^        branch: main$|        commit: ${{ github.sha }}|' scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
+          grep -q '^        commit: ${{ github.sha }}$' scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
           flatpak-builder --repo=chiaki-ng --force-clean build-dir scripts/flatpak/io.github.streetpea.Chiaki4deck.yaml
 
       - name: Bundle Flatpak app
@@ -42,14 +48,14 @@ jobs:
           flatpak build-bundle chiaki-ng chiaki-ng-arm64.flatpak io.github.streetpea.Chiaki4deck --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
           flatpak build-bundle chiaki-ng --runtime chiaki-ng-arm64-debug.flatpak io.github.streetpea.Chiaki4deck.Debug --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-arm64.flatpak
           path: chiaki-ng/chiaki-ng-arm64.flatpak
           if-no-files-found: error
           retention-days: 1
       - name: Upload chiaki-ng Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: chiaki-ng-arm64-debug.flatpak
           path: chiaki-ng/chiaki-ng-arm64-debug.flatpak
