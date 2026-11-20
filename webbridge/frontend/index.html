@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0a0c10">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>chiaki-web</title>
+  <!-- use-credentials: manifest fetches are anonymous CORS by default, which
+       breaks behind cookie-based auth gates (e.g. Cloudflare Access) -->
+  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon.svg">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- ══════════════ console list view ══════════════ -->
+  <div id="view-hosts" class="view">
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 3.5 19.5 12 5 20.5z" fill="currentColor"/>
+        </svg>
+        <h1>chiaki<span class="brand-accent">web</span></h1>
+      </div>
+      <div class="topbar-actions">
+        <button id="btn-demo" class="btn btn-ghost">Demo</button>
+        <button id="btn-refresh" class="btn btn-ghost" title="Rescan">Refresh</button>
+      </div>
+    </header>
+
+    <div id="banner-unsupported" class="banner hidden">
+      This browser does not support WebCodecs (VideoDecoder), which chiaki-web
+      needs for video. Use a recent Chrome, Edge or Safari.
+    </div>
+
+    <main class="hosts-main">
+      <section class="hosts-col">
+        <div class="section-head">
+          <h2>Consoles</h2>
+          <button id="btn-register-new" class="btn">Register a console</button>
+        </div>
+        <div id="host-list" class="card-list">
+          <p class="empty-note">Scanning…</p>
+        </div>
+      </section>
+
+      <aside class="settings-col">
+        <h2>Stream settings</h2>
+        <label class="field">
+          <span>Resolution</span>
+          <select id="set-resolution">
+            <option value="360p">360p</option>
+            <option value="540p">540p</option>
+            <option value="720p" selected>720p</option>
+            <option value="1080p">1080p</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Frame rate</span>
+          <select id="set-fps">
+            <option value="30">30 fps</option>
+            <option value="60" selected>60 fps</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Codec</span>
+          <select id="set-codec">
+            <option value="h264" selected>H.264</option>
+            <option value="hevc">HEVC (H.265)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Bitrate (kbps, 0 = auto)</span>
+          <input id="set-bitrate" type="number" min="0" max="50000" step="1000" value="0">
+        </label>
+        <label class="field">
+          <span>Transport</span>
+          <select id="set-transport">
+            <option value="auto" selected>Auto (WebRTC, fall back to WebSocket)</option>
+            <option value="webrtc">WebRTC only (lowest latency)</option>
+            <option value="ws">WebSocket only (strict networks)</option>
+          </select>
+        </label>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span id="app-version">chiaki-web</span>
+    </footer>
+  </div>
+
+  <!-- ══════════════ stream view ══════════════ -->
+  <div id="view-stream" class="view hidden">
+    <div id="canvas-wrap"><!-- canvas is created per session --></div>
+
+    <div class="hud">
+      <div class="hud-top">
+        <span id="hud-nickname"></span>
+        <span id="hud-streaminfo"></span>
+        <button id="btn-stream-menu" class="btn btn-ghost hud-menu-btn"
+                title="Menu (Esc)" aria-label="Stream menu">☰</button>
+      </div>
+      <pre id="hud-stats" class="hud-stats hidden"></pre>
+    </div>
+  </div>
+
+  <!-- ══════════════ modals ══════════════ -->
+  <div id="modal-register" class="modal">
+    <div class="modal-box">
+      <h2>Register console</h2>
+      <label class="field">
+        <span>Host (IP or name)</span>
+        <input id="reg-host" type="text" placeholder="192.168.1.42" autocomplete="off">
+      </label>
+      <label class="field field-row">
+        <input id="reg-ps5" type="checkbox" checked>
+        <span>PlayStation 5</span>
+      </label>
+      <label class="field">
+        <span>PIN (from Remote Play settings on the console)</span>
+        <input id="reg-pin" type="text" inputmode="numeric" pattern="[0-9]*"
+               placeholder="12345678" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>PSN Account ID (base64)</span>
+        <input id="reg-psn" type="text" placeholder="xxxxxxxxxxx=" autocomplete="off">
+      </label>
+      <p id="reg-error" class="form-error"></p>
+      <div class="modal-actions">
+        <button id="reg-cancel" class="btn">Cancel</button>
+        <button id="reg-submit" class="btn btn-primary">Register</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-pin" class="modal">
+    <div class="modal-box">
+      <h2>Login PIN</h2>
+      <p id="pin-msg"></p>
+      <label class="field">
+        <span>PIN</span>
+        <input id="pin-input" type="text" inputmode="numeric" pattern="[0-9]*"
+               placeholder="0000" autocomplete="off">
+      </label>
+      <div class="modal-actions">
+        <button id="pin-cancel" class="btn">Cancel</button>
+        <button id="pin-submit" class="btn btn-primary">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-menu" class="modal">
+    <div class="modal-box modal-menu-box">
+      <h2>Stream menu</h2>
+      <button id="menu-mic" class="btn btn-wide">Microphone: off</button>
+      <button id="menu-transport" class="btn btn-wide">Transport: WebRTC</button>
+      <button id="menu-stats" class="btn btn-wide">Toggle stats</button>
+      <button id="menu-fullscreen" class="btn btn-wide">Toggle fullscreen</button>
+      <button id="menu-help" class="btn btn-wide">Controls help</button>
+      <button id="menu-disconnect" class="btn btn-wide btn-danger">Disconnect</button>
+    </div>
+  </div>
+
+  <div id="modal-help" class="modal">
+    <div class="modal-box modal-help-box">
+      <h2>Keyboard &amp; mouse controls</h2>
+      <table class="help-table-el">
+        <tbody id="help-table"></tbody>
+      </table>
+      <p class="help-note">Press <kbd>F1</kbd> or <kbd>?</kbd> to close.</p>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
