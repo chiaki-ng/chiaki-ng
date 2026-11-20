@@ -24,6 +24,7 @@ class QmlSettings : public QObject
     Q_PROPERTY(bool verticalDeck READ verticalDeck WRITE setVerticalDeck NOTIFY verticalDeckChanged)
 #endif
     Q_PROPERTY(bool buttonsByPosition READ buttonsByPosition WRITE setButtonsByPosition NOTIFY buttonsByPositionChanged)
+    Q_PROPERTY(bool touchpadTouchEnabled READ touchpadTouchEnabled WRITE setTouchpadTouchEnabled NOTIFY touchpadTouchEnabledChanged)
     Q_PROPERTY(bool startMicUnmuted READ startMicUnmuted WRITE setStartMicUnmuted NOTIFY startMicUnmutedChanged)
 #ifdef CHIAKI_GUI_ENABLE_SPEEX
     Q_PROPERTY(bool speechProcessing READ speechProcessing WRITE setSpeechProcessing NOTIFY speechProcessingChanged)
@@ -221,6 +222,9 @@ public:
 
     bool buttonsByPosition() const;
     void setButtonsByPosition(bool buttonsByPosition);
+
+    bool touchpadTouchEnabled() const;
+    void setTouchpadTouchEnabled(bool enabled);
 
     bool iDROnFECFailureEnabled() const;
     void setIDROnFECFailureEnabled(bool enabled);
@@ -623,6 +627,7 @@ signals:
     void vSyncEnabledChanged();
     void rumbleHapticsIntensityChanged();
     void buttonsByPositionChanged();
+    void touchpadTouchEnabledChanged();
     void allowJoystickBackgroundEventsChanged();
     void startMicUnmutedChanged();
 #ifdef CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE

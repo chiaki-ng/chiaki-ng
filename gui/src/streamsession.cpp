@@ -308,6 +308,7 @@ StreamSessionConnectInfo::StreamSessionConnectInfo(
 	this->enable_idr_on_fec_failure = settings->GetIDROnFECFailureEnabled();
 	this->rumble_haptics_intensity = settings->GetRumbleHapticsIntensity();
 	this->buttons_by_pos = settings->GetButtonsByPosition();
+	this->touchpad_touch_enabled = settings->GetTouchpadTouchEnabled();
 	this->start_mic_unmuted = settings->GetStartMicUnmuted();
 	this->port_guessing_enabled = settings->GetPortGuessingEnabled();
 	this->port_guess_count = settings->GetPortGuessCount();
@@ -462,6 +463,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 #endif
 	audio_buffer_size = connect_info.audio_buffer_size;
 	mouse_touch_enabled = connect_info.mouse_touch_enabled;
+	touchpad_touch_enabled = connect_info.touchpad_touch_enabled;
 	keyboard_controller_enabled = connect_info.keyboard_controller_enabled;
 	host = connect_info.host;
 	QByteArray host_str = connect_info.host.toUtf8();
@@ -1320,6 +1322,12 @@ void StreamSession::DpadSendFeedbackState()
 	chiaki_session_set_controller_state(&session, &state);
 }
 
+static void ClearTouches(ChiakiControllerState *state)
+{
+	for(size_t i = 0; i < CHIAKI_CONTROLLER_TOUCHES_MAX; i++)
+		state->touches[i].id = -1;
+}
+
 void StreamSession::SendFeedbackState()
 {
 	ChiakiControllerState state;
@@ -1328,11 +1336,16 @@ void StreamSession::SendFeedbackState()
 #if CHIAKI_GUI_ENABLE_SETSU
 	// setsu is the one that potentially has gyro/accel/orient so copy that directly first
 	state = setsu_state;
+	if(!touchpad_touch_enabled)
+		ClearTouches(&state);
 #endif
 
 	for(auto controller : controllers)
 	{
 		auto controller_state = controller->GetState();
+		// some games act on a touch alone, the touchpad click is still sent
+		if(!touchpad_touch_enabled)
+			ClearTouches(&controller_state);
 		chiaki_controller_state_or(&state, &state, &controller_state);
 	}
 

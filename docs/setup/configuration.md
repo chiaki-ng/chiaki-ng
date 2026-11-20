@@ -263,6 +263,10 @@ Here are different settings you can use for Chiaki/`chiaki-ng` depending on your
 
             This enables the option to use the face buttons of your controller by position (i.e., NSEW) as opposed to by their label (i.e., ABXY). This enables you to use a Nintendo-style controller and still be able to use the buttons in the same positions as on a PlayStation controller instead of the swapped Nintendo controller positions.
 
+        !!! Info "Touchpad Touch"
+
+            On by default, this sends where your finger is on the DualSense or DualShock 4 touchpad. Some games act on a touch alone, so resting a thumb on the touchpad can open a menu or the map. Uncheck it to send only the touchpad click. This setting is in the **Controllers** tab.
+
         !!! Info "Use Steam Deck in Vertical Orientation"
 
             For Steam Deck, this enables the option to use the Steam Deck in vertical orientation in games that assume a horizontal controller for motion controls. Since most PlayStation games assume a horizontal facing controller, (even though data is sent for using the controller in any orientation) most games only work if the Steam Deck is horizontal (like you would hold a DualSense/DualShock 4 controller). This option enables you to play those games in vertical mode by allowing you to use roll instead of yaw and having a vertical orientation correspond to a horizontal facing controller. Some games, such as Astro's playroom use the orientation values and enable you to use the controller in various different positions (i.e. this option isn't needed for using the controller in vertical orientation for that small subset of games).

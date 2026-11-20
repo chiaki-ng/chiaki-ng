@@ -279,6 +279,9 @@ class Settings : public QObject
 		bool GetButtonsByPosition() const 		{ return settings.value("settings/buttons_by_pos", false).toBool(); }
 		void SetButtonsByPosition(bool enabled) { settings.setValue("settings/buttons_by_pos", enabled); }
 
+		bool GetTouchpadTouchEnabled() const		{ return settings.value("settings/touchpad_touch_enabled", true).toBool(); }
+		void SetTouchpadTouchEnabled(bool enabled)	{ settings.setValue("settings/touchpad_touch_enabled", enabled); }
+
 		bool GetAllowJoystickBackgroundEvents() const { return settings.value("settings/allow_joystick_background_events", true).toBool(); }
 		void SetAllowJoystickBackgroundEvents(bool enabled) { settings.setValue("settings/allow_joystick_background_events", enabled); }
 
