@@ -394,16 +394,22 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_rudp_send_raw(RudpInstance *rudp, uint8_t *
 CHIAKI_EXPORT ChiakiErrorCode chiaki_rudp_select_recv(RudpInstance *rudp, size_t buf_size,  RudpMessage *message)
 {
     uint8_t buf[buf_size]; 
-	ChiakiErrorCode err = chiaki_stop_pipe_select_single(&rudp->stop_pipe, rudp->sock, false, RUDP_EXPECT_TIMEOUT_MS);
-	if(err == CHIAKI_ERR_TIMEOUT || err == CHIAKI_ERR_CANCELED)
-		return err;
-	if(err != CHIAKI_ERR_SUCCESS)
+	ChiakiErrorCode err;
+	CHIAKI_SSIZET_TYPE received_sz;
+	// Same as takion_recv: a readable signal without data (WOULDBLOCK) is not an error.
+	do
 	{
-		CHIAKI_LOGE(rudp->log, "Rudp select failed: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-		return err;
-	}
+		err = chiaki_stop_pipe_select_single(&rudp->stop_pipe, rudp->sock, false, RUDP_EXPECT_TIMEOUT_MS);
+		if(err == CHIAKI_ERR_TIMEOUT || err == CHIAKI_ERR_CANCELED)
+			return err;
+		if(err != CHIAKI_ERR_SUCCESS)
+		{
+			CHIAKI_LOGE(rudp->log, "Rudp select failed: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
+			return err;
+		}
 
-	CHIAKI_SSIZET_TYPE received_sz = recv(rudp->sock, (CHIAKI_SOCKET_BUF_TYPE) buf, buf_size, 0);
+		received_sz = recv(rudp->sock, (CHIAKI_SOCKET_BUF_TYPE) buf, buf_size, 0);
+	} while(received_sz < 0 && CHIAKI_SOCKET_EWOULDBLOCK);
 	if(received_sz <= 8)
 	{
 		if(received_sz < 0)
