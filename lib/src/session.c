@@ -313,6 +313,11 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_session_start(ChiakiSession *session)
 
 CHIAKI_EXPORT ChiakiErrorCode chiaki_session_stop(ChiakiSession *session)
 {
+	// The session thread keeps state_mutex locked while it punches the hole for the
+	// data connection, which can wait on the console for up to 90 seconds. Cancel
+	// that wait first, otherwise the lock below does not return until it is over.
+	if(session->holepunch_session)
+		chiaki_holepunch_main_thread_cancel(session->holepunch_session, false);
 	ChiakiErrorCode err = chiaki_mutex_lock(&session->state_mutex);
 	assert(err == CHIAKI_ERR_SUCCESS);
 
