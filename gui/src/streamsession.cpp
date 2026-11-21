@@ -513,7 +513,9 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	}
 
 	chiaki_controller_state_set_idle(&keyboard_state);
+	chiaki_controller_state_set_idle(&ml_state);
 	chiaki_controller_state_set_idle(&touch_state);
+	MouseLookInit();
 	touch_tracker=QMap<int, uint8_t>();
 	mouse_touch_id=-1;
 	dpad_touch_id =-1;
@@ -1284,6 +1286,7 @@ void StreamSession::DpadSendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+	chiaki_controller_state_or(&state, &state, &ml_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)
@@ -1340,6 +1343,7 @@ void StreamSession::SendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+	chiaki_controller_state_or(&state, &state, &ml_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)
