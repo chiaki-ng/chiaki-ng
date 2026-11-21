@@ -1880,6 +1880,29 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
         free(session->gw.data);
         free(session->gw.urls);
     }
+    // Set up by holepunch_session_create_offer() and normally released by
+    // chiaki_holepunch_session_punch_hole(). If the session ends before that runs,
+    // they are still ours to release.
+    if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
+    {
+        CHIAKI_SOCKET_CLOSE(session->ipv4_sock);
+        session->ipv4_sock = CHIAKI_INVALID_SOCKET;
+    }
+    if(!CHIAKI_SOCKET_IS_INVALID(session->ipv6_sock))
+    {
+        CHIAKI_SOCKET_CLOSE(session->ipv6_sock);
+        session->ipv6_sock = CHIAKI_INVALID_SOCKET;
+    }
+    if(session->our_offer_msg)
+    {
+        session_message_free(session->our_offer_msg);
+        session->our_offer_msg = NULL;
+    }
+    if(session->local_candidates)
+    {
+        free(session->local_candidates);
+        session->local_candidates = NULL;
+    }
     if (session->oauth_header)
         free(session->oauth_header);
     if(session->session_id_header)
