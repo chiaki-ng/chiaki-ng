@@ -1236,16 +1236,23 @@ beach:
 
 static ChiakiErrorCode takion_recv(ChiakiTakion *takion, uint8_t *buf, size_t *buf_size, uint64_t timeout_ms)
 {
-	ChiakiErrorCode err = chiaki_stop_pipe_select_single(&takion->stop_pipe, takion->sock, false, timeout_ms);
-	if(err == CHIAKI_ERR_TIMEOUT || err == CHIAKI_ERR_CANCELED)
-		return err;
-	if(err != CHIAKI_ERR_SUCCESS)
+	CHIAKI_SSIZET_TYPE received_sz;
+	// The socket can be signaled readable and recv() still fail with WOULDBLOCK
+	// (documented for WSAEventSelect on Windows). That is not an error: wait again.
+	// Note: the timeout restarts after each spurious wakeup.
+	do
 	{
-		CHIAKI_LOGE(takion->log, "Takion select failed: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
-		return err;
-	}
+		ChiakiErrorCode err = chiaki_stop_pipe_select_single(&takion->stop_pipe, takion->sock, false, timeout_ms);
+		if(err == CHIAKI_ERR_TIMEOUT || err == CHIAKI_ERR_CANCELED)
+			return err;
+		if(err != CHIAKI_ERR_SUCCESS)
+		{
+			CHIAKI_LOGE(takion->log, "Takion select failed: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
+			return err;
+		}
 
-	CHIAKI_SSIZET_TYPE received_sz = recv(takion->sock, buf, *buf_size, 0);
+		received_sz = recv(takion->sock, buf, *buf_size, 0);
+	} while(received_sz < 0 && CHIAKI_SOCKET_EWOULDBLOCK);
 	if(received_sz <= 0)
 	{
 		if(received_sz < 0)

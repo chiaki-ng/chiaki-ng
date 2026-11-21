@@ -20,6 +20,7 @@ typedef SOCKET chiaki_socket_t;
 #define CHIAKI_SOCKET_ERROR_FMT "%d"
 #define CHIAKI_SOCKET_ERROR_VALUE (WSAGetLastError())
 #define CHIAKI_SOCKET_EINPROGRESS (WSAGetLastError() == WSAEWOULDBLOCK)
+#define CHIAKI_SOCKET_EWOULDBLOCK (WSAGetLastError() == WSAEWOULDBLOCK)
 #define CHIAKI_SOCKET_BUF_TYPE char*
 #else
 #include <unistd.h>
@@ -31,6 +32,7 @@ typedef int chiaki_socket_t;
 #define CHIAKI_SOCKET_ERROR_FMT "%s"
 #define CHIAKI_SOCKET_ERROR_VALUE (strerror(errno))
 #define CHIAKI_SOCKET_EINPROGRESS (errno == EINPROGRESS)
+#define CHIAKI_SOCKET_EWOULDBLOCK (errno == EAGAIN || errno == EWOULDBLOCK)
 #define CHIAKI_SOCKET_BUF_TYPE void *
 #endif
 
