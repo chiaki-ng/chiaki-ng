@@ -42,6 +42,8 @@ set(SOURCE_FILES
 	include/jsonrequester.h
 	src/jsonrequester.cpp
 	src/qml/qml.qrc
+	include/framegen.h
+	src/framegen.cpp
 	include/qmlmainwindow.h
 	src/qmlmainwindow.cpp
 	include/qmlbackend.h

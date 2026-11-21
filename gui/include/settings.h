@@ -521,6 +521,9 @@ class Settings : public QObject
 		bool GetDirectFrameMapping() const { return settings.value("settings/direct_frame_mapping", true).toBool(); }
 		void SetDirectFrameMapping(bool enabled) { settings.setValue("settings/direct_frame_mapping", enabled); }
 		void SetPlaceboFrameMixer(PlaceboFrameMixer frame_mixer);
+		// Optical-flow frame generation (doubles the shown frame rate, adds one source frame of latency)
+		bool GetFrameGeneration() const { return settings.value("settings/frame_generation", false).toBool(); }
+		void SetFrameGeneration(bool enabled) { settings.setValue("settings/frame_generation", enabled); }
 
 		bool GetPlaceboDeinterlaceEnabled() const;
 		void SetPlaceboDeinterlaceEnabled(bool enabled);

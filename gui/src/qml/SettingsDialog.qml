@@ -995,6 +995,27 @@ DialogView {
 
                     Label {
                         Layout.alignment: Qt.AlignRight
+                        text: qsTr("Frame Generation:")
+                    }
+
+                    C.CheckBox {
+                        text: qsTr("Optical flow 2x (stream at 30 fps, restart to apply)")
+                        checked: Chiaki.settings.frameGeneration
+                        onToggled: {
+                            Chiaki.settings.frameGeneration = checked;
+                            // Direct mapping skips the frame queue frame gen needs
+                            if (checked)
+                                Chiaki.settings.directFrameMapping = false;
+                        }
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
+                        text: qsTr("(Off)")
+                    }
+
+                    Label {
+                        Layout.alignment: Qt.AlignRight
                         text: qsTr("Renderer Backend:")
                     }
 

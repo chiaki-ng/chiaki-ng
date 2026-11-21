@@ -989,6 +989,19 @@ void QmlSettings::setDirectFrameMapping(bool enabled)
     emit directFrameMappingChanged();
 }
 
+bool QmlSettings::frameGeneration() const
+{
+    return settings->GetFrameGeneration();
+}
+
+void QmlSettings::setFrameGeneration(bool enabled)
+{
+    if (enabled == settings->GetFrameGeneration())
+        return;
+    settings->SetFrameGeneration(enabled);
+    emit frameGenerationChanged();
+}
+
 void QmlSettings::setPlaceboFrameMixer(int mixer)
 {
     settings->SetPlaceboFrameMixer(static_cast<PlaceboFrameMixer>(mixer));
@@ -1975,6 +1988,7 @@ void QmlSettings::refreshAllPlaceboKeys()
     emit placeboDownscalerChanged();
     emit placeboPlaneDownscalerChanged();
     emit placeboFrameMixerChanged();
+    emit frameGenerationChanged();
     emit placeboDeinterlaceEnabledChanged();
     emit placeboDeinterlacePresetChanged();
     emit placeboDeinterlaceAlgorithmChanged();
