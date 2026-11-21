@@ -42,6 +42,11 @@
 #include <QThread>
 #include <QWaitCondition>
 #include <QAtomicInteger>
+#include <QDateTime>
+#include <QKeyEvent>
+#include <QWheelEvent>
+#include <QWindow>
+#include "mouselook_core.h"
 #if CHIAKI_GUI_ENABLE_SPEEX
 #include <QQueue>
 #include <speex/speex_echo.h>
@@ -220,6 +225,18 @@ class StreamSession : public QObject
 		bool rumble_haptics_on;
 		float PS_TOUCHPAD_MAX_X, PS_TOUCHPAD_MAX_Y;
 		ChiakiControllerState keyboard_state;
+		// mouse look (no-driver mouse and keyboard)
+		ChiakiControllerState ml_state;
+		mouselook::Mapper *ml_mapper = nullptr;
+		mouselook::Mapper::Output ml_last;
+		QTimer *ml_timer = nullptr;
+		QElapsedTimer ml_clock;
+		QDateTime ml_ini_time;
+		bool ml_on = false, ml_first_load_done = false, ml_have_center = false, ml_have_last = false;
+		unsigned ml_tick_count = 0;
+		QString MouseLookIniPath() const;
+		void MouseLookInit();
+		void MouseLookReload();
 		ChiakiControllerState touch_state;
 		QMap<int, uint8_t> touch_tracker;
 		int8_t mouse_touch_id;
@@ -366,6 +383,12 @@ class StreamSession : public QObject
 		ChiakiPiDecoder *GetPiDecoder()	{ return pi_decoder; }
 #endif
 		void HandleKeyboardEvent(QKeyEvent *event);
+		bool MouseLookActive() const;
+		void MouseLookSetOn(bool on);
+		void MouseLookReleaseAll();
+		bool MouseLookKey(QKeyEvent *event);
+		bool MouseLookMouse(QMouseEvent *event, QWindow *window);
+		bool MouseLookWheel(QWheelEvent *event);
 		void HandleTouchEvent(QTouchEvent *event, qreal width, qreal height);
 		void HandleDpadTouchEvent(ChiakiControllerState *state, bool placeholder = false);
 		void HandleMouseReleaseEvent(QMouseEvent *event);
@@ -404,6 +427,7 @@ class StreamSession : public QObject
 		void UpdateGamepads();
 		void DpadSendFeedbackState();
 		void SendFeedbackState();
+		void MouseLookTick();
 };
 
 Q_DECLARE_METATYPE(ChiakiQuitReason)

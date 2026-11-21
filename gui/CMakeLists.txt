@@ -25,7 +25,9 @@ set(SOURCE_FILES
 	include/discoverymanager.h
 	src/discoverymanager.cpp
 	include/streamsession.h
+	include/mouselook_core.h
 	src/streamsession.cpp
+	src/mouselook.cpp
 	include/sessionlog.h
 	src/sessionlog.cpp
 	include/settings.h

@@ -7709,6 +7709,8 @@ bool QmlMainWindow::event(QEvent *event)
     case QEvent::MouseButtonRelease:
         if (static_cast<QMouseEvent*>(event)->source() != Qt::MouseEventNotSynthesized)
             return true;
+        if (session && !grab_input && session->MouseLookMouse(static_cast<QMouseEvent*>(event), this))
+            return true;
         if (session && !grab_input) {
             if (event->type() == QEvent::MouseMove)
                 session->HandleMouseMoveEvent(static_cast<QMouseEvent*>(event), width(), height());
@@ -7730,10 +7732,24 @@ bool QmlMainWindow::event(QEvent *event)
                 normalTime();
         }
         break;
+    case QEvent::Wheel:
+        if (session && !grab_input && session->MouseLookWheel(static_cast<QWheelEvent*>(event)))
+            return true;
+        break;
+    case QEvent::FocusOut:
+        if (session)
+            session->MouseLookReleaseAll();
+        break;
     case QEvent::KeyPress:
+        if (session && !grab_input && static_cast<QKeyEvent*>(event)->spontaneous() &&
+                session->MouseLookKey(static_cast<QKeyEvent*>(event)))
+            return true;
         if (handleShortcut(static_cast<QKeyEvent*>(event)))
             return true;
     case QEvent::KeyRelease:
+        if (session && !grab_input && static_cast<QKeyEvent*>(event)->spontaneous() &&
+                session->MouseLookKey(static_cast<QKeyEvent*>(event)))
+            return true;
         if (session && !grab_input) {
             QKeyEvent *e = static_cast<QKeyEvent*>(event);
             if (!e->spontaneous()) {
