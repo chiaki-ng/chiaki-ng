@@ -1261,7 +1261,7 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_session_start(
             chiaki_mutex_unlock(&session->stop_mutex);
             CHIAKI_LOGI(session->log, "chiaki_holepunch_session_start: canceled");
             err = CHIAKI_ERR_CANCELED;
-            return err;
+            break;
         }
         chiaki_mutex_unlock(&session->stop_mutex);
         http_check_session(session, false);
@@ -1270,7 +1270,9 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_session_start(
         log_session_state(session);
         chiaki_mutex_unlock(&session->state_mutex);
     }
-    chiaki_mutex_unlock(&session->state_mutex);
+    // The loop is left with state_mutex held only through one of the breaks above.
+    if(!finished)
+        chiaki_mutex_unlock(&session->state_mutex);
     return err;
 }
 
