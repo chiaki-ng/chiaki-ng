@@ -28,14 +28,25 @@ jobs:
           # OpenSSL 4 headers in the Homebrew prefix would shadow openssl@3; the bundled curl needs 3
           brew unlink openssl@4 || true
 
-      - name: Rebuild bundled libs for macOS 14 compatibility
+      - name: Rebuild freetype for macOS 14 compatibility
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: |
-          # Homebrew bottles on macos-15 are built for macOS 15 and link against
-          # macOS 15-only system libs (e.g. libhvf.dylib). Rebuild from source with
-          # MACOSX_DEPLOYMENT_TARGET=14.0 so the bundled dylibs run on macOS 14.
-          brew reinstall --build-from-source freetype harfbuzz libpng
+          # Homebrew's freetype bottle on macos-15 is built for macOS 15 and links
+          # against /usr/lib/libhvf.dylib which does not exist on macOS 14. Build
+          # the same version from source with MACOSX_DEPLOYMENT_TARGET=14.0 so it
+          # doesn't gain that dependency, then overwrite the Homebrew copy.
+          FT_VERSION=$(brew info --json=v2 freetype | python3 -c 'import sys,json; print(json.load(sys.stdin)["formulae"][0]["versions"]["stable"])')
+          echo "Building freetype ${FT_VERSION} for macOS 14"
+          curl -fL "https://download.savannah.gnu.org/releases/freetype/freetype-${FT_VERSION}.tar.gz" -o freetype.tar.gz
+          tar xzf freetype.tar.gz
+          cmake -S "freetype-${FT_VERSION}" -B freetype-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$(brew --prefix)" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix)"
+          cmake --build freetype-build
+          sudo cmake --install freetype-build
 
       - name: Install sdl2-compat
         run: |
