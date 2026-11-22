@@ -183,8 +183,13 @@ class StreamInput(val context: Context, val preferences: Preferences)
 		motionControllerState.leftY = event.getAxisValue(MotionEvent.AXIS_Y).signedAxis()
 		motionControllerState.rightX = event.getAxisValue(MotionEvent.AXIS_Z).signedAxis()
 		motionControllerState.rightY = event.getAxisValue(MotionEvent.AXIS_RZ).signedAxis()
-		motionControllerState.l2State = event.getAxisValue(MotionEvent.AXIS_LTRIGGER).unsignedAxis()
-		motionControllerState.r2State = event.getAxisValue(MotionEvent.AXIS_RTRIGGER).unsignedAxis()
+		// Some controllers report the analog triggers as BRAKE/GAS instead of LTRIGGER/RTRIGGER
+		motionControllerState.l2State = maxOf(
+			event.getAxisValue(MotionEvent.AXIS_LTRIGGER),
+			event.getAxisValue(MotionEvent.AXIS_BRAKE)).unsignedAxis()
+		motionControllerState.r2State = maxOf(
+			event.getAxisValue(MotionEvent.AXIS_RTRIGGER),
+			event.getAxisValue(MotionEvent.AXIS_GAS)).unsignedAxis()
 		motionControllerState.buttons = motionControllerState.buttons.let {
 			val dpadX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
 			val dpadY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
