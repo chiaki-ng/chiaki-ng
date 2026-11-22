@@ -54,9 +54,22 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Setup Qt
+        id: setup_qt
+        continue-on-error: true
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.12.0"
+          host: 'windows'
+          target: 'desktop'
+          modules: 'qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport'
+
+      # aqtinstall currently can't read the Qt 6.12 package index, fall back
+      # to the Qt this build used before the 6.12 bump
+      - name: Setup Qt (fallback)
+        if: steps.setup_qt.outcome == 'failure'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.9.*"
           host: 'windows'
           target: 'desktop'
           modules: 'qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport'

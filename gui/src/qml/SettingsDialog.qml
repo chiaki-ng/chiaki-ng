@@ -999,13 +999,18 @@ DialogView {
                     }
 
                     C.CheckBox {
-                        text: qsTr("Optical flow 2x (stream at 30 fps, restart to apply)")
+                        text: qsTr("Optical flow 2x, streams at 30 fps and shows 60 (restarts chiaki-ng)")
                         checked: Chiaki.settings.frameGeneration
                         onToggled: {
+                            if (checked === Chiaki.settings.frameGeneration)
+                                return;
                             Chiaki.settings.frameGeneration = checked;
                             // Direct mapping skips the frame queue frame gen needs
                             if (checked)
                                 Chiaki.settings.directFrameMapping = false;
+                            // The renderer reads this once at startup, same as Direct Mapping
+                            if (Chiaki.settings.restartApplication())
+                                Qt.quit();
                         }
                     }
 

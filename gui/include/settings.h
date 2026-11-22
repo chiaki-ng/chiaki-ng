@@ -321,6 +321,8 @@ class Settings : public QObject
 		ChiakiVideoFPSPreset GetFPSRemotePS4() const;
 		ChiakiVideoFPSPreset GetFPSLocalPS5() const;
 		ChiakiVideoFPSPreset GetFPSRemotePS5() const;
+		// FPS actually requested from the console (forced to 30 with frame generation)
+		ChiakiVideoFPSPreset StreamFPS(ChiakiVideoFPSPreset configured) const;
 		void SetFPSLocalPS4(ChiakiVideoFPSPreset fps);
 		void SetFPSRemotePS4(ChiakiVideoFPSPreset fps);
 		void SetFPSLocalPS5(ChiakiVideoFPSPreset fps);

@@ -170,6 +170,15 @@ struct pl_shader_desc sampled(const char *name, pl_tex tex)
     return d;
 }
 
+struct pl_shader_var shaderVar(struct pl_var var, const void *data, bool dynamic = false)
+{
+    struct pl_shader_var v = {};
+    v.var = var;
+    v.data = data;
+    v.dynamic = dynamic;
+    return v;
+}
+
 const float kCorners[4][2] = { {0.f, 0.f}, {1.f, 0.f}, {0.f, 1.f}, {1.f, 1.f} };
 
 } // namespace
@@ -249,7 +258,7 @@ bool FrameGen::dispatchLuma(pl_tex src, pl_tex dst, bool from_rgb)
     pl_shader sh = pl_dispatch_begin(dp);
     struct pl_shader_desc desc = sampled("fg_src", src);
     int from_rgb_i = from_rgb ? 1 : 0;
-    struct pl_shader_var var = { .var = pl_var_int("fg_from_rgb"), .data = &from_rgb_i };
+    struct pl_shader_var var = shaderVar(pl_var_int("fg_from_rgb"), &from_rgb_i);
     struct pl_shader_va va;
     addPosAttrib(&va);
 
@@ -292,12 +301,12 @@ bool FrameGen::dispatchFlow(int level, const Slot *a, const Slot *b, pl_tex coar
     };
     float motion_cost = 0.00012f;
     struct pl_shader_var vars[6] = {
-        { .var = pl_var_vec2("fg_inv_size"), .data = inv_size },
-        { .var = pl_var_float("fg_scale"), .data = &scale },
-        { .var = pl_var_float("fg_motion_cost"), .data = &motion_cost },
-        { .var = pl_var_int("fg_has_coarse"), .data = &has_coarse },
-        { .var = pl_var_int("fg_radius"), .data = &radius },
-        { .var = pl_var_int("fg_subpixel"), .data = &subpix },
+        shaderVar(pl_var_vec2("fg_inv_size"), inv_size),
+        shaderVar(pl_var_float("fg_scale"), &scale),
+        shaderVar(pl_var_float("fg_motion_cost"), &motion_cost),
+        shaderVar(pl_var_int("fg_has_coarse"), &has_coarse),
+        shaderVar(pl_var_int("fg_radius"), &radius),
+        shaderVar(pl_var_int("fg_subpixel"), &subpix),
     };
     struct pl_shader_va va;
     addPosAttrib(&va);
@@ -330,7 +339,7 @@ bool FrameGen::dispatchMedian(pl_tex src, pl_tex dst)
     float inv_size[2] = { 1.0f / src->params.w, 1.0f / src->params.h };
     struct pl_shader_desc desc = sampled("fg_src", src);
     desc.binding.sample_mode = PL_TEX_SAMPLE_NEAREST;
-    struct pl_shader_var var = { .var = pl_var_vec2("fg_inv_size"), .data = inv_size };
+    struct pl_shader_var var = shaderVar(pl_var_vec2("fg_inv_size"), inv_size);
     struct pl_shader_va va;
     addPosAttrib(&va);
 
@@ -366,10 +375,10 @@ bool FrameGen::dispatchWarp(const Slot *a, const Slot *b, pl_tex flow_tex, float
         sampled("fg_flow", flow_tex),
     };
     struct pl_shader_var vars[4] = {
-        { .var = pl_var_vec2("fg_inv_size"), .data = inv_size },
-        { .var = pl_var_float("fg_t"), .data = &t, .dynamic = true },
-        { .var = pl_var_float("fg_bad_lo"), .data = &bad_lo },
-        { .var = pl_var_float("fg_bad_hi"), .data = &bad_hi },
+        shaderVar(pl_var_vec2("fg_inv_size"), inv_size),
+        shaderVar(pl_var_float("fg_t"), &t, true),
+        shaderVar(pl_var_float("fg_bad_lo"), &bad_lo),
+        shaderVar(pl_var_float("fg_bad_hi"), &bad_hi),
     };
     struct pl_shader_va va;
     addPosAttrib(&va);
