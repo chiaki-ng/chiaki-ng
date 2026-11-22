@@ -265,7 +265,13 @@ private:
     void refreshPendingFrameAge();
     void snapshotPendingFrame();
     bool handleShortcut(QKeyEvent *event);
+    bool handleKbmShortcut(QKeyEvent *event);
+    void setKbmCapture(bool capture);
+    void releaseKbmCaptureLocal();
+    void applyKbmCursorClip();
+    void handleKbmMouseEvent(QMouseEvent *event);
     bool event(QEvent *event) override;
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
     QObject *focusObject() const override;
     void updateQueueDepthAverage(int depth);
     void updatePendingFrameAge(double age);
@@ -314,6 +320,7 @@ private:
     bool keep_video = false;
     RenderBackend render_backend = RenderBackend::Vulkan;
     int grab_input = 0;
+    bool kbm_capture = false;
     int dropped_frames = 0;
     bool is_window_adjustable = false;
     bool is_stream_window_adjustable = false;

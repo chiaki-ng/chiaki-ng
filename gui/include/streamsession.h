@@ -31,8 +31,11 @@
 #include "sessionlog.h"
 #include "controllermanager.h"
 #include "settings.h"
+#include "kbmprofile.h"
 
 #include <QObject>
+#include <QHash>
+#include <QSet>
 #include <QImage>
 #include <QMouseEvent>
 #include <QMutex>
@@ -318,6 +321,31 @@ class StreamSession : public QObject
 		void WaitHaptics();
 		void RetryHaptics(quint64 generation);
 
+		// keyboard + mouse profile ("KBM" mode, mouse aims with the right stick)
+		struct KbmWheelPulse
+		{
+			int pending = 0;
+			bool pressed = false;
+			QTimer *timer = nullptr;
+		};
+		bool kbm_active = false;
+		kbm::Profile kbm_profile;
+		kbm::AimMapper kbm_aim;
+		QHash<int, QList<kbm::Action>> kbm_bindings;
+		QSet<int> kbm_held_inputs;
+		kbm::PadOutput kbm_pad;
+		int16_t kbm_aim_x = 0, kbm_aim_y = 0;
+		ChiakiControllerState kbm_state;
+		QTimer *kbm_timer = nullptr;
+		QElapsedTimer kbm_clock;
+		KbmWheelPulse kbm_wheel_up, kbm_wheel_down;
+		int kbm_wheel_accum = 0;
+		void KbmLoadProfile();
+		void KbmRecompute();
+		void KbmApplyState();
+		void KbmTick();
+		void KbmWheelStep(KbmWheelPulse *pulse, int code);
+
 	private slots:
 		void InitAudio(unsigned int channels, unsigned int rate);
 		void InitMic(unsigned int channels, unsigned int rate);
@@ -371,6 +399,14 @@ class StreamSession : public QObject
 		void HandleMouseReleaseEvent(QMouseEvent *event);
 		void HandleMousePressEvent(QMouseEvent *event);
 		void HandleMouseMoveEvent(QMouseEvent *event, qreal width, qreal height);
+
+		bool KbmActive() const { return kbm_active; }
+		bool KbmClickToCapture() const { return kbm_profile.click_to_capture; }
+		void SetKbmActive(bool active);
+		void HandleKbmMouseDelta(double dx, double dy);
+		void HandleKbmMouseButton(Qt::MouseButton button, bool pressed);
+		void HandleKbmWheel(int angle_delta_y);
+		void AdjustKbmSensitivity(double factor);
 #if CHIAKI_GUI_ENABLE_SPEEX
 		bool ProcessMicFrame(int16_t *echo_buf);
 #endif

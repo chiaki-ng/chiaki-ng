@@ -3,6 +3,7 @@
 #include <streamsession.h>
 #include <settings.h>
 #include <controllermanager.h>
+#include <kbminput.h>
 
 #include <chiaki/base64.h>
 #include <chiaki/streamconnection.h>
@@ -19,6 +20,8 @@
 #include <algorithm>
 
 #include <cstring>
+#include <cmath>
+#include <utility>
 
 #define SETSU_UPDATE_INTERVAL_MS 4
 #define STEAMDECK_UPDATE_INTERVAL_MS 4
@@ -534,6 +537,20 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 			SendFeedbackState();
 		}
 	});
+
+	chiaki_controller_state_set_idle(&kbm_state);
+	kbm_timer = new QTimer(this);
+	kbm_timer->setTimerType(Qt::PreciseTimer);
+	connect(kbm_timer, &QTimer::timeout, this, &StreamSession::KbmTick);
+	auto init_wheel_pulse = [this](KbmWheelPulse *pulse, int code) {
+		pulse->timer = new QTimer(this);
+		pulse->timer->setSingleShot(true);
+		connect(pulse->timer, &QTimer::timeout, this, [this, pulse, code]{ KbmWheelStep(pulse, code); });
+	};
+	init_wheel_pulse(&kbm_wheel_up, kbm::WheelUp);
+	init_wheel_pulse(&kbm_wheel_down, kbm::WheelDown);
+	KbmLoadProfile();
+
 	// If duid isn't empty connect with psn
 	chiaki_connect_info.holepunch_session = NULL;
 	if(!connect_info.duid.isEmpty())
@@ -947,6 +964,18 @@ void StreamSession::HandleMouseMoveEvent(QMouseEvent *event, qreal width, qreal 
 
 void StreamSession::HandleKeyboardEvent(QKeyEvent *event)
 {
+	if(kbm_active)
+	{
+		if(event->isAutoRepeat())
+			return;
+		int code = kbm::KeyEventCode(event);
+		if(event->type() == QEvent::Type::KeyPress)
+			kbm_held_inputs.insert(code);
+		else
+			kbm_held_inputs.remove(code);
+		KbmRecompute();
+		return;
+	}
 	if(!keyboard_controller_enabled)
 		return;
 	if(key_map.contains(Qt::Key(event->key())) == false)
@@ -999,6 +1028,207 @@ void StreamSession::HandleKeyboardEvent(QKeyEvent *event)
 	}
 
 	SendFeedbackState();
+}
+
+// Keyboard + mouse profile ("KBM" mode)
+
+static constexpr int KBM_WHEEL_PRESS_MS = 50;
+static constexpr int KBM_WHEEL_GAP_MS = 40;
+static constexpr int KBM_WHEEL_MAX_PENDING = 5;
+static constexpr int KBM_WHEEL_NOTCH = 120;
+
+void StreamSession::KbmLoadProfile()
+{
+	QString error;
+	kbm_profile = kbm::LoadProfile(&error);
+	const QByteArray path = kbm::ProfilePath().toUtf8();
+	if(!error.isEmpty())
+		CHIAKI_LOGW(GetChiakiLog(), "KBM profile: %s", error.toUtf8().constData());
+	for(const auto &warning : kbm_profile.warnings)
+		CHIAKI_LOGW(GetChiakiLog(), "KBM profile %s: %s", path.constData(), warning.c_str());
+
+	kbm_bindings.clear();
+	for(const auto &binding : kbm_profile.bindings)
+	{
+		int code = kbm::ResolveInputName(QString::fromStdString(binding.input));
+		if(!code)
+		{
+			CHIAKI_LOGW(GetChiakiLog(), "KBM profile %s: unknown key or mouse input \"%s\" for %s",
+					path.constData(), binding.input.c_str(), kbm::ActionName(binding.action));
+			continue;
+		}
+		kbm_bindings[code].append(binding.action);
+	}
+
+	kbm_aim.Configure(kbm_profile.aim);
+	kbm_timer->setInterval(qMax(1, static_cast<int>(std::lround(kbm_profile.aim.update_interval_ms))));
+	CHIAKI_LOGI(GetChiakiLog(), "KBM profile loaded from %s (%d inputs bound)", path.constData(), static_cast<int>(kbm_bindings.size()));
+}
+
+void StreamSession::SetKbmActive(bool active)
+{
+	if(active == kbm_active)
+		return;
+	if(active)
+		KbmLoadProfile();
+	kbm_active = active;
+
+	kbm_held_inputs.clear();
+	kbm_aim.Reset();
+	kbm_aim_x = kbm_aim_y = 0;
+	kbm_wheel_accum = 0;
+	for(auto pulse : { &kbm_wheel_up, &kbm_wheel_down })
+	{
+		pulse->pending = 0;
+		pulse->pressed = false;
+		pulse->timer->stop();
+	}
+
+	// drop whatever the regular keyboard / mouse touchpad mapping was holding
+	chiaki_controller_state_set_idle(&keyboard_state);
+	mouse_touch_id = -1;
+
+	if(active)
+	{
+		kbm_clock.start();
+		kbm_timer->start();
+	}
+	else
+		kbm_timer->stop();
+
+	CHIAKI_LOGI(GetChiakiLog(), active ? "KBM mode on (mouse captured)" : "KBM mode off");
+	KbmRecompute();
+}
+
+void StreamSession::KbmRecompute()
+{
+	std::array<bool, kbm::ActionCount> held = {};
+	for(int code : std::as_const(kbm_held_inputs))
+	{
+		auto it = kbm_bindings.constFind(code);
+		if(it == kbm_bindings.constEnd())
+			continue;
+		for(kbm::Action action : it.value())
+			held[static_cast<size_t>(action)] = true;
+	}
+	kbm_pad = kbm::ComputePad(held, kbm_profile.aim.walk_scale);
+	KbmApplyState();
+	SendFeedbackState();
+}
+
+void StreamSession::KbmApplyState()
+{
+	chiaki_controller_state_set_idle(&kbm_state);
+	if(!kbm_active)
+		return;
+	kbm_state.buttons = kbm_pad.buttons;
+	kbm_state.l2_state = kbm_pad.l2;
+	kbm_state.r2_state = kbm_pad.r2;
+	kbm_state.left_x = kbm_pad.left_x;
+	kbm_state.left_y = kbm_pad.left_y;
+	// right stick keys win over the mouse while they are held
+	kbm_state.right_x = kbm_pad.right_x ? kbm_pad.right_x : kbm_aim_x;
+	kbm_state.right_y = kbm_pad.right_y ? kbm_pad.right_y : kbm_aim_y;
+}
+
+void StreamSession::KbmTick()
+{
+	if(!kbm_active)
+		return;
+	int16_t x, y;
+	kbm_aim.Update(static_cast<double>(kbm_clock.nsecsElapsed()) / 1e6, kbm_pad.l2 > 0, &x, &y);
+	if(x == kbm_aim_x && y == kbm_aim_y)
+		return;
+	kbm_aim_x = x;
+	kbm_aim_y = y;
+	KbmApplyState();
+	SendFeedbackState();
+}
+
+void StreamSession::HandleKbmMouseDelta(double dx, double dy)
+{
+	if(kbm_active)
+		kbm_aim.AddDelta(dx, dy);
+}
+
+void StreamSession::HandleKbmMouseButton(Qt::MouseButton button, bool pressed)
+{
+	if(!kbm_active)
+		return;
+	int code = kbm::MouseButtonCode(button);
+	if(!code)
+		return;
+	if(pressed)
+		kbm_held_inputs.insert(code);
+	else
+		kbm_held_inputs.remove(code);
+	KbmRecompute();
+}
+
+void StreamSession::HandleKbmWheel(int angle_delta_y)
+{
+	if(!kbm_active || !angle_delta_y)
+		return;
+	// direction change drops the leftover of a partial notch
+	if((angle_delta_y > 0) != (kbm_wheel_accum > 0))
+		kbm_wheel_accum = 0;
+	kbm_wheel_accum += angle_delta_y;
+
+	auto queue = [this](KbmWheelPulse *pulse, int code) {
+		if(!kbm_bindings.contains(code))
+			return;
+		pulse->pending = qMin(pulse->pending + 1, KBM_WHEEL_MAX_PENDING);
+		if(!pulse->timer->isActive())
+			KbmWheelStep(pulse, code);
+	};
+	while(kbm_wheel_accum >= KBM_WHEEL_NOTCH)
+	{
+		kbm_wheel_accum -= KBM_WHEEL_NOTCH;
+		queue(&kbm_wheel_up, kbm::WheelUp);
+	}
+	while(kbm_wheel_accum <= -KBM_WHEEL_NOTCH)
+	{
+		kbm_wheel_accum += KBM_WHEEL_NOTCH;
+		queue(&kbm_wheel_down, kbm::WheelDown);
+	}
+}
+
+// A wheel notch becomes a short button press followed by a short release,
+// so that several notches register as several presses in the game.
+void StreamSession::KbmWheelStep(KbmWheelPulse *pulse, int code)
+{
+	if(pulse->pressed)
+	{
+		pulse->pressed = false;
+		kbm_held_inputs.remove(code);
+		KbmRecompute();
+		pulse->timer->start(KBM_WHEEL_GAP_MS);
+		return;
+	}
+	if(pulse->pending > 0 && kbm_active)
+	{
+		pulse->pending--;
+		pulse->pressed = true;
+		kbm_held_inputs.insert(code);
+		KbmRecompute();
+		pulse->timer->start(KBM_WHEEL_PRESS_MS);
+	}
+}
+
+void StreamSession::AdjustKbmSensitivity(double factor)
+{
+	if(!kbm_active)
+		return;
+	kbm::AimConfig config = kbm_aim.Config();
+	config.sensitivity = std::clamp(config.sensitivity * factor, 0.005, 100.0);
+	kbm_aim.Configure(config);
+	kbm_profile.aim = config;
+
+	QString value = QString::number(config.sensitivity, 'g', 4);
+	QString error;
+	if(!kbm::SaveProfileValue(QStringLiteral("mouse"), QStringLiteral("sensitivity"), value, &error))
+		CHIAKI_LOGW(GetChiakiLog(), "KBM profile: failed to save sensitivity: %s", error.toUtf8().constData());
+	CHIAKI_LOGI(GetChiakiLog(), "KBM mouse sensitivity: %s", value.toUtf8().constData());
 }
 
 void StreamSession::HandleTouchEvent(QTouchEvent *event, qreal width, qreal height)
@@ -1284,6 +1514,7 @@ void StreamSession::DpadSendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+	chiaki_controller_state_or(&state, &state, &kbm_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)
@@ -1340,6 +1571,7 @@ void StreamSession::SendFeedbackState()
 	chiaki_controller_state_or(&state, &state, &sdeck_state);
 #endif
 	chiaki_controller_state_or(&state, &state, &keyboard_state);
+	chiaki_controller_state_or(&state, &state, &kbm_state);
 	chiaki_controller_state_or(&state, &state, &touch_state);
 
 	if(input_block)

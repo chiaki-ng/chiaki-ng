@@ -54,6 +54,10 @@ set(SOURCE_FILES
 	src/qmlsvgprovider.cpp
 	include/systemdinhibit.h
 	src/systemdinhibit.cpp
+	include/kbmprofile.h
+	src/kbmprofile.cpp
+	include/kbminput.h
+	src/kbminput.cpp
 	)
 set(RESOURCE_FILES "")
 
@@ -152,6 +156,15 @@ set_target_properties(chiaki PROPERTIES
 		MACOSX_BUNDLE_GUI_IDENTIFIER "org.streetpea.chiaking"
 		MACOSX_BUNDLE_ICON_FILE chiaking.icns
 		RESOURCE "${RESOURCE_FILES}")
+
+if(CHIAKI_ENABLE_TESTS)
+	# keyboard + mouse profile logic, no Qt needed
+	enable_testing()
+	add_executable(chiaki-kbmprofile-test tests/kbmprofile_test.cpp src/kbmprofile.cpp)
+	target_include_directories(chiaki-kbmprofile-test PRIVATE include ${CMAKE_SOURCE_DIR}/lib/include)
+	target_compile_features(chiaki-kbmprofile-test PRIVATE cxx_std_17)
+	add_test(NAME kbmprofile COMMAND chiaki-kbmprofile-test)
+endif()
 
 install(TARGETS chiaki
 		RUNTIME DESTINATION bin

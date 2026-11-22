@@ -4,6 +4,7 @@
 #include "chiaki/log.h"
 #include "chiaki/time.h"
 #include "streamsession.h"
+#include "kbminput.h"
 
 #include <qpa/qplatformnativeinterface.h>
 
@@ -21,6 +22,9 @@ extern "C" {
 }
 
 #include <QByteArray>
+#include <QCursor>
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QPointer>
 #include <QColor>
 #include <QDebug>
@@ -2756,6 +2760,7 @@ void QmlMainWindow::setKeepVideo(bool keep)
 
 void QmlMainWindow::grabInput()
 {
+    setKbmCapture(false);
     setCursor(Qt::ArrowCursor);
     grab_input++;
     if (session)
@@ -5161,6 +5166,8 @@ renderer_backend_ready:
     connect(backend, &QmlBackend::sessionChanged, this, [this, exit_app_on_stream_exit](StreamSession *s) {
         const bool preserve_startup_warmup = s && startup_warmup_preserve_next_session_change;
         startup_warmup_preserve_next_session_change = false;
+        // the previous session may already be going away, only undo the window side
+        releaseKbmCaptureLocal();
         session = s;
         stream_session_active.storeRelease(s ? 1 : 0);
         startup_video_visible_generation.fetchAndAddRelaxed(1);
@@ -7709,7 +7716,17 @@ bool QmlMainWindow::event(QEvent *event)
     case QEvent::MouseButtonRelease:
         if (static_cast<QMouseEvent*>(event)->source() != Qt::MouseEventNotSynthesized)
             return true;
+        if (session && kbm_capture) {
+            handleKbmMouseEvent(static_cast<QMouseEvent*>(event));
+            return true;
+        }
         if (session && !grab_input) {
+            if (event->type() == QEvent::MouseButtonPress && has_video
+                    && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton
+                    && session->KbmClickToCapture()) {
+                setKbmCapture(true);
+                return true;
+            }
             if (event->type() == QEvent::MouseMove)
                 session->HandleMouseMoveEvent(static_cast<QMouseEvent*>(event), width(), height());
             else if (event->type() == QEvent::MouseButtonPress)
@@ -7721,6 +7738,11 @@ bool QmlMainWindow::event(QEvent *event)
         QGuiApplication::sendEvent(quick_window, event);
         break;
     case QEvent::MouseButtonDblClick:
+        if (session && kbm_capture) {
+            // the second click of a double click arrives only as this event
+            handleKbmMouseEvent(static_cast<QMouseEvent*>(event));
+            return true;
+        }
         if(!settings->GetFullscreenDoubleClickEnabled())
             break;
         if (session && !grab_input) {
@@ -7731,7 +7753,10 @@ bool QmlMainWindow::event(QEvent *event)
         }
         break;
     case QEvent::KeyPress:
-        if (handleShortcut(static_cast<QKeyEvent*>(event)))
+        if (handleKbmShortcut(static_cast<QKeyEvent*>(event)))
+            return true;
+        // Ctrl shortcuts would fire while Ctrl is a game key (Ctrl+Q closes the window)
+        if (!kbm_capture && handleShortcut(static_cast<QKeyEvent*>(event)))
             return true;
     case QEvent::KeyRelease:
         if (session && !grab_input) {
@@ -7754,6 +7779,18 @@ bool QmlMainWindow::event(QEvent *event)
             return true;
         }
         QGuiApplication::sendEvent(quick_window, event);
+        break;
+    case QEvent::Wheel:
+        if (session && kbm_capture) {
+            session->HandleKbmWheel(static_cast<QWheelEvent*>(event)->angleDelta().y());
+            return true;
+        }
+        break;
+    case QEvent::FocusOut:
+    case QEvent::WindowDeactivate:
+    case QEvent::Hide:
+        if (kbm_capture)
+            setKbmCapture(false);
         break;
     case QEvent::Close:
         if (!backend->closeRequested()) {
@@ -7782,6 +7819,8 @@ bool QmlMainWindow::event(QEvent *event)
                 QMetaObject::invokeMethod(quick_render, std::bind(&QmlMainWindow::destroySwapchain, this), Qt::BlockingQueuedConnection);
         break;
     case QEvent::Move:
+        if (kbm_capture)
+            applyKbmCursorClip();
         if(!session && isWindowAdjustable())
             settings->SetGeometry(geometry());
         else if(session && settings->GetWindowType() == WindowType::AdjustableResolution && isStreamWindowAdjustable())
@@ -7789,6 +7828,8 @@ bool QmlMainWindow::event(QEvent *event)
         updateStatsOverlayGeometry();
         break;
     case QEvent::Resize:
+        if (kbm_capture)
+            applyKbmCursorClip();
         if(!session && isWindowAdjustable())
             settings->SetGeometry(geometry());
         else if(session && settings->GetWindowType() == WindowType::AdjustableResolution && isStreamWindowAdjustable())
@@ -7802,6 +7843,114 @@ bool QmlMainWindow::event(QEvent *event)
     }
 
     return ret;
+}
+
+// Keyboard + mouse mode: F8 captures / releases the mouse, F9 / F10 change the aim sensitivity.
+bool QmlMainWindow::handleKbmShortcut(QKeyEvent *event)
+{
+    if (!session || grab_input || event->isAutoRepeat())
+        return false;
+    switch (event->key()) {
+    case Qt::Key_F8:
+        setKbmCapture(!kbm_capture);
+        return true;
+    case Qt::Key_F9:
+    case Qt::Key_F10:
+        if (!kbm_capture)
+            return false;
+        session->AdjustKbmSensitivity(event->key() == Qt::Key_F10 ? 1.1 : 1.0 / 1.1);
+        return true;
+    case Qt::Key_F11:
+        if (!kbm_capture)
+            return false;
+        return handleShortcut(event);
+    default:
+        return false;
+    }
+}
+
+void QmlMainWindow::setKbmCapture(bool capture)
+{
+    if (capture && (!session || grab_input))
+        capture = false;
+    if (capture == kbm_capture)
+        return;
+    if (!capture) {
+        if (session)
+            session->SetKbmActive(false);
+        releaseKbmCaptureLocal();
+        return;
+    }
+
+    kbm_capture = true;
+    session->SetKbmActive(true);
+    setCursor(Qt::BlankCursor);
+#ifdef Q_OS_WIN
+    if (!kbm::RawMouseRegister(winId()))
+        qWarning() << "KBM: failed to register raw mouse input";
+#endif
+    applyKbmCursorClip();
+}
+
+void QmlMainWindow::releaseKbmCaptureLocal()
+{
+    if (!kbm_capture)
+        return;
+    kbm_capture = false;
+#ifdef Q_OS_WIN
+    kbm::RawMouseUnregister();
+    kbm::ReleaseCursorClip();
+#endif
+    setCursor(has_video && settings->GetHideCursor() && !grab_input ? Qt::BlankCursor : Qt::ArrowCursor);
+}
+
+void QmlMainWindow::applyKbmCursorClip()
+{
+#ifdef Q_OS_WIN
+    kbm::ClipCursorToWindowCenter(winId());
+#else
+    QCursor::setPos(screen(), mapToGlobal(QPoint(width() / 2, height() / 2)));
+#endif
+}
+
+void QmlMainWindow::handleKbmMouseEvent(QMouseEvent *event)
+{
+    switch (event->type()) {
+    case QEvent::MouseMove: {
+#ifndef Q_OS_WIN
+        // no raw input: measure the distance from the window center and warp back
+        const QPointF center(width() / 2, height() / 2);
+        const QPointF delta = event->position() - center;
+        if (!delta.isNull()) {
+            session->HandleKbmMouseDelta(delta.x(), delta.y());
+            applyKbmCursorClip();
+        }
+#endif
+        break;
+    }
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseButtonDblClick:
+        session->HandleKbmMouseButton(event->button(), true);
+        break;
+    case QEvent::MouseButtonRelease:
+        session->HandleKbmMouseButton(event->button(), false);
+        break;
+    default:
+        break;
+    }
+}
+
+bool QmlMainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)
+{
+#ifdef Q_OS_WIN
+    if (kbm_capture && session && eventType == "windows_generic_MSG") {
+        long dx = 0, dy = 0;
+        if (kbm::RawMouseParse(message, &dx, &dy))
+            session->HandleKbmMouseDelta(dx, dy);
+        // fall through: WM_INPUT still has to reach DefWindowProc
+    }
+#endif
+    return QWindow::nativeEvent(eventType, message, result);
 }
 
 QObject *QmlMainWindow::focusObject() const
