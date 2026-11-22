@@ -512,6 +512,24 @@ DialogView {
                             onActivated: index => root.setTheme(keys[index])
                         }
 
+                        RowLayout {
+                            spacing: 6
+                            // Third grid cell: show the palette without shifting
+                            // the label/control/default columns below this row.
+                            Repeater {
+                                model: [root.currentTheme.background, root.currentTheme.primary, root.currentTheme.accent]
+                                delegate: Rectangle {
+                                    required property string modelData
+                                    width: 24
+                                    height: 24
+                                    radius: 6
+                                    color: modelData
+                                    border.width: 1
+                                    border.color: Material.foreground
+                                }
+                            }
+                        }
+
                         Label {
                             Layout.alignment: Qt.AlignRight
                             text: qsTr("Steam Deck Haptics:")

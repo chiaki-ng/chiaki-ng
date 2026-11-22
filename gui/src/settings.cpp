@@ -2358,48 +2358,53 @@ void Settings::SaveControllerMappings(QSettings *qsettings)
 	qsettings->endArray();
 }
 
-QString Settings::GetChiakiControllerButtonName(int button)
+static const char *GetChiakiControllerButtonId(int button)
 {
 	switch(button)
 	{
-		case CHIAKI_CONTROLLER_BUTTON_CROSS      : return tr("Cross");
-		case CHIAKI_CONTROLLER_BUTTON_MOON       : return tr("Moon");
-		case CHIAKI_CONTROLLER_BUTTON_BOX        : return tr("Box");
-		case CHIAKI_CONTROLLER_BUTTON_PYRAMID    : return tr("Pyramid");
-		case CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT  : return tr("D-Pad Left");
-		case CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT : return tr("D-Pad Right");
-		case CHIAKI_CONTROLLER_BUTTON_DPAD_UP    : return tr("D-Pad Up");
-		case CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN  : return tr("D-Pad Down");
-		case CHIAKI_CONTROLLER_BUTTON_L1         : return tr("L1");
-		case CHIAKI_CONTROLLER_BUTTON_R1         : return tr("R1");
-		case CHIAKI_CONTROLLER_BUTTON_L3         : return tr("L3");
-		case CHIAKI_CONTROLLER_BUTTON_R3         : return tr("R3");
-		case CHIAKI_CONTROLLER_BUTTON_OPTIONS    : return tr("Options");
-		case CHIAKI_CONTROLLER_BUTTON_SHARE      : return tr("Share");
-		case CHIAKI_CONTROLLER_BUTTON_TOUCHPAD   : return tr("Touchpad");
-		case CHIAKI_CONTROLLER_BUTTON_PS         : return tr("PS");
-		case CHIAKI_CONTROLLER_ANALOG_BUTTON_L2  : return tr("L2");
-		case CHIAKI_CONTROLLER_ANALOG_BUTTON_R2  : return tr("R2");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X_UP)    : return tr("Left Stick Right");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y_UP)    : return tr("Left Stick Up");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X_UP)   : return tr("Right Stick Right");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y_UP)   : return tr("Right Stick Up");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X_DOWN)  : return tr("Left Stick Left");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y_DOWN)  : return tr("Left Stick Down");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X_DOWN) : return tr("Right Stick Left");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y_DOWN) : return tr("Right Stick Down");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X) : return tr("Left Stick X");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y) : return tr("Left Stick Y");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X) : return tr("Right Stick X");
-		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y) : return tr("Right Stick Y");
-		case static_cast<int>(ControllerButtonExt::MISC1) : return tr("MIC");
+		case CHIAKI_CONTROLLER_BUTTON_CROSS      : return QT_TRANSLATE_NOOP("Settings", "Cross");
+		case CHIAKI_CONTROLLER_BUTTON_MOON       : return QT_TRANSLATE_NOOP("Settings", "Moon");
+		case CHIAKI_CONTROLLER_BUTTON_BOX        : return QT_TRANSLATE_NOOP("Settings", "Box");
+		case CHIAKI_CONTROLLER_BUTTON_PYRAMID    : return QT_TRANSLATE_NOOP("Settings", "Pyramid");
+		case CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT  : return QT_TRANSLATE_NOOP("Settings", "D-Pad Left");
+		case CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT : return QT_TRANSLATE_NOOP("Settings", "D-Pad Right");
+		case CHIAKI_CONTROLLER_BUTTON_DPAD_UP    : return QT_TRANSLATE_NOOP("Settings", "D-Pad Up");
+		case CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN  : return QT_TRANSLATE_NOOP("Settings", "D-Pad Down");
+		case CHIAKI_CONTROLLER_BUTTON_L1         : return QT_TRANSLATE_NOOP("Settings", "L1");
+		case CHIAKI_CONTROLLER_BUTTON_R1         : return QT_TRANSLATE_NOOP("Settings", "R1");
+		case CHIAKI_CONTROLLER_BUTTON_L3         : return QT_TRANSLATE_NOOP("Settings", "L3");
+		case CHIAKI_CONTROLLER_BUTTON_R3         : return QT_TRANSLATE_NOOP("Settings", "R3");
+		case CHIAKI_CONTROLLER_BUTTON_OPTIONS    : return QT_TRANSLATE_NOOP("Settings", "Options");
+		case CHIAKI_CONTROLLER_BUTTON_SHARE      : return QT_TRANSLATE_NOOP("Settings", "Share");
+		case CHIAKI_CONTROLLER_BUTTON_TOUCHPAD   : return QT_TRANSLATE_NOOP("Settings", "Touchpad");
+		case CHIAKI_CONTROLLER_BUTTON_PS         : return QT_TRANSLATE_NOOP("Settings", "PS");
+		case CHIAKI_CONTROLLER_ANALOG_BUTTON_L2  : return QT_TRANSLATE_NOOP("Settings", "L2");
+		case CHIAKI_CONTROLLER_ANALOG_BUTTON_R2  : return QT_TRANSLATE_NOOP("Settings", "R2");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X_UP)    : return QT_TRANSLATE_NOOP("Settings", "Left Stick Right");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y_UP)    : return QT_TRANSLATE_NOOP("Settings", "Left Stick Up");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X_UP)   : return QT_TRANSLATE_NOOP("Settings", "Right Stick Right");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y_UP)   : return QT_TRANSLATE_NOOP("Settings", "Right Stick Up");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X_DOWN)  : return QT_TRANSLATE_NOOP("Settings", "Left Stick Left");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y_DOWN)  : return QT_TRANSLATE_NOOP("Settings", "Left Stick Down");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X_DOWN) : return QT_TRANSLATE_NOOP("Settings", "Right Stick Left");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y_DOWN) : return QT_TRANSLATE_NOOP("Settings", "Right Stick Down");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X) : return QT_TRANSLATE_NOOP("Settings", "Left Stick X");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y) : return QT_TRANSLATE_NOOP("Settings", "Left Stick Y");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X) : return QT_TRANSLATE_NOOP("Settings", "Right Stick X");
+		case static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y) : return QT_TRANSLATE_NOOP("Settings", "Right Stick Y");
+		case static_cast<int>(ControllerButtonExt::MISC1) : return QT_TRANSLATE_NOOP("Settings", "MIC");
 		default: return "Unknown";
 	}
 }
 
+QString Settings::GetChiakiControllerButtonName(int button)
+{
+	return tr(GetChiakiControllerButtonId(button));
+}
+
 void Settings::SetControllerButtonMapping(int chiaki_button, Qt::Key key)
 {
-	auto button_name = GetChiakiControllerButtonName(chiaki_button).replace(' ', '_').toLower();
+	auto button_name = QString::fromLatin1(GetChiakiControllerButtonId(chiaki_button)).replace(' ', '_').toLower();
 	settings.setValue("keymap/" + button_name, QKeySequence(key).toString());
 }
 
@@ -2440,7 +2445,7 @@ QMap<int, Qt::Key> Settings::GetControllerMapping()
 	auto chiaki_buttons = result.keys();
 	for(auto chiaki_button : chiaki_buttons)
 	{
-		auto button_name = GetChiakiControllerButtonName(chiaki_button).replace(' ', '_').toLower();
+		auto button_name = QString::fromLatin1(GetChiakiControllerButtonId(chiaki_button)).replace(' ', '_').toLower();
 		if(settings.contains("keymap/" + button_name))
 			result[static_cast<int>(chiaki_button)] = QKeySequence(settings.value("keymap/" + button_name).toString())[0].key();
 	}
@@ -2485,7 +2490,7 @@ void Settings::ClearKeyMapping()
 	auto chiaki_buttons = result.keys();
 	for(auto chiaki_button : chiaki_buttons)
 	{
-		auto button_name = GetChiakiControllerButtonName(chiaki_button).replace(' ', '_').toLower();
+		auto button_name = QString::fromLatin1(GetChiakiControllerButtonId(chiaki_button)).replace(' ', '_').toLower();
 		if(settings.contains("keymap/" + button_name))
 			settings.remove("keymap/" + button_name);
 	}
