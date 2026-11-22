@@ -501,6 +501,28 @@ DialogView {
 
                         Label {
                             Layout.alignment: Qt.AlignRight
+                            text: qsTr("Theme:")
+                        }
+
+                        C.ComboBox {
+                            readonly property var keys: root.themeKeys
+                            Layout.preferredWidth: 400
+                            model: keys.map(k => root.themes[k].name)
+                            currentIndex: Math.max(0, keys.indexOf(root.currentThemeKey))
+                            onActivated: index => root.setTheme(keys[index])
+                        }
+
+                        GameBackdrop {
+                            Layout.preferredWidth: 140
+                            Layout.preferredHeight: 72
+                            themeKey: root.currentThemeKey
+                            themePalette: root.currentTheme
+                            showLabel: false
+                            clip: true
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignRight
                             text: qsTr("Steam Deck Haptics:")
                             visible: (typeof Chiaki.settings.steamDeckHaptics !== "undefined")
                         }

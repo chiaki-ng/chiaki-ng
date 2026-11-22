@@ -1,3 +1,4 @@
+import QtCore
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -11,8 +12,39 @@ Item {
     property bool initialAsk: false
     readonly property bool preferSeparateStreamSettingsWindows: Chiaki.window.runtimeRendererBackend === 1 && Chiaki.session
     property bool useSeparateStreamSettingsWindows: false
+    // Temas inspirados en PlayStation y sus juegos; se elige en Ajustes > General
+    readonly property var themes: ({
+        "chiaki":   { name: qsTr("chiaki-ng (original)"), accent: "#00a7ff", background: "#303030", primary: "#00a7ff" },
+        "ps5":      { name: qsTr("PS5 clásico"),          accent: "#53b5ff", background: "#0b0d12", primary: "#17243a" },
+        "ps4":      { name: qsTr("PS4"),                  accent: "#00a7ff", background: "#0a1f44", primary: "#2e6db4" },
+        "gow":      { name: qsTr("God of War"),           accent: "#ee5266", background: "#160909", primary: "#39232a" },
+        "spiderman":{ name: qsTr("Marvel's Spider-Man"),  accent: "#e23636", background: "#0d0f1f", primary: "#1f4fa3" },
+        "horizon":  { name: qsTr("Horizon"),              accent: "#f5a450", background: "#0b1a1c", primary: "#163c45" },
+        "tlou":     { name: qsTr("The Last of Us"),       accent: "#b4ca7d", background: "#111410", primary: "#2b3726" },
+        "ghost":    { name: qsTr("Ghost of Tsushima"),    accent: "#f47971", background: "#141210", primary: "#382a28" },
+        "astro":    { name: qsTr("Astro Bot"),            accent: "#63c9ff", background: "#0c1426", primary: "#1c3459" },
+        "gt7":      { name: "Gran Turismo",              accent: "#62b6ff", background: "#0c1018", primary: "#1b2c45" },
+        "ratchet":  { name: "Ratchet & Clank",           accent: "#ffb758", background: "#13102b", primary: "#34244c" },
+        "returnal": { name: "Returnal",                  accent: "#89e6ce", background: "#07191c", primary: "#153338" },
+        "uncharted":{ name: "Uncharted",                 accent: "#e8c17e", background: "#18150c", primary: "#3a3020" },
+        "bloodborne":{name: "Bloodborne",                accent: "#df9b9c", background: "#100e18", primary: "#302332" },
+        "demons":   { name: "Demon's Souls",             accent: "#9bc5e8", background: "#0b131c", primary: "#203141" },
+        "stranding":{ name: "Death Stranding",           accent: "#a4d9e8", background: "#10181d", primary: "#273941" }
+    })
+    readonly property var themeKeys: ["ps5", "ps4", "gow", "spiderman", "horizon", "tlou", "ghost", "astro", "gt7", "ratchet", "returnal", "uncharted", "bloodborne", "demons", "stranding", "chiaki"]
+    Settings {
+        id: themeSettings
+        category: "theme"
+        property string current: "ps5"
+    }
+    readonly property string currentThemeKey: themes[themeSettings.current] ? themeSettings.current : "ps5"
+    readonly property var currentTheme: themes[currentThemeKey]
+    function setTheme(key) { if (themes[key]) themeSettings.current = key; }
+
     Material.theme: Material.Dark
-    Material.accent: "#00a7ff"
+    Material.accent: currentTheme.accent
+    Material.primary: currentTheme.primary
+    Material.background: currentTheme.background
 
     function controllerButton(name) {
         let type = "deck";
