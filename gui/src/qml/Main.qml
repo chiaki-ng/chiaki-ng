@@ -548,6 +548,13 @@ Item {
         function onRegistDialogRequested(host, ps5, duid) {
             if(!duid)
                 showRegistDialog(host, ps5);
+            else if(!host)
+            {
+                const message = ps5
+                    ? qsTr("Register this PS5 over PSN?\nNo local network connection or pairing PIN is required.")
+                    : qsTr("Register the main PS4 for this PSN account?\nNo local network connection or pairing PIN is required.");
+                root.showConfirmDialog(qsTr("Register via PSN"), message, () => Chiaki.autoRegister());
+            }
             else
             {
                 if(ps5)

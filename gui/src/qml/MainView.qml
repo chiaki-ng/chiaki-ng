@@ -270,6 +270,8 @@ Pane {
                         {
                             if(modelData.discovered)
                                 t += "\n" + qsTr("Automatic Registration Available");
+                            else if(!modelData.registered)
+                                t += "\n" + qsTr("Register via PSN (no local connection needed)");
                             else
                                 t += "\n" + qsTr("Remote Connection via PSN");
                         } 

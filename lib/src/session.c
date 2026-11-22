@@ -1109,12 +1109,13 @@ static void regist_cb(ChiakiRegistEvent *event, void *user)
 	{
 		case CHIAKI_REGIST_EVENT_TYPE_FINISHED_SUCCESS:
 			CHIAKI_LOGI(session->log, "%s successfully registered for Remote Play", event->registered_host->server_nickname);
-			if(session->auto_regist)
+			// PSN also registers during a streaming connection. Expose the result so
+			// clients can save a console that has never been registered locally.
 			{
-				ChiakiEvent event_auto_regist = { 0 };
-				event_auto_regist.type = CHIAKI_EVENT_REGIST;
-				memcpy(&event_auto_regist.host, event->registered_host, sizeof(ChiakiRegisteredHost));
-				chiaki_session_send_event(session, &event_auto_regist);
+				ChiakiEvent event_regist = { 0 };
+				event_regist.type = CHIAKI_EVENT_REGIST;
+				memcpy(&event_regist.host, event->registered_host, sizeof(ChiakiRegisteredHost));
+				chiaki_session_send_event(session, &event_regist);
 			}
 			memcpy(session->connect_info.morning, event->registered_host->rp_key, sizeof(session->connect_info.morning));
 			memcpy(session->connect_info.regist_key, event->registered_host->rp_regist_key, sizeof(session->connect_info.regist_key));

@@ -162,8 +162,6 @@ public:
 
     void checkPsnConnection(const ChiakiErrorCode &err);
 
-    void checkNickname(QString nickname);
-
     bool closeRequested();
 
     void setAllowJoystickBackgroundEvents();
@@ -256,19 +254,23 @@ private:
 
         DiscoveryHost discovery_host;
         ManualHost manual_host;
-        bool discovered;
+        bool discovered = false;
 
         PsnHost psn_host;
         QString duid;
         RegisteredHost registered_host;
-        bool registered;
+        bool registered = false;
 
         QString GetHostAddr() const { return discovered ? discovery_host.host_addr : manual_host.GetHost(); }
         bool IsPS5() const { return discovered ? discovery_host.ps5 :
-            (registered ? chiaki_target_is_ps5(registered_host.GetTarget()) : true); }
+            (!duid.isEmpty() ? psn_host.IsPS5() :
+            (registered ? chiaki_target_is_ps5(registered_host.GetTarget()) : true)); }
     };
 
     DisplayServer displayServerAt(int index) const;
+    QList<PsnHost> visiblePsnHosts() const;
+    bool psnHostRegistered(const PsnHost &host) const;
+    size_t registeredPs4Count() const;
     bool sendWakeup(const DisplayServer &server);
     bool sendWakeup(const QString &host, const QByteArray &regist_key, bool ps5);
     void updateControllers();
