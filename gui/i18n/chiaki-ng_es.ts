@@ -3510,6 +3510,26 @@ Please use Steam to map controller or disable Steam Input for the controller bef
         <translation>Este controlador es gestionado por Steam.
 Por favor, usa Steam para mapear el controlador o desactiva la Entrada de Steam para el controlador antes de mapearlo aquí.</translation>
     </message>
+    <message>
+        <source>Sharpening:</source>
+        <translation>Nitidez:</translation>
+    </message>
+    <message>
+        <source>Low</source>
+        <translation>Baja</translation>
+    </message>
+    <message>
+        <source>Medium</source>
+        <translation>Media</translation>
+    </message>
+    <message>
+        <source>High</source>
+        <translation>Alta</translation>
+    </message>
+    <message>
+        <source>(Off)</source>
+        <translation>(Apagada)</translation>
+    </message>
 </context>
 <context>
     <name>StatsOverlayWidget</name>
