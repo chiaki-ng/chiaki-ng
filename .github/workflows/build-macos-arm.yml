@@ -11,7 +11,7 @@ permissions:
 jobs:
   build-mac_arm64_github:
     name: Build macOSX arm64 version Github
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -27,6 +27,15 @@ jobs:
           brew install --force qt@6 ffmpeg pkgconfig opus openssl@3 cmake ninja nasm protobuf@29 speexdsp libplacebo wget python-setuptools json-c miniupnpc libevent
           # OpenSSL 4 headers in the Homebrew prefix would shadow openssl@3; the bundled curl needs 3
           brew unlink openssl@4 || true
+
+      - name: Rebuild bundled libs for macOS 14 compatibility
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+        run: |
+          # Homebrew bottles on macos-15 are built for macOS 15 and link against
+          # macOS 15-only system libs (e.g. libhvf.dylib). Rebuild from source with
+          # MACOSX_DEPLOYMENT_TARGET=14.0 so the bundled dylibs run on macOS 14.
+          brew reinstall --build-from-source freetype harfbuzz libpng
 
       - name: Install sdl2-compat
         run: |
