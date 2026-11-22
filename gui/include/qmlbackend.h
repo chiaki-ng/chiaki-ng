@@ -274,6 +274,8 @@ private:
     void updateControllers();
     void updateControllerMappings();
     void updateDiscoveryHosts();
+    bool isSessionConsole(const DiscoveryHost &host) const;
+    void retargetSession(const QString &new_host);
     void updatePsnHosts();
     void updatePsnHostsThread();
     void updateAudioVolume();

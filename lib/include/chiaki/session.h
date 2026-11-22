@@ -283,6 +283,19 @@ typedef struct chiaki_session_t
 CHIAKI_EXPORT ChiakiErrorCode chiaki_session_init(ChiakiSession *session, ChiakiConnectInfo *connect_info, ChiakiLog *log);
 CHIAKI_EXPORT void chiaki_session_fini(ChiakiSession *session);
 CHIAKI_EXPORT ChiakiErrorCode chiaki_session_start(ChiakiSession *session);
+
+/**
+ * Point a local (non-PSN) session at a new console address, e.g. after the console
+ * got a different IP from DHCP while waking up from rest mode.
+ *
+ * The address is resolved the same way as in chiaki_session_init(). On failure the
+ * previously resolved address is kept.
+ *
+ * Must only be called while the session thread is not running, i.e. before
+ * chiaki_session_start() or after the session has quit and before it is started again.
+ */
+CHIAKI_EXPORT ChiakiErrorCode chiaki_session_set_host(ChiakiSession *session, const char *host);
+
 CHIAKI_EXPORT ChiakiErrorCode chiaki_session_stop(ChiakiSession *session);
 CHIAKI_EXPORT ChiakiErrorCode chiaki_session_join(ChiakiSession *session);
 

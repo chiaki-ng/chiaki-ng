@@ -152,7 +152,7 @@ class StreamSession : public QObject
 	friend class StreamSessionPrivate;
 
 	Q_OBJECT
-	Q_PROPERTY(QString host READ GetHost CONSTANT)
+	Q_PROPERTY(QString host READ GetHost NOTIFY HostChanged)
 	Q_PROPERTY(bool connected READ GetConnected NOTIFY ConnectedChanged)
 	Q_PROPERTY(double measuredBitrate READ GetMeasuredBitrate NOTIFY MeasuredBitrateChanged)
 	Q_PROPERTY(double averagePacketLoss READ GetAveragePacketLoss NOTIFY AveragePacketLossChanged)
@@ -242,6 +242,7 @@ class StreamSession : public QObject
 		RumbleHapticsIntensity rumble_haptics_intensity;
 		bool start_mic_unmuted;
 		bool session_started;
+		QString pending_host;
 
 		ChiakiFfmpegDecoder *ffmpeg_decoder;
 		void TriggerFfmpegFrameAvailable();
@@ -340,6 +341,12 @@ class StreamSession : public QObject
 		bool IsConnecting()	{ return connect_timer.isValid(); }
 
 		void Start();
+		/**
+		 * Change the console address of a local session. Takes effect on the next Start(),
+		 * so it is applied before the first start or before a connection retry, never
+		 * while the session thread is running.
+		 */
+		void SetHost(const QString &new_host);
 		void Stop();
 		void GoToBed();
 	Q_INVOKABLE bool RequestIDR();
@@ -381,6 +388,7 @@ class StreamSession : public QObject
 		void BlockInput(bool block) { input_block = block ? 1 : 2; SendFeedbackState(); }
 
 	signals:
+		void HostChanged();
 		void FfmpegFrameAvailable();
 		void RumbleHapticPushed(uint16_t strength);
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE

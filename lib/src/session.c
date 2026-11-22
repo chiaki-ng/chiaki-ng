@@ -311,6 +311,40 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_session_start(ChiakiSession *session)
 	return err;
 }
 
+CHIAKI_EXPORT ChiakiErrorCode chiaki_session_set_host(ChiakiSession *session, const char *host)
+{
+	if(!session || !host || !*host)
+		return CHIAKI_ERR_INVALID_DATA;
+	// PSN sessions get their address from the holepunch session, not from a host name
+	if(session->holepunch_session)
+		return CHIAKI_ERR_INVALID_DATA;
+
+	// same resolution rules as chiaki_session_init()
+	struct addrinfo hints;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_family = strchr(host, ':') ? AF_INET6 : AF_INET;
+	struct addrinfo *addrinfos = NULL;
+	int r = getaddrinfo(host, NULL, &hints, &addrinfos);
+	if(r != 0 || !addrinfos)
+	{
+		CHIAKI_LOGE(session->log, "Failed to resolve new session host %s", host);
+		if(addrinfos)
+			freeaddrinfo(addrinfos);
+		return CHIAKI_ERR_PARSE_ADDR;
+	}
+
+	struct addrinfo *old_addrinfos = session->connect_info.host_addrinfos;
+	session->connect_info.host_addrinfos = addrinfos;
+	// pointed into the old list, gets selected again on the next session request
+	session->connect_info.host_addrinfo_selected = NULL;
+	if(old_addrinfos)
+		freeaddrinfo(old_addrinfos);
+
+	CHIAKI_LOGI(session->log, "Session host changed to %s", host);
+	return CHIAKI_ERR_SUCCESS;
+}
+
 CHIAKI_EXPORT ChiakiErrorCode chiaki_session_stop(ChiakiSession *session)
 {
 	ChiakiErrorCode err = chiaki_mutex_lock(&session->state_mutex);
