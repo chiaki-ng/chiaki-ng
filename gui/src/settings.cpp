@@ -1093,10 +1093,19 @@ void Settings::SetPsnAccountId(QString account_id)
 	settings.setValue("settings/psn_account_id", account_id);
 }
 
+ChiakiVideoFPSPreset Settings::StreamFPS(ChiakiVideoFPSPreset configured) const
+{
+	// Frame generation needs each streamed frame to be a new game frame. A
+	// 30 fps game streamed at 60 fps arrives as doubled frames, leaving
+	// nothing to interpolate, so frame generation always streams at 30 fps
+	// and doubles it locally.
+	return GetFrameGeneration() ? CHIAKI_VIDEO_FPS_PRESET_30 : configured;
+}
+
 ChiakiConnectVideoProfile Settings::GetVideoProfileLocalPS4()
 {
 	ChiakiConnectVideoProfile profile = {};
-	chiaki_connect_video_profile_preset(&profile, GetResolutionLocalPS4(), GetFPSLocalPS4());
+	chiaki_connect_video_profile_preset(&profile, GetResolutionLocalPS4(), StreamFPS(GetFPSLocalPS4()));
 	unsigned int bitrate = GetBitrateLocalPS4();
 	if(bitrate)
 		profile.bitrate = bitrate;
@@ -1107,7 +1116,7 @@ ChiakiConnectVideoProfile Settings::GetVideoProfileLocalPS4()
 ChiakiConnectVideoProfile Settings::GetVideoProfileRemotePS4()
 {
 	ChiakiConnectVideoProfile profile = {};
-	chiaki_connect_video_profile_preset(&profile, GetResolutionRemotePS4(), GetFPSRemotePS4());
+	chiaki_connect_video_profile_preset(&profile, GetResolutionRemotePS4(), StreamFPS(GetFPSRemotePS4()));
 	unsigned int bitrate = GetBitrateRemotePS4();
 	if(bitrate)
 		profile.bitrate = bitrate;
@@ -1118,7 +1127,7 @@ ChiakiConnectVideoProfile Settings::GetVideoProfileRemotePS4()
 ChiakiConnectVideoProfile Settings::GetVideoProfileLocalPS5()
 {
 	ChiakiConnectVideoProfile profile = {};
-	chiaki_connect_video_profile_preset(&profile, GetResolutionLocalPS5(), GetFPSLocalPS5());
+	chiaki_connect_video_profile_preset(&profile, GetResolutionLocalPS5(), StreamFPS(GetFPSLocalPS5()));
 	unsigned int bitrate = GetBitrateLocalPS5();
 	if(bitrate)
 		profile.bitrate = bitrate;
@@ -1129,7 +1138,7 @@ ChiakiConnectVideoProfile Settings::GetVideoProfileLocalPS5()
 ChiakiConnectVideoProfile Settings::GetVideoProfileRemotePS5()
 {
 	ChiakiConnectVideoProfile profile = {};
-	chiaki_connect_video_profile_preset(&profile, GetResolutionRemotePS5(), GetFPSRemotePS5());
+	chiaki_connect_video_profile_preset(&profile, GetResolutionRemotePS5(), StreamFPS(GetFPSRemotePS5()));
 	unsigned int bitrate = GetBitrateRemotePS5();
 	if(bitrate)
 		profile.bitrate = bitrate;

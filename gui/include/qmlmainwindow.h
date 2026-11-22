@@ -1,5 +1,8 @@
 #pragma once
 
+#include "framegen.h"
+
+#include <memory>
 #include "streamsession.h"
 #include "settings.h"
 
@@ -288,6 +291,10 @@ private:
     // the queue for it. Guarded by placebo_state_mutex
     bool queue_rollback_pending = false;
     quint64 placebo_queue_resets = 0;
+    // Optical-flow frame generation (render thread only, except the enabled flag)
+    std::unique_ptr<FrameGen> frame_gen;
+    bool frame_gen_enabled = false;
+    quint64 frame_gen_seen_resets = 0;
     // Direct rendering retains the displayed mapping and replaces only pending input.
     bool bypass_frame_queue = true;
     QMutex direct_frame_mutex;

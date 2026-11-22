@@ -99,6 +99,7 @@ class QmlSettings : public QObject
 	Q_PROPERTY(int placeboDownscaler READ placeboDownscaler WRITE setPlaceboDownscaler NOTIFY placeboDownscalerChanged)
 	Q_PROPERTY(int placeboPlaneDownscaler READ placeboPlaneDownscaler WRITE setPlaceboPlaneDownscaler NOTIFY placeboPlaneDownscalerChanged)
 	Q_PROPERTY(int placeboFrameMixer READ placeboFrameMixer WRITE setPlaceboFrameMixer NOTIFY placeboFrameMixerChanged)
+	Q_PROPERTY(bool frameGeneration READ frameGeneration WRITE setFrameGeneration NOTIFY frameGenerationChanged)
 	Q_PROPERTY(bool directFrameMapping READ directFrameMapping WRITE setDirectFrameMapping NOTIFY directFrameMappingChanged)
 	Q_PROPERTY(bool placeboDeinterlaceEnabled READ placeboDeinterlaceEnabled WRITE setPlaceboDeinterlaceEnabled NOTIFY placeboDeinterlaceEnabledChanged)
 	Q_PROPERTY(int placeboDeinterlacePreset READ placeboDeinterlacePreset WRITE setPlaceboDeinterlacePreset NOTIFY placeboDeinterlacePresetChanged)
@@ -348,6 +349,8 @@ public:
     bool directFrameMapping() const;
     void setDirectFrameMapping(bool enabled);
     void setPlaceboFrameMixer(int mixer);
+    bool frameGeneration() const;
+    void setFrameGeneration(bool enabled);
 
     bool placeboDeinterlaceEnabled() const;
     void setPlaceboDeinterlaceEnabled(bool enabled);
@@ -703,6 +706,7 @@ signals:
     void placeboDownscalerChanged();
     void placeboPlaneDownscalerChanged();
     void placeboFrameMixerChanged();
+    void frameGenerationChanged();
     void directFrameMappingChanged();
     void placeboDeinterlaceEnabledChanged();
     void placeboDeinterlacePresetChanged();

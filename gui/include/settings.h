@@ -321,6 +321,8 @@ class Settings : public QObject
 		ChiakiVideoFPSPreset GetFPSRemotePS4() const;
 		ChiakiVideoFPSPreset GetFPSLocalPS5() const;
 		ChiakiVideoFPSPreset GetFPSRemotePS5() const;
+		// FPS actually requested from the console (forced to 30 with frame generation)
+		ChiakiVideoFPSPreset StreamFPS(ChiakiVideoFPSPreset configured) const;
 		void SetFPSLocalPS4(ChiakiVideoFPSPreset fps);
 		void SetFPSRemotePS4(ChiakiVideoFPSPreset fps);
 		void SetFPSLocalPS5(ChiakiVideoFPSPreset fps);
@@ -521,6 +523,9 @@ class Settings : public QObject
 		bool GetDirectFrameMapping() const { return settings.value("settings/direct_frame_mapping", true).toBool(); }
 		void SetDirectFrameMapping(bool enabled) { settings.setValue("settings/direct_frame_mapping", enabled); }
 		void SetPlaceboFrameMixer(PlaceboFrameMixer frame_mixer);
+		// Optical-flow frame generation (doubles the shown frame rate, adds one source frame of latency)
+		bool GetFrameGeneration() const { return settings.value("settings/frame_generation", false).toBool(); }
+		void SetFrameGeneration(bool enabled) { settings.setValue("settings/frame_generation", enabled); }
 
 		bool GetPlaceboDeinterlaceEnabled() const;
 		void SetPlaceboDeinterlaceEnabled(bool enabled);

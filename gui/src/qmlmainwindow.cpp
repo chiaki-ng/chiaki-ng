@@ -2677,6 +2677,7 @@ QmlMainWindow::~QmlMainWindow()
         fclose(file);
     }
     pl_cache_destroy(&placebo_cache);
+    frame_gen.reset();
     pl_queue_destroy(&placebo_queue);
     pl_renderer_destroy(&placebo_renderer);
     // User shader hooks hold a reference to the GPU (their descriptors destroy
@@ -2933,14 +2934,17 @@ constexpr int kDefaultQueueDepthLimit = 2;
 
 constexpr double kPtsStaleMarginS = 0.0005; // 500 µs
 
-static const struct pl_filter_config *frame_mixer_config(Settings *settings)
+static const struct pl_filter_config *frame_mixer_config(Settings *settings, bool frame_gen)
 {
     if (!settings)
         return pl_find_filter_config("oversample", PL_FILTER_FRAME_MIXING);
 
     switch (settings->GetPlaceboFrameMixer()) {
     case PlaceboFrameMixer::None:
-        return nullptr;
+        // Frame generation needs refresh-paced rendering, which the app only
+        // does while a mixer is active. Oversample is the cheapest one and is
+        // only used for vsyncs that land right on a real frame.
+        return frame_gen ? pl_find_filter_config("oversample", PL_FILTER_FRAME_MIXING) : nullptr;
     case PlaceboFrameMixer::Oversample:
         return pl_find_filter_config("oversample", PL_FILTER_FRAME_MIXING);
     case PlaceboFrameMixer::Hermite:
@@ -2964,18 +2968,18 @@ const struct pl_filter_config *QmlMainWindow::effectiveFrameMixerConfig(const st
 
     switch (video_preset) {
     case VideoPreset::Fast:
-        return frame_mixer_config(settings);
+        return frame_mixer_config(settings, frame_gen_enabled);
     case VideoPreset::Custom: {
-        return frame_mixer_config(settings);
+        return frame_mixer_config(settings, frame_gen_enabled);
     }
     case VideoPreset::Default:
     case VideoPreset::HighQuality:
     case VideoPreset::HighQualitySpatial:
     case VideoPreset::HighQualityAdvancedSpatial:
-        return frame_mixer_config(settings);
+        return frame_mixer_config(settings, frame_gen_enabled);
     }
 
-    return frame_mixer_config(settings);
+    return frame_mixer_config(settings, frame_gen_enabled);
 }
 
 bool QmlMainWindow::effectiveFrameMixerEnabled(const struct pl_render_params *render_params) const
@@ -2989,18 +2993,18 @@ bool QmlMainWindow::configuredFrameMixerEnabledForScheduling() const
         return false;
     switch (video_preset) {
     case VideoPreset::Fast:
-        return frame_mixer_config(settings) != nullptr;
+        return frame_mixer_config(settings, frame_gen_enabled) != nullptr;
     case VideoPreset::Custom: {
-        return frame_mixer_config(settings) != nullptr;
+        return frame_mixer_config(settings, frame_gen_enabled) != nullptr;
     }
     case VideoPreset::Default:
     case VideoPreset::HighQuality:
     case VideoPreset::HighQualitySpatial:
     case VideoPreset::HighQualityAdvancedSpatial:
-        return frame_mixer_config(settings) != nullptr;
+        return frame_mixer_config(settings, frame_gen_enabled) != nullptr;
     }
 
-    return frame_mixer_config(settings) != nullptr;
+    return frame_mixer_config(settings, frame_gen_enabled) != nullptr;
 }
 
 void QmlMainWindow::presentFrame(ChiakiFfmpegFrame frame, int32_t frames_lost, qint64 decoder_delivery_us)
@@ -4679,6 +4683,10 @@ int QmlMainWindow::effectiveQueueDepthLimit() const
             depth_limit = v;
     }
 
+    // Frame generation holds the shown frame and the next one, plus room for
+    // the frame arriving after that.
+    if (frame_gen_enabled)
+        return qMax(depth_limit, 3);
     // Always use low-latency queue depth regardless of frame mixer mode.
     return qMax(depth_limit, 2);
 }
@@ -4834,7 +4842,9 @@ void QmlMainWindow::doneOpenGLContextCurrent()
 
 void QmlMainWindow::init(Settings *settings, bool exit_app_on_stream_exit)
 {
-    bypass_frame_queue = settings->GetDirectFrameMapping();
+    frame_gen_enabled = settings->GetFrameGeneration();
+    // Frame generation needs the frame queue to see the next frame
+    bypass_frame_queue = settings->GetDirectFrameMapping() && !frame_gen_enabled;
     render_backend = settings->GetRenderBackend();
     setSurfaceType(render_backend == RenderBackend::Vulkan ? QWindow::VulkanSurface : QWindow::OpenGLSurface);
     qparams = {};
@@ -5116,6 +5126,16 @@ renderer_backend_ready:
     );
 
     placebo_queue = pl_queue_create(placeboGpu());
+
+    if (frame_gen_enabled) {
+        frame_gen = std::make_unique<FrameGen>(placebo_log, placeboGpu());
+        if (!frame_gen->ok()) {
+            qCWarning(chiakiGui) << "Frame generation unavailable on this GPU, disabling it";
+            frame_gen.reset();
+        } else {
+            qCInfo(chiakiGui) << "Frame generation enabled (optical flow, 2x)";
+        }
+    }
 
     if (render_backend == RenderBackend::Vulkan) {
         struct pl_vulkan_sem_params sem_params = {
@@ -6768,9 +6788,16 @@ void QmlMainWindow::render()
     schedule_frame_mixer_active.storeRelaxed(mixer_active ? 1 : 0);
     qparams.interpolation_threshold = mixer_active ? 0.01 : 0.0;
     qparams.radius = pl_frame_mix_radius(&params);
+    // Frame generation shows the picture one source frame behind the newest
+    // one, so the queue always hands us the frame before and after the vsync.
+    const double frame_gen_delay_s = frame_gen
+        ? (stream_interval_s > 0.0 ? stream_interval_s : 1.0 / 30.0)
+        : 0.0;
+    if (frame_gen)
+        qparams.radius = qMax(qparams.radius, 1.0);
     qparams.vsync_duration = vsync_duration;
     qparams.pts = playback_started
-        ? (double)(ts_pre_update - ts_start) / 1000000.0 + vsync_duration - kPtsStaleMarginS
+        ? qMax(0.0, (double)(ts_pre_update - ts_start) / 1000000.0 + vsync_duration - kPtsStaleMarginS - frame_gen_delay_s)
         : 0.0;
     const int depth_limit = effectiveQueueDepthLimit();
     enum pl_queue_status queue_status;
@@ -6819,6 +6846,11 @@ void QmlMainWindow::render()
     } else {
         TimedMutexLocker locker(placebo_state_mutex, "render_queue_update");
         queue_depth_before_update = pl_queue_num_frames(placebo_queue);
+        if (frame_gen && frame_gen_seen_resets != placebo_queue_resets) {
+            // Frame signatures may restart after a queue reset
+            frame_gen->reset();
+            frame_gen_seen_resets = placebo_queue_resets;
+        }
         const qint64 queue_update_work_begin_us = static_cast<qint64>(chiaki_time_now_monotonic_us());
         queue_status = pl_queue_update(placebo_queue, &frame_mix, &qparams);
         queue_depth_cached.storeRelease(pl_queue_num_frames(placebo_queue));
@@ -6895,7 +6927,7 @@ void QmlMainWindow::render()
                 // new one rather than the target worked out before it
                 const uint64_t ts_refresh = chiaki_time_now_monotonic_us();
                 qparams.pts = playback_started && ts_refresh > ts_start
-                    ? (double)(ts_refresh - ts_start) / 1000000.0 + vsync_duration - kPtsStaleMarginS
+                    ? qMax(0.0, (double)(ts_refresh - ts_start) / 1000000.0 + vsync_duration - kPtsStaleMarginS - frame_gen_delay_s)
                     : 0.0;
                 queue_status = pl_queue_update(placebo_queue, &frame_mix, &qparams);
                 queue_depth_cached.storeRelease(pl_queue_num_frames(placebo_queue));
@@ -7614,9 +7646,34 @@ void QmlMainWindow::render()
         logLatencyStats("render_prep", render_call_begin_us - render_entry_us_local);
     if (render_call_begin_us >= render_setup_begin_us)
         logRenderSetupStats(render_call_begin_us, render_call_begin_us - render_setup_begin_us);
+    // Frame generation: find the real frames on either side of this vsync and
+    // draw a synthesized in-between frame instead of holding the old one.
+    struct pl_frame frame_gen_out = {};
+    bool use_frame_gen = false;
+    if (frame_gen && !bypass_frame_queue && frame_mix.num_frames >= 2 && frame_mix.signatures) {
+        for (int i = 0; i + 1 < frame_mix.num_frames; i++) {
+            const double ts_a = frame_mix.timestamps[i];
+            const double ts_b = frame_mix.timestamps[i + 1];
+            if (ts_a > 0.0 || ts_b <= 0.0)
+                continue;
+            const double span = ts_b - ts_a;
+            // Skip gaps from dropped frames, and vsyncs that land on a real frame
+            const float t = span > 1e-6 ? static_cast<float>(-ts_a / span) : 0.0f;
+            if (span < 2.5 && t > 0.03f && t < 0.97f) {
+                use_frame_gen = frame_gen->interpolate(frame_mix.frames[i], frame_mix.signatures[i],
+                                                       frame_mix.frames[i + 1], frame_mix.signatures[i + 1],
+                                                       t, &frame_gen_out);
+                if (!use_frame_gen)
+                    CHIAKI_NOISY_DEBUG() << "[framegen] interpolation failed, showing real frame";
+            }
+            break;
+        }
+    }
     if (!(bypass_frame_queue
         ? pl_render_image(placebo_renderer, &direct_render_frame, &target_frame, &params)
-        : pl_render_image_mix(placebo_renderer, &frame_mix, &target_frame, &params)))
+        : use_frame_gen
+            ? pl_render_image(placebo_renderer, &frame_gen_out, &target_frame, &params)
+            : pl_render_image_mix(placebo_renderer, &frame_mix, &target_frame, &params)))
     {
         qCWarning(chiakiGui) << "Failed to render Placebo frame!";
         close_started_frame(false);

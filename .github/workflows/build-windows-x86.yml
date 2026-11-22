@@ -36,9 +36,9 @@ jobs:
       - name: Setup Vulkan
         run: |
           $ProgressPreference = 'SilentlyContinue'
-          $ver = (Invoke-WebRequest -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
+          $ver = (Invoke-WebRequest -UseBasicParsing -Uri "https://vulkan.lunarg.com/sdk/latest.json" | ConvertFrom-Json).windows
           echo Version $ver
-          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/vulkansdk-windows-X64-$ver.exe" -OutFile VulkanSDK.exe
+          Invoke-WebRequest -UseBasicParsing -Uri "https://sdk.lunarg.com/sdk/download/$ver/windows/vulkansdk-windows-X64-$ver.exe" -OutFile VulkanSDK.exe
           echo Downloaded
           .\VulkanSDK.exe --root ${{ env.VULKAN_SDK }}  --accept-licenses --default-answer --confirm-command install
 
@@ -54,9 +54,22 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Setup Qt
+        id: setup_qt
+        continue-on-error: true
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.12.*"
+          version: "6.12.0"
+          host: 'windows'
+          target: 'desktop'
+          modules: 'qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport'
+
+      # aqtinstall currently can't read the Qt 6.12 package index, fall back
+      # to the Qt this build used before the 6.12 bump
+      - name: Setup Qt (fallback)
+        if: steps.setup_qt.outcome == 'failure'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.9.*"
           host: 'windows'
           target: 'desktop'
           modules: 'qtwebengine qtpositioning qtwebchannel qtwebsockets qtserialport'

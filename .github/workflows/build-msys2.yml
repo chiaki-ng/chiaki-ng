@@ -6,7 +6,7 @@ on:
       libplacebo_version:
         description: "libplacebo git tag to build"
         required: false
-        default: "3be579e6c7f6b421d9ac3ab4860edc437c50b3eb"
+        default: "v7.387.0"
 
 permissions:
   contents: read
@@ -36,6 +36,7 @@ jobs:
             ca-certificates:p
             cc:p
             cmake:p
+            compiler-rt:p
             curl:p
             fast_float:p
             fftw:p
