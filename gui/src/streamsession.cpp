@@ -818,8 +818,39 @@ StreamSession::~StreamSession()
 #endif
 }
 
+void StreamSession::SetHost(const QString &new_host)
+{
+	// PSN sessions are routed by the holepunch session, they have no console address
+	if(new_host.isEmpty() || holepunch_session)
+		return;
+	if(new_host == host)
+	{
+		pending_host.clear();
+		return;
+	}
+	pending_host = new_host;
+}
+
 void StreamSession::Start()
 {
+	// Apply an address change only here: the session thread is not running before the
+	// first start nor between a quit and the retry, so the lib may re-resolve the host.
+	if(!pending_host.isEmpty())
+	{
+		const QString new_host = pending_host;
+		pending_host.clear();
+		const QByteArray new_host_utf8 = new_host.toUtf8();
+		if(chiaki_session_set_host(&session, new_host_utf8.constData()) == CHIAKI_ERR_SUCCESS)
+		{
+			CHIAKI_LOGI(GetChiakiLog(), "Console address changed from %s to %s, connecting to the new address",
+					host.toUtf8().constData(), new_host_utf8.constData());
+			host = new_host;
+			emit HostChanged();
+		}
+		else
+			CHIAKI_LOGW(GetChiakiLog(), "Could not switch to console address %s, keeping %s",
+					new_host_utf8.constData(), host.toUtf8().constData());
+	}
 	if(!connect_timer.isValid())
 		connect_timer.start();
 	ChiakiErrorCode err = chiaki_session_start(&session);

@@ -2326,36 +2326,83 @@ void QmlBackend::controllerMappingApply()
     }
 }
 
+bool QmlBackend::isSessionConsole(const DiscoveryHost &host) const
+{
+    // Identify the console of the local session by its registration, not by its address:
+    // the address can change (e.g. a new DHCP lease when waking up from rest mode), but the
+    // MAC reported by discovery and the regist key of the registration belonging to that MAC
+    // stay the same. This also keeps several registered consoles apart.
+    if (session_info.regist_key.isEmpty())
+        return false;
+    if (host.ps5 != chiaki_target_is_ps5(session_info.target))
+        return false;
+    const HostMAC mac = host.GetHostMAC();
+    if (!settings->GetRegisteredHostRegistered(mac))
+        return false;
+    return settings->GetRegisteredHost(mac).GetRPRegistKey() == session_info.regist_key;
+}
+
+void QmlBackend::retargetSession(const QString &new_host)
+{
+    if (!session || new_host.isEmpty() || new_host == session_info.host)
+        return;
+    qCInfo(chiakiGui) << "Console of the current session is now at" << new_host
+                      << "(was" << session_info.host << "), switching session address";
+    // used by wakeup resends, the session start and resuming after sleep
+    session_info.host = new_host;
+    // takes effect on the next start of the session, i.e. never while it is running
+    session->SetHost(new_host);
+}
+
 void QmlBackend::updateDiscoveryHosts()
 {
-    // Wakeup console that we are currently connecting to
-    for (const auto &host : discovery_manager.GetHosts()) {
-        if (host.host_addr != session_info.host)
-            continue;
-        if (host.ps5 != chiaki_target_is_ps5(session_info.target))
-            continue;
-        if (!settings->GetRegisteredHostRegistered(host.GetHostMAC()))
-            continue;
-        auto registered = settings->GetRegisteredHost(host.GetHostMAC());
-        if (registered.GetRPRegistKey() == session_info.regist_key) {
-            if(wakeup_start && session && host.host_name == wakeup_nickname && host.state == CHIAKI_DISCOVERY_HOST_STATE_READY)
-            {
+    // Follow the console of the local session that is waiting for its console to wake up
+    // or still connecting. PSN sessions have no console address and are not affected.
+    if (session && session_info.duid.isEmpty() && !session->IsConnected()) {
+        // The same console can be listed twice for a moment, e.g. under its old address
+        // (dropped after a few unanswered pings) and its new one. Prefer a ready entry
+        // and, among equal states, the address the session already uses.
+        DiscoveryHost ready_host = {};
+        DiscoveryHost standby_host = {};
+        bool ready_found = false, standby_found = false;
+        for (const auto &host : discovery_manager.GetHosts()) {
+            if (!isSessionConsole(host))
+                continue;
+            if (host.state == CHIAKI_DISCOVERY_HOST_STATE_READY) {
+                if (!ready_found || host.host_addr == session_info.host)
+                    ready_host = host;
+                ready_found = true;
+            } else if (host.state == CHIAKI_DISCOVERY_HOST_STATE_STANDBY) {
+                if (!standby_found || host.host_addr == session_info.host)
+                    standby_host = host;
+                standby_found = true;
+            }
+        }
+
+        if (ready_found) {
+            retargetSession(ready_host.host_addr);
+            if (wakeup_start) {
+                // the console we woke up is ready now, start the session at its current address
                 wakeup_nickname.clear();
                 wakeup_start = false;
                 wakeup_start_timer->stop();
+                wakeup_resend_timer->stop();
                 startSession(true);
+                // the session may have been torn down if it failed to start, don't use it below
             }
-            else if(host.state == CHIAKI_DISCOVERY_HOST_STATE_STANDBY && session && session->IsConnecting())
-            {
-                sendWakeup(host.host_addr, registered.GetRPRegistKey(), host.ps5);
-                QString nickname = host.host_name;
+        } else if (standby_found) {
+            // keep wakeup resends going to the address the console actually answers on
+            retargetSession(standby_host.host_addr);
+            if (session->IsConnecting()) {
+                // Wakeup console that we are currently connecting to
+                sendWakeup(standby_host.host_addr, session_info.regist_key, standby_host.ps5);
+                QString nickname = standby_host.host_name;
                 wakeup_nickname = nickname;
                 waking_sleeping_nicknames.append(nickname);
                 QTimer::singleShot(WAKEUP_PSN_IGNORE_SECONDS * 1000, [this, nickname]{
                     waking_sleeping_nicknames.removeOne(nickname);
                     emit hostsChanged();
                 });
-                break;
             }
         }
     }
