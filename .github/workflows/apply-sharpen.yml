@@ -1,6 +1,11 @@
 name: Apply sharpening option
 
 on:
+  push:
+    branches: [feature/sharpening]
+    paths:
+      - ".github/workflows/apply-sharpen.yml"
+      - "tools/apply_sharpen.py"
   workflow_dispatch:
 
 permissions:
