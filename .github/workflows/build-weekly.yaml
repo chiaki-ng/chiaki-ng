@@ -363,7 +363,7 @@ jobs:
 
   build-mac_arm64_github:
     name: Build macOSX arm64 version Github
-    runs-on: macos-15
+    runs-on: macos-14
     permissions:
       contents: write
     needs: [check-changes, create-release]
@@ -452,7 +452,7 @@ jobs:
 
   sign-mac_arm64:
     name: Sign and notarize macOS arm64
-    runs-on: macos-15
+    runs-on: macos-14
     # Only main's weekly is signed. The weekly-signing environment only serves main, which needs the
     # code owner's review, so even a branch that drops this if can't reach the signing keys
     environment: weekly-signing

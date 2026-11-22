@@ -299,7 +299,7 @@ jobs:
 
   build-mac_arm64_github:
     name: Build macOSX arm64 version Github
-    runs-on: macos-15
+    runs-on: macos-14
     permissions:
       contents: read
     needs: create-release
@@ -368,7 +368,7 @@ jobs:
 
   sign-mac_arm64:
     name: Sign and notarize macOS arm64
-    runs-on: macos-15
+    runs-on: macos-14
     # The Developer ID certificate and notary key are secrets of this environment, which only serves
     # v* tags (only the repository admin can create those); the build job above never sees them
     environment: release
