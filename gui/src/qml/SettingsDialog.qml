@@ -505,29 +505,20 @@ DialogView {
                         }
 
                         C.ComboBox {
-                            readonly property var keys: ["ps5", "ps4", "gow", "spiderman", "horizon", "tlou", "ghost", "astro", "chiaki"]
+                            readonly property var keys: root.themeKeys
                             Layout.preferredWidth: 400
                             model: keys.map(k => root.themes[k].name)
                             currentIndex: Math.max(0, keys.indexOf(root.currentThemeKey))
                             onActivated: index => root.setTheme(keys[index])
                         }
 
-                        RowLayout {
-                            spacing: 6
-                            // Third grid cell: show the palette without shifting
-                            // the label/control/default columns below this row.
-                            Repeater {
-                                model: [root.currentTheme.background, root.currentTheme.primary, root.currentTheme.accent]
-                                delegate: Rectangle {
-                                    required property string modelData
-                                    width: 24
-                                    height: 24
-                                    radius: 6
-                                    color: modelData
-                                    border.width: 1
-                                    border.color: Material.foreground
-                                }
-                            }
+                        GameBackdrop {
+                            Layout.preferredWidth: 140
+                            Layout.preferredHeight: 72
+                            themeKey: root.currentThemeKey
+                            themePalette: root.currentTheme
+                            showLabel: false
+                            clip: true
                         }
 
                         Label {

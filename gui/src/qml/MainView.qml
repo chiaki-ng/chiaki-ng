@@ -8,6 +8,10 @@ import org.streetpea.chiaking
 Pane {
     padding: 0
     id: consolePane
+    background: GameBackdrop {
+        themeKey: root.currentThemeKey
+        themePalette: root.currentTheme
+    }
     StackView.onActivated: {
         forceActiveFocus(Qt.TabFocusReason);
         if(!Chiaki.autoConnect && !root.initialAsk && !Chiaki.window.directStream)

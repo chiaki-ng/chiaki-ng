@@ -3,6 +3,7 @@
     <file>qtquickcontrols2.conf</file>
     <file>Main.qml</file>
     <file>MainView.qml</file>
+    <file>GameBackdrop.qml</file>
     <file>StreamView.qml</file>
     <file>StreamMenuWindow.qml</file>
     <file>ConfirmDialog.qml</file>
