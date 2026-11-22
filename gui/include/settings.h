@@ -363,6 +363,9 @@ class Settings : public QObject
 		void SetUseZeroCopy(bool enabled) { settings.setValue("settings/use_zero_copy", enabled); }
 		bool GetVulkanDeferredSwap() const { return settings.value("settings/vulkan_deferred_swap", false).toBool(); }
 		void SetVulkanDeferredSwap(bool enabled) { settings.setValue("settings/vulkan_deferred_swap", enabled); }
+		// 0 = off, 1 = low, 2 = medium, 3 = high
+		int GetSharpenLevel() const { return qBound(0, settings.value("settings/sharpen_level", 0).toInt(), 3); }
+		void SetSharpenLevel(int level) { settings.setValue("settings/sharpen_level", qBound(0, level, 3)); }
 
 		WindowType GetWindowType() const;
 		void SetWindowType(WindowType type);

@@ -27,6 +27,7 @@
   </qresource>
   <qresource prefix="/shaders">
     <file alias="FSR.glsl">shaders/FSR.glsl</file>
+    <file alias="CAS.glsl">shaders/CAS.glsl</file>
     <file alias="FSRCNNX_x2_8-0-4-1.glsl">shaders/FSRCNNX_x2_8-0-4-1.glsl</file>
     <file alias="FSRCNNX_x2_16-0-4-1.glsl">shaders/FSRCNNX_x2_16-0-4-1.glsl</file>
   </qresource>
