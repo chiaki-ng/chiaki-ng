@@ -2,6 +2,8 @@ name: Build chiaki-ng macOSX arm64
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ mac-fix ]
 
 permissions:
   contents: read
