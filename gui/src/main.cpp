@@ -79,7 +79,7 @@ int real_main(int argc, char *argv[])
 	QGuiApplication::setOrganizationName("Chiaki");
 	QGuiApplication::setApplicationName("Chiaki");
 	QGuiApplication::setApplicationVersion(CHIAKI_VERSION);
-	QGuiApplication::setApplicationDisplayName("chiaki-ng");
+	QGuiApplication::setApplicationDisplayName("PS5 Remoto");
 #if defined(Q_OS_MACOS)
 	// Use a plain CAMetalLayer for Vulkan windows. Qt's own layer presents in step with each
 	// live resize, but our swapchain presents from the render thread, so every resize step
@@ -132,7 +132,7 @@ int real_main(int argc, char *argv[])
 		return 1;
 	}
 
-    SDL_SetHint(SDL_HINT_APP_NAME, "chiaki-ng");
+    SDL_SetHint(SDL_HINT_APP_NAME, "PS5 Remoto");
 
 	if(SDL_Init(SDL_INIT_AUDIO) < 0)
 	{
@@ -219,7 +219,7 @@ int real_main(int argc, char *argv[])
 		settings.SetCurrentProfile(parser.value(profile_option));
 	Settings alt_settings(parser.isSet(profile_option) ? "" : settings.GetCurrentProfile());
 	if(!settings.GetCurrentProfile().isEmpty())
-		QGuiApplication::setApplicationDisplayName(QString("chiaki-ng:%1").arg(settings.GetCurrentProfile()));
+		QGuiApplication::setApplicationDisplayName(QString("PS5 Remoto:%1").arg(settings.GetCurrentProfile()));
 	bool use_alt_settings = false;
 	if(!parser.isSet(profile_option))
 		use_alt_settings = true;

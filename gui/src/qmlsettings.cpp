@@ -599,6 +599,17 @@ void QmlSettings::setVulkanDeferredSwap(bool enabled)
     emit vulkanDeferredSwapChanged();
 }
 
+int QmlSettings::sharpenLevel() const
+{
+    return settings->GetSharpenLevel();
+}
+
+void QmlSettings::setSharpenLevel(int level)
+{
+    settings->SetSharpenLevel(level);
+    emit sharpenLevelChanged();
+}
+
 int QmlSettings::windowType() const
 {
     return static_cast<int>(settings->GetWindowType());
@@ -1939,6 +1950,7 @@ void QmlSettings::refreshAllKeys()
     emit videoPresetChanged();
     emit rendererBackendChanged();
     emit vulkanDeferredSwapChanged();
+    emit sharpenLevelChanged();
     emit autoConnectMacChanged();
     emit audioDevicesChanged();
     emit registeredHostsChanged();

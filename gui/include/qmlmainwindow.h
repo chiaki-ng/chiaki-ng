@@ -465,6 +465,7 @@ private:
     const struct pl_hook *fsr_hook = nullptr;
     const struct pl_hook *fsrcnnx_hook_8 = nullptr;
     const struct pl_hook *fsrcnnx_hook_16 = nullptr;
+    const struct pl_hook *sharpen_hooks[3] = {nullptr, nullptr, nullptr};
 
     struct {
         PFN_vkGetDeviceProcAddr vkGetDeviceProcAddr;

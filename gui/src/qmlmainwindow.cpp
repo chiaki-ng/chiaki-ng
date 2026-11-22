@@ -2437,6 +2437,23 @@ static const struct pl_hook *load_mpv_hook(pl_gpu gpu, const QString &path)
     return hook;
 }
 
+// Loads the contrast-adaptive sharpening shader with a fixed strength baked in.
+static const struct pl_hook *load_sharpen_hook(pl_gpu gpu, float strength)
+{
+    QFile file(QStringLiteral(":/shaders/CAS.glsl"));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qCWarning(chiakiGui) << "Failed to open sharpening shader resource";
+        return nullptr;
+    }
+
+    QByteArray shader = file.readAll();
+    shader.replace("@STRENGTH@", QByteArray::number(static_cast<double>(strength), 'f', 2));
+    const struct pl_hook *hook = pl_mpv_user_shader_parse(gpu, shader.constData(), static_cast<size_t>(shader.size()));
+    if (!hook)
+        qCWarning(chiakiGui) << "Failed to parse sharpening shader";
+    return hook;
+}
+
 static bool uses_fsrcnnx(PlaceboUpscaler upscaler)
 {
     return upscaler == PlaceboUpscaler::FSRCNNX8 || upscaler == PlaceboUpscaler::FSRCNNX16;
@@ -2684,6 +2701,8 @@ QmlMainWindow::~QmlMainWindow()
     pl_mpv_user_shader_destroy(&fsr_hook);
     pl_mpv_user_shader_destroy(&fsrcnnx_hook_8);
     pl_mpv_user_shader_destroy(&fsrcnnx_hook_16);
+    for (auto &sharpen_hook : sharpen_hooks)
+        pl_mpv_user_shader_destroy(&sharpen_hook);
     if (render_backend == RenderBackend::Vulkan) {
         pl_vulkan_destroy(&placebo_vulkan);
         pl_vk_inst_destroy(&placebo_vk_inst);
@@ -5328,6 +5347,9 @@ renderer_backend_ready:
     this->fsr_hook = load_mpv_hook(placeboGpu(), QStringLiteral(":/shaders/FSR.glsl"));
     this->fsrcnnx_hook_8 = load_mpv_hook(placeboGpu(), QStringLiteral(":/shaders/FSRCNNX_x2_8-0-4-1.glsl"));
     this->fsrcnnx_hook_16 = load_mpv_hook(placeboGpu(), QStringLiteral(":/shaders/FSRCNNX_x2_16-0-4-1.glsl"));
+    this->sharpen_hooks[0] = load_sharpen_hook(placeboGpu(), 0.35f);
+    this->sharpen_hooks[1] = load_sharpen_hook(placeboGpu(), 0.60f);
+    this->sharpen_hooks[2] = load_sharpen_hook(placeboGpu(), 0.85f);
 
 
     switch (settings->GetPlaceboPreset()) {
@@ -7575,6 +7597,21 @@ void QmlMainWindow::render()
         default:
             break;
         }
+    }
+
+    // Optional contrast-adaptive sharpening, applied after scaling (hook stage OUTPUT).
+    const int sharpen_level = settings ? settings->GetSharpenLevel() : 0;
+    const struct pl_hook *sharpen_hook = (sharpen_level >= 1 && sharpen_level <= 3)
+        ? sharpen_hooks[sharpen_level - 1] : nullptr;
+    const struct pl_hook *all_hooks[2] = {nullptr, nullptr};
+    int num_all_hooks = 0;
+    if (fsrcnnx_hook)
+        all_hooks[num_all_hooks++] = fsrcnnx_hook;
+    if (sharpen_hook)
+        all_hooks[num_all_hooks++] = sharpen_hook;
+    if (num_all_hooks > 0) {
+        params.hooks = all_hooks;
+        params.num_hooks = num_all_hooks;
     }
 
     for (int i = 0; i < frame_mix.num_frames; i++) {

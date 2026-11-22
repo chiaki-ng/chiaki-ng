@@ -55,6 +55,7 @@ class QmlSettings : public QObject
     Q_PROPERTY(QString decoder READ decoder WRITE setDecoder NOTIFY decoderChanged)
     Q_PROPERTY(bool useZeroCopy READ useZeroCopy WRITE setUseZeroCopy NOTIFY useZeroCopyChanged)
     Q_PROPERTY(bool vulkanDeferredSwap READ vulkanDeferredSwap WRITE setVulkanDeferredSwap NOTIFY vulkanDeferredSwapChanged)
+    Q_PROPERTY(int sharpenLevel READ sharpenLevel WRITE setSharpenLevel NOTIFY sharpenLevelChanged)
     Q_PROPERTY(int windowType READ windowType WRITE setWindowType NOTIFY windowTypeChanged)
     Q_PROPERTY(uint customResolutionWidth READ customResolutionWidth WRITE setCustomResolutionWidth NOTIFY customResolutionWidthChanged)
     Q_PROPERTY(uint customResolutionHeight READ customResolutionHeight WRITE setCustomResolutionHeight NOTIFY customResolutionHeightChanged)
@@ -297,6 +298,8 @@ public:
     void setUseZeroCopy(bool enabled);
     bool vulkanDeferredSwap() const;
     void setVulkanDeferredSwap(bool enabled);
+    int sharpenLevel() const;
+    void setSharpenLevel(int level);
 
     int windowType() const;
     void setWindowType(int type);
@@ -653,6 +656,7 @@ signals:
     void codecLocalPS5Changed();
     void codecRemotePS5Changed();
     void vulkanDeferredSwapChanged();
+    void sharpenLevelChanged();
     void displayTargetPeakChanged();
     void displayTargetContrastChanged();
     void displayTargetPrimChanged();
