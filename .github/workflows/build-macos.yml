@@ -9,7 +9,7 @@ permissions:
 jobs:
   build-mac_arm64:
     name: Build macOSX arm64 version
-    runs-on: macos-15
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v7
         with:
