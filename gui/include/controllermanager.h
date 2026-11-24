@@ -103,6 +103,9 @@ class Controller : public QObject
 		bool has_led;
 		bool micbutton_push;
 		uint16_t firmware_version;
+		uint16_t guid_version;
+
+		QPair<uint16_t, uint16_t> CurrentVidPid();
 
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 		QMap<QPair<Sint64, Sint64>, uint8_t> touch_ids;

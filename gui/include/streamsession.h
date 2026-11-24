@@ -186,7 +186,11 @@ class StreamSession : public QObject
 		QList<double> packet_loss_history;
 		QAtomicInteger<quint64> decoder_flush_generation{0};
 		bool cant_display = false;
-		int haptics_handheld;
+		// The Steam Deck's own share of handheld haptics, counted once at session start (see HapticsHandheld())
+		int haptics_handheld_base;
+		// Latest HapticsHandheld() result, worked out on the GUI thread and read by the haptics thread
+		QAtomicInteger<int> haptics_handheld{0};
+		bool haptics_routing_logged = false;
 		float rumble_multiplier;
 		int ps5_rumble_intensity;
 		int ps5_trigger_intensity;
@@ -303,6 +307,8 @@ class StreamSession : public QObject
 		void DrainAudioOutRingBuffer();
 		void PushAudioFrame(int16_t *buf, size_t samples_count);
 		void PushHapticsFrame(uint8_t *buf, size_t buf_size);
+		int HapticsHandheld();
+		void UpdateHapticsRouting();
 		void CantDisplayMessage(bool cant_display);
 		ChiakiErrorCode InitiatePsnConnection(QString psn_token);
 #ifdef Q_OS_MACOS

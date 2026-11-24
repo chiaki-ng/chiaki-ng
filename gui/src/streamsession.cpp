@@ -369,7 +369,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 	audio_out(0),
 	audio_in(0),
 	haptics_output(0),
-	haptics_handheld(0),
+	haptics_handheld_base(0),
 	session_started(false),
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
 	sdeck(nullptr),
@@ -673,7 +673,7 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 		// Connect Steam Deck haptics with a delay to give other potential haptics time to set up
 		if(sdeck)
 		{
-			haptics_handheld++;
+			haptics_handheld_base++;
 			QTimer::singleShot(STEAMDECK_HAPTIC_CONNECT_DELAY_MS, this, &StreamSession::ConnectSdeckHaptics);
 		}
 #endif
@@ -681,6 +681,12 @@ StreamSession::StreamSession(const StreamSessionConnectInfo &connect_info, QObje
 		ConnectRumbleHaptics();
 	}
 	UpdateGamepads();
+	// Steam writes the identities of its virtual gamepads a couple of seconds after it creates them,
+	// so keep re-checking the haptics routing while the session runs (see Controller::IsHandheld())
+	QTimer *haptics_routing_timer = new QTimer(this);
+	haptics_routing_timer->setInterval(1000);
+	connect(haptics_routing_timer, &QTimer::timeout, this, &StreamSession::UpdateHapticsRouting);
+	haptics_routing_timer->start();
 	QTimer *packet_loss_timer = new QTimer(this);
 	packet_loss_timer->setInterval(200);
 	packet_loss_timer->start();
@@ -1171,10 +1177,6 @@ void StreamSession::UpdateGamepads()
 			{
 				DisconnectHaptics();
 			}
-			if (!controller->IsHandheld() && !controller->IsSteamVirtualUnmasked())
-			{
-				haptics_handheld++;
-			}
 			controller->Unref();
 		}
 	}
@@ -1194,20 +1196,6 @@ void StreamSession::UpdateGamepads()
 			connect(controller, &Controller::StateChanged, this, &StreamSession::SendFeedbackState);
 			connect(controller, &Controller::MicButtonPush, this, &StreamSession::ToggleMute);
 			controllers[controller_id] = controller;
-			if(controller->IsHandheld())
-			{
-#if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
-				// let sdeck handle haptics bc sdeck works even if Steam is running whereas checking via SDL only works if Steam is not running
-				if(!sdeck)
-					haptics_handheld++;
-#else
-				haptics_handheld++;
-#endif
-			}
-			if (!controller->IsHandheld() && !controller->IsSteamVirtualUnmasked())
-			{
-				haptics_handheld--;
-			}
 			QTimer::singleShot(1000, this, [this, controller_id] {
 				// The controller may have been removed (and released) before this fires
 				// (e.g. a quick disconnect), so re-look it up instead of capturing a raw pointer.
@@ -1229,8 +1217,49 @@ void StreamSession::UpdateGamepads()
 			}
 		}
 	}
+	UpdateHapticsRouting();
 	SendFeedbackState();
 #endif
+}
+
+// Whether haptics should go to the handheld itself: the Steam Deck (counted once when the session
+// starts) plus handheld controllers, minus external controllers. Worked out from the controllers
+// that are open now rather than adjusted as they come and go, because a Steam virtual gamepad can
+// change identity after it is opened (see Controller::IsHandheld()). GUI thread only; the haptics
+// thread reads the published value.
+int StreamSession::HapticsHandheld()
+{
+	int count = haptics_handheld_base;
+#if CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	for(auto controller : controllers)
+	{
+		if(controller->IsHandheld())
+		{
+#if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
+			// let sdeck handle haptics bc sdeck works even if Steam is running whereas checking via SDL only works if Steam is not running
+			if(!sdeck)
+				count++;
+#else
+			count++;
+#endif
+		}
+		else if(!controller->IsSteamVirtualUnmasked())
+			count--;
+	}
+#endif
+	int previous = haptics_handheld.fetchAndStoreRelaxed(count);
+	if(!haptics_routing_logged || previous != count)
+	{
+		haptics_routing_logged = true;
+		CHIAKI_LOGI(log.GetChiakiLog(), "Haptics routing: %s (handheld count %d)",
+			count > 0 ? "handheld, including the Steam Deck itself" : "external controllers only", count);
+	}
+	return count;
+}
+
+void StreamSession::UpdateHapticsRouting()
+{
+	HapticsHandheld();
 }
 
 void StreamSession::WaitHaptics()
@@ -1827,12 +1856,13 @@ void StreamSession::ConnectRumbleHaptics()
 		}
 		strength /= RUMBLE_HAPTICS_PACKETS_PER_RUMBLE;
 		QMetaObject::invokeMethod(this, [this, strength]() {
+			const int handheld = HapticsHandheld();
 			for(auto controller : controllers)
 			{
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
-				if(haptics_handheld < 1 && (controller->IsHandheld() || (sdeck && controller->IsSteamVirtualUnmasked())))
+				if(handheld < 1 && (controller->IsHandheld() || (sdeck && controller->IsSteamVirtualUnmasked())))
 #else
-				if(haptics_handheld < 1 && controller->IsHandheld())
+				if(handheld < 1 && controller->IsHandheld())
 #endif
 					continue;
 
@@ -2212,7 +2242,7 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 	}
 
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
-	if(sdeck && haptics_handheld > 0 && enable_steamdeck_haptics)
+	if(sdeck && haptics_handheld.loadRelaxed() > 0 && enable_steamdeck_haptics)
 	{
 		if(ps5_rumble_intensity < 0 || haptic_override < 0.01)
 			return;
@@ -2307,12 +2337,13 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 		right = ((right > 0 && right < (1 << 9)) ? (1 << 9) : right);
 		uint16_t strength = (left > right) ? left : right;
 		bool send_rumble_haptics = false;
+		const int handheld = haptics_handheld.loadRelaxed();
 		for(auto controller : controllers)
 		{
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
-			if(haptics_handheld < 1 && (controller->IsHandheld() || (sdeck && controller->IsSteamVirtualUnmasked())))
+			if(handheld < 1 && (controller->IsHandheld() || (sdeck && controller->IsSteamVirtualUnmasked())))
 #else
-			if(haptics_handheld < 1 && controller->IsHandheld())
+			if(handheld < 1 && controller->IsHandheld())
 #endif
 				continue;
 			send_rumble_haptics = true;
@@ -2419,12 +2450,13 @@ void StreamSession::Event(ChiakiEvent *event)
 			uint8_t left_adj = left * rumble_multiplier;
 			uint8_t right_adj = right * rumble_multiplier;
 			QMetaObject::invokeMethod(this, [this, left, right, left_adj, right_adj]() {
+				const int handheld = HapticsHandheld();
 				for(auto controller : controllers)
 				{
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
-					if(haptics_handheld < 1 && (controller->IsHandheld() || (sdeck && controller->IsSteamVirtualUnmasked())))
+					if(handheld < 1 && (controller->IsHandheld() || (sdeck && controller->IsSteamVirtualUnmasked())))
 #else
-					if(haptics_handheld < 1 && controller->IsHandheld())
+					if(handheld < 1 && controller->IsHandheld())
 #endif
 						continue;
 					if(controller->IsDualSense() || controller->IsDualSenseEdge())

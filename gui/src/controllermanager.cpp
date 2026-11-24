@@ -366,7 +366,7 @@ void ControllerManager::ControllerClosed(Controller *controller)
 Controller::Controller(int device_id, ControllerManager *manager)
 : QObject(manager), ref(0), last_motion_timestamp(0), micbutton_push(false), is_dualsense(false),
   is_dualsense_edge(false), has_led(false), firmware_version(0), updating_mapping_button(false), is_handheld(false),
-  is_steam_virtual(false), is_steam_virtual_unmasked(false), enable_analog_stick_mapping(false)
+  is_steam_virtual(false), is_steam_virtual_unmasked(false), enable_analog_stick_mapping(false), guid_version(0)
 {
 	this->id = device_id;
 	this->manager = manager;
@@ -397,7 +397,6 @@ Controller::Controller(int device_id, ControllerManager *manager)
 			SDL_Joystick *js = SDL_GameControllerGetJoystick(controller);
 			SDL_JoystickGUID guid = SDL_JoystickGetGUID(js);
 			auto guid_controller_id = QPair<uint16_t, uint16_t>(0, 0);
-			uint16_t guid_version = 0;
 			SDL_GetJoystickGUIDInfo(guid, &guid_controller_id.first, &guid_controller_id.second, &guid_version, NULL);
 #ifdef Q_OS_MACOS
 			is_steam_virtual = (guid_version == 0 && chiaki_steam_virtual_controller_ids.contains(guid_controller_id));
@@ -939,12 +938,28 @@ bool Controller::IsDualSenseEdge()
 	return false;
 }
 
+QPair<uint16_t, uint16_t> Controller::CurrentVidPid()
+{
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(controller)
+		return QPair<uint16_t, uint16_t>(SDL_GameControllerGetVendor(controller), SDL_GameControllerGetProduct(controller));
+#endif
+	return QPair<uint16_t, uint16_t>(0, 0);
+}
+
+// A Steam virtual gamepad only reports the vendor/product of the controller behind it once Steam
+// has written its virtual gamepad info file, and Steam writes that file a couple of seconds after
+// it creates the pads (at game start, and again whenever a controller reconnects). A pad opened in
+// that window reports the generic Steam virtual gamepad ID, or whatever the previous file said for
+// its slot. So look the IDs up on every call instead of caching what the pad reported when opened;
+// otherwise a Steam Deck's built-in controls and an external controller can be told apart wrongly
+// for as long as the pad stays open, and rumble goes to the Deck instead of the controller in use.
 bool Controller::IsHandheld()
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	if(!controller)
 		return false;
-	return is_handheld;
+	return chiaki_handheld_controller_ids.contains(CurrentVidPid());
 #endif
 	return false;
 }
@@ -964,7 +979,12 @@ bool Controller::IsSteamVirtualUnmasked()
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
 	if(!controller)
 		return false;
-	return is_steam_virtual_unmasked;
+	// Live lookup for the same reason as IsHandheld()
+#ifdef Q_OS_MACOS
+	return guid_version == 0 && chiaki_steam_virtual_controller_ids.contains(CurrentVidPid());
+#else
+	return chiaki_steam_virtual_controller_ids.contains(CurrentVidPid());
+#endif
 #endif
 	return false;
 }
