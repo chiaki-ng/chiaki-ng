@@ -1253,6 +1253,26 @@ void QmlBackend::createSession(const StreamSessionConnectInfo &connect_info)
     }
 }
 
+void QmlBackend::quitApplication()
+{
+    if (!session) {
+        qGuiApp->quit();
+        return;
+    }
+    if (quit_requested) {
+        // second signal while the session is still stopping
+        qCWarning(chiakiGui) << "Session did not stop yet, quitting anyway";
+        qGuiApp->quit();
+        return;
+    }
+    quit_requested = true;
+    // Stop the session first so the decoder/renderer are torn down by the
+    // SessionQuit handler before the window and its Vulkan instance go away.
+    // The queued connection runs after that handler.
+    connect(session, &StreamSession::SessionQuit, qGuiApp, &QGuiApplication::quit, Qt::QueuedConnection);
+    session->Stop();
+}
+
 bool QmlBackend::closeRequested()
 {
     if (!session)

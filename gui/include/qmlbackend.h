@@ -165,6 +165,8 @@ public:
     void checkNickname(QString nickname);
 
     bool closeRequested();
+    /// Quit the application, stopping a running session first (used for SIGINT/SIGTERM)
+    void quitApplication();
 
     void setAllowJoystickBackgroundEvents();
 
@@ -287,6 +289,7 @@ private:
     QmlSettings *settings_qml = {};
     QmlMainWindow *window = {};
     StreamSession *session = {};
+    bool quit_requested = false;
     QThread *frame_thread = {};
     QTimer *psn_reconnect_timer = {};
     QTimer *psn_auto_connect_timer = {};

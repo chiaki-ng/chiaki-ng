@@ -2553,6 +2553,11 @@ QmlMainWindow::QmlMainWindow(const StreamSessionConnectInfo &connect_info)
     connect(session, &StreamSession::SessionQuit, qGuiApp, &QGuiApplication::quit);
 }
 
+void QmlMainWindow::quitApplication()
+{
+    backend->quitApplication();
+}
+
 QmlMainWindow::~QmlMainWindow()
 {
     Q_ASSERT(!placebo_swapchain);

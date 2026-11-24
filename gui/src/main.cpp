@@ -41,6 +41,14 @@ int main(int argc, char *argv[]) { return real_main(argc, argv); }
 #include <QMap>
 #include <QSurfaceFormat>
 
+#ifdef Q_OS_UNIX
+#include <QSocketNotifier>
+#include <signal.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <fcntl.h>
+#endif
+
 Q_DECLARE_METATYPE(ChiakiLogLevel)
 Q_DECLARE_METATYPE(ChiakiRegistEventType)
 
@@ -59,6 +67,55 @@ static const QMap<QString, CLICommand> cli_commands = {
 	{ "discover", { chiaki_cli_cmd_discover } },
 	{ "wakeup", { chiaki_cli_cmd_wakeup } }
 };
+#endif
+
+#ifdef Q_OS_UNIX
+// SDL installs its own SIGINT/SIGTERM handlers that only push an SDL_QUIT event,
+// which nothing consumes, so `kill <pid>` / Ctrl+C were silently ignored.
+// Disable SDL's handlers and quit the Qt event loop instead, using the
+// self-pipe trick so that only async-signal-safe calls run in the handler.
+static int quit_signal_fd[2] = { -1, -1 };
+
+static void QuitSignalHandler(int)
+{
+	char c = 1;
+	ssize_t r = write(quit_signal_fd[0], &c, sizeof(c));
+	(void)r;
+}
+
+static void SetupQuitSignalHandlers(QGuiApplication &app)
+{
+	if(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, quit_signal_fd) != 0)
+	{
+		qWarning() << "Failed to create quit signal socketpair, SIGINT/SIGTERM will terminate immediately";
+		signal(SIGINT, SIG_DFL);
+		signal(SIGTERM, SIG_DFL);
+		return;
+	}
+	auto notifier = new QSocketNotifier(quit_signal_fd[1], QSocketNotifier::Read, &app);
+	QObject::connect(notifier, &QSocketNotifier::activated, &app, [&app]() {
+		char c;
+		ssize_t r = read(quit_signal_fd[1], &c, sizeof(c));
+		(void)r;
+		qInfo() << "Received termination signal, quitting";
+		for(QWindow *window : app.topLevelWindows())
+		{
+			if(auto main_window = qobject_cast<QmlMainWindow *>(window))
+			{
+				main_window->quitApplication();
+				return;
+			}
+		}
+		app.quit();
+	});
+
+	struct sigaction sa = {};
+	sa.sa_handler = QuitSignalHandler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART;
+	sigaction(SIGINT, &sa, nullptr);
+	sigaction(SIGTERM, &sa, nullptr);
+}
 #endif
 
 int RunStream(QGuiApplication &app, const StreamSessionConnectInfo &connect_info);
@@ -130,6 +187,10 @@ int real_main(int argc, char *argv[])
 	}
 
     SDL_SetHint(SDL_HINT_APP_NAME, "chiaki-ng");
+#ifdef Q_OS_UNIX
+	// we handle SIGINT/SIGTERM ourselves, see SetupQuitSignalHandlers()
+	SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
+#endif
 
 	if(SDL_Init(SDL_INIT_AUDIO) < 0)
 	{
@@ -142,6 +203,9 @@ int real_main(int argc, char *argv[])
 	QtWebEngineQuick::initialize();
 #endif
 	QApplication app(argc, argv);
+#ifdef Q_OS_UNIX
+	SetupQuitSignalHandlers(app);
+#endif
 
 #ifdef Q_OS_MACOS
 	QGuiApplication::setWindowIcon(QIcon(":/icons/chiaking_macos.svg"));
