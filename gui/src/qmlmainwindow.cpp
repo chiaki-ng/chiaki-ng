@@ -30,6 +30,8 @@ extern "C" {
 #include <QStandardPaths>
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QCursor>
+#include <QWheelEvent>
 #include <QFile>
 #include <QWidget>
 #include <QLabel>
@@ -2756,6 +2758,8 @@ void QmlMainWindow::setKeepVideo(bool keep)
 
 void QmlMainWindow::grabInput()
 {
+    // a menu or dialog takes over: give the pointer back to the user
+    setMouseCaptured(false);
     setCursor(Qt::ArrowCursor);
     grab_input++;
     if (session)
@@ -5161,6 +5165,7 @@ renderer_backend_ready:
     connect(backend, &QmlBackend::sessionChanged, this, [this, exit_app_on_stream_exit](StreamSession *s) {
         const bool preserve_startup_warmup = s && startup_warmup_preserve_next_session_change;
         startup_warmup_preserve_next_session_change = false;
+        setMouseCaptured(false);
         session = s;
         stream_session_active.storeRelease(s ? 1 : 0);
         startup_video_visible_generation.fetchAndAddRelaxed(1);
@@ -7647,6 +7652,62 @@ void QmlMainWindow::render()
 
 }
 
+bool QmlMainWindow::mouseControllerActive() const
+{
+    return session && !grab_input && session->GetMouseControllerEnabled();
+}
+
+void QmlMainWindow::restoreCursor()
+{
+    if (!grab_input && has_video && settings->GetHideCursor())
+        setCursor(Qt::BlankCursor);
+    else
+        setCursor(Qt::ArrowCursor);
+}
+
+void QmlMainWindow::setMouseCaptured(bool captured)
+{
+    if (captured && !(session && session->GetMouseControllerEnabled()))
+        captured = false;
+    if (captured == mouse_captured)
+        return;
+    mouse_captured = captured;
+    if (captured) {
+        mouse_capture_warp = !QGuiApplication::platformName().startsWith("wayland");
+        if (!mouse_capture_warp)
+            qCWarning(chiakiGui) << "Mouse-look on Wayland can't lock the pointer; it stops at the window edge. Run with QT_QPA_PLATFORM=xcb for full mouse-look.";
+        setCursor(Qt::BlankCursor);
+        setMouseGrabEnabled(true);
+        const QPoint center = mapToGlobal(QPoint(width() / 2, height() / 2));
+        if (mouse_capture_warp)
+            QCursor::setPos(screen(), center);
+        mouse_capture_last_pos = mouse_capture_warp ? QPointF(center) : QPointF(QCursor::pos(screen()));
+    } else {
+        setMouseGrabEnabled(false);
+        if (session)
+            session->ReleaseKeyboardMouseInput();
+        restoreCursor();
+    }
+}
+
+void QmlMainWindow::handleCapturedMouseMove(QMouseEvent *event)
+{
+    const QPointF pos = event->globalPosition();
+    if (mouse_capture_warp) {
+        // keep the hidden pointer at the window center and report how far it moved from there
+        const QPoint center = mapToGlobal(QPoint(width() / 2, height() / 2));
+        const QPoint delta = pos.toPoint() - center;
+        if (delta.isNull())
+            return; // the event caused by our own re-centering
+        session->HandleMouseDelta(delta.x(), delta.y());
+        QCursor::setPos(screen(), center);
+    } else {
+        const QPointF delta = pos - mouse_capture_last_pos;
+        mouse_capture_last_pos = pos;
+        session->HandleMouseDelta(delta.x(), delta.y());
+    }
+}
+
 bool QmlMainWindow::handleShortcut(QKeyEvent *event)
 {
     if (event->modifiers() == Qt::NoModifier) {
@@ -7657,12 +7718,24 @@ bool QmlMainWindow::handleShortcut(QKeyEvent *event)
             else
                 normalTime();
             return true;
+        case Qt::Key_F10:
+            // toggle the mouse-look pointer lock (click on the stream also captures it)
+            if (session && session->GetMouseControllerEnabled() && !session->IsKeyMapped(Qt::Key_F10)) {
+                setMouseCaptured(!mouse_captured && !grab_input && has_video);
+                return true;
+            }
+            break;
         default:
             break;
         }
     }
 
     if (!event->modifiers().testFlag(Qt::ControlModifier))
+        return false;
+
+    // Ctrl is a common game key (crouch). When Ctrl and this key are both bound to the
+    // controller, Ctrl+key is game input, not an app shortcut (else Ctrl+S would stretch the video).
+    if (session && session->IsKeyMapped(Qt::Key_Control) && session->IsKeyMapped(Qt::Key(event->key())))
         return false;
 
     switch (event->key()) {
@@ -7709,6 +7782,21 @@ bool QmlMainWindow::event(QEvent *event)
     case QEvent::MouseButtonRelease:
         if (static_cast<QMouseEvent*>(event)->source() != Qt::MouseEventNotSynthesized)
             return true;
+        if (mouseControllerActive()) {
+            QMouseEvent *e = static_cast<QMouseEvent*>(event);
+            if (event->type() == QEvent::MouseMove) {
+                if (mouse_captured)
+                    handleCapturedMouseMove(e);
+            } else if (event->type() == QEvent::MouseButtonPress) {
+                if (!mouse_captured)
+                    setMouseCaptured(true); // first click only captures, it isn't sent to the game
+                else
+                    session->HandleMouseButton(e->button(), true);
+            } else if (mouse_captured) {
+                session->HandleMouseButton(e->button(), false);
+            }
+            return true;
+        }
         if (session && !grab_input) {
             if (event->type() == QEvent::MouseMove)
                 session->HandleMouseMoveEvent(static_cast<QMouseEvent*>(event), width(), height());
@@ -7721,6 +7809,9 @@ bool QmlMainWindow::event(QEvent *event)
         QGuiApplication::sendEvent(quick_window, event);
         break;
     case QEvent::MouseButtonDblClick:
+        // with mouse-look a double click is just two fast clicks (e.g. shooting), never fullscreen
+        if (mouseControllerActive())
+            return true;
         if(!settings->GetFullscreenDoubleClickEnabled())
             break;
         if (session && !grab_input) {
@@ -7745,6 +7836,20 @@ bool QmlMainWindow::event(QEvent *event)
             return true;
         }
         QGuiApplication::sendEvent(quick_window, event);
+        break;
+    case QEvent::Wheel:
+        if (mouseControllerActive()) {
+            if (mouse_captured)
+                session->HandleMouseWheel(static_cast<QWheelEvent*>(event)->angleDelta().y());
+            return true;
+        }
+        break;
+    case QEvent::FocusOut:
+    case QEvent::Hide:
+        // alt-tab etc.: the key releases will go to another window, so release everything now
+        setMouseCaptured(false);
+        if (session)
+            session->ReleaseKeyboardMouseInput();
         break;
     case QEvent::TouchBegin:
     case QEvent::TouchUpdate:

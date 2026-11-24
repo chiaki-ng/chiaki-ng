@@ -7,6 +7,7 @@
 #include <QUrl>
 #include <QKeySequence>
 #include <QCoreApplication>
+#include <algorithm>
 
 #include <chiaki/config.h>
 
@@ -994,6 +995,101 @@ bool Settings::GetMouseTouchEnabled() const
 void Settings::SetMouseTouchEnabled(bool enabled)
 {
 	settings.setValue("settings/mouse_touch_enabled", enabled);
+}
+
+bool Settings::GetMouseControllerEnabled() const
+{
+	return settings.value("settings/mouse_controller_enabled", false).toBool();
+}
+
+void Settings::SetMouseControllerEnabled(bool enabled)
+{
+	settings.setValue("settings/mouse_controller_enabled", enabled);
+}
+
+int Settings::GetMouseSensitivity() const
+{
+	return std::clamp(settings.value("settings/mouse_sensitivity", 40).toInt(), 1, 100);
+}
+
+void Settings::SetMouseSensitivity(int sensitivity)
+{
+	settings.setValue("settings/mouse_sensitivity", std::clamp(sensitivity, 1, 100));
+}
+
+int Settings::GetMouseDeadzone() const
+{
+	return std::clamp(settings.value("settings/mouse_deadzone", 15).toInt(), 0, 90);
+}
+
+void Settings::SetMouseDeadzone(int deadzone)
+{
+	settings.setValue("settings/mouse_deadzone", std::clamp(deadzone, 0, 90));
+}
+
+bool Settings::GetMouseInvertY() const
+{
+	return settings.value("settings/mouse_invert_y", false).toBool();
+}
+
+void Settings::SetMouseInvertY(bool invert)
+{
+	settings.setValue("settings/mouse_invert_y", invert);
+}
+
+static QString MouseBindingKey(MouseBinding binding)
+{
+	switch(binding)
+	{
+		case MouseBinding::Left: return "left";
+		case MouseBinding::Right: return "right";
+		case MouseBinding::Middle: return "middle";
+		case MouseBinding::Back: return "back";
+		case MouseBinding::Forward: return "forward";
+		case MouseBinding::WheelUp: return "wheel_up";
+		case MouseBinding::WheelDown: return "wheel_down";
+		default: return "unknown";
+	}
+}
+
+static int DefaultMouseButtonMapping(MouseBinding binding)
+{
+	switch(binding)
+	{
+		case MouseBinding::Left: return CHIAKI_CONTROLLER_ANALOG_BUTTON_R2;    // shoot
+		case MouseBinding::Right: return CHIAKI_CONTROLLER_ANALOG_BUTTON_L2;   // aim
+		case MouseBinding::Middle: return CHIAKI_CONTROLLER_BUTTON_R3;
+		case MouseBinding::Back: return CHIAKI_CONTROLLER_BUTTON_L1;
+		case MouseBinding::Forward: return CHIAKI_CONTROLLER_BUTTON_R1;
+		case MouseBinding::WheelUp: return CHIAKI_CONTROLLER_BUTTON_DPAD_UP;
+		case MouseBinding::WheelDown: return CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN;
+		default: return 0;
+	}
+}
+
+int Settings::GetMouseButtonMapping(MouseBinding binding) const
+{
+	return settings.value("mousemap/" + MouseBindingKey(binding), DefaultMouseButtonMapping(binding)).toInt();
+}
+
+void Settings::SetMouseButtonMapping(MouseBinding binding, int chiaki_button)
+{
+	settings.setValue("mousemap/" + MouseBindingKey(binding), chiaki_button);
+}
+
+QString Settings::GetMouseBindingName(MouseBinding binding)
+{
+	switch(binding)
+	{
+		case MouseBinding::Left: return tr("Left Click");
+		case MouseBinding::Right: return tr("Right Click");
+		case MouseBinding::Middle: return tr("Middle Click");
+		case MouseBinding::Back: return tr("Side Button (Back)");
+		case MouseBinding::Forward: return tr("Side Button (Forward)");
+		case MouseBinding::WheelUp: return tr("Wheel Up");
+		case MouseBinding::WheelDown: return tr("Wheel Down");
+		default: return tr("Unknown");
+	}
 }
 
 
@@ -2399,8 +2495,58 @@ QString Settings::GetChiakiControllerButtonName(int button)
 
 void Settings::SetControllerButtonMapping(int chiaki_button, Qt::Key key)
 {
+	// Each key can drive only one button. If the key is already bound to another
+	// button, give that button the key this one had, instead of silently breaking it.
+	auto mapping = GetControllerMapping();
+	Qt::Key previous_key = mapping.value(chiaki_button, Qt::Key_unknown);
+	for(auto it = mapping.cbegin(); it != mapping.cend(); ++it)
+	{
+		if(it.key() != chiaki_button && it.value() == key)
+		{
+			auto other_name = GetChiakiControllerButtonName(it.key()).replace(' ', '_').toLower();
+			settings.setValue("keymap/" + other_name, QKeySequence(previous_key).toString());
+		}
+	}
 	auto button_name = GetChiakiControllerButtonName(chiaki_button).replace(' ', '_').toLower();
 	settings.setValue("keymap/" + button_name, QKeySequence(key).toString());
+}
+
+void Settings::ApplyGamingKeyMapping()
+{
+	const QMap<int, Qt::Key> layout =
+	{
+		{CHIAKI_CONTROLLER_BUTTON_CROSS     , Qt::Key::Key_Space},
+		{CHIAKI_CONTROLLER_BUTTON_MOON      , Qt::Key::Key_C},
+		{CHIAKI_CONTROLLER_BUTTON_BOX       , Qt::Key::Key_R},
+		{CHIAKI_CONTROLLER_BUTTON_PYRAMID   , Qt::Key::Key_F},
+		{CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT , Qt::Key::Key_Left},
+		{CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT, Qt::Key::Key_Right},
+		{CHIAKI_CONTROLLER_BUTTON_DPAD_UP   , Qt::Key::Key_Up},
+		{CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN , Qt::Key::Key_Down},
+		{CHIAKI_CONTROLLER_BUTTON_L1        , Qt::Key::Key_Q},
+		{CHIAKI_CONTROLLER_BUTTON_R1        , Qt::Key::Key_E},
+		{CHIAKI_CONTROLLER_BUTTON_L3        , Qt::Key::Key_Shift},
+		{CHIAKI_CONTROLLER_BUTTON_R3        , Qt::Key::Key_V},
+		{CHIAKI_CONTROLLER_BUTTON_OPTIONS   , Qt::Key::Key_Escape},
+		{CHIAKI_CONTROLLER_BUTTON_SHARE     , Qt::Key::Key_P},
+		{CHIAKI_CONTROLLER_BUTTON_TOUCHPAD  , Qt::Key::Key_Tab},
+		{CHIAKI_CONTROLLER_BUTTON_PS        , Qt::Key::Key_Home},
+		{CHIAKI_CONTROLLER_ANALOG_BUTTON_L2 , Qt::Key::Key_Z},
+		{CHIAKI_CONTROLLER_ANALOG_BUTTON_R2 , Qt::Key::Key_X},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X_UP)   , Qt::Key::Key_D},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_X_DOWN) , Qt::Key::Key_A},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y_UP)   , Qt::Key::Key_W},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_LEFT_Y_DOWN) , Qt::Key::Key_S},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X_UP)  , Qt::Key::Key_L},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_X_DOWN), Qt::Key::Key_J},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y_UP)  , Qt::Key::Key_I},
+		{static_cast<int>(ControllerButtonExt::ANALOG_STICK_RIGHT_Y_DOWN), Qt::Key::Key_K}
+	};
+	for(auto it = layout.cbegin(); it != layout.cend(); ++it)
+	{
+		auto button_name = GetChiakiControllerButtonName(it.key()).replace(' ', '_').toLower();
+		settings.setValue("keymap/" + button_name, QKeySequence(it.value()).toString());
+	}
 }
 
 QMap<int, Qt::Key> Settings::GetControllerMapping()

@@ -30,6 +30,19 @@ enum class ControllerButtonExt
 	MISC1 = (1 << 30),
 };
 
+// Physical mouse inputs that can be bound to a controller button in mouse-as-controller mode
+enum class MouseBinding
+{
+	Left,
+	Right,
+	Middle,
+	Back,
+	Forward,
+	WheelUp,
+	WheelDown,
+	Count
+};
+
 enum class RumbleHapticsIntensity
 {
 	Off,
@@ -443,6 +456,20 @@ class Settings : public QObject
 		bool GetMouseTouchEnabled() const;
 		void SetMouseTouchEnabled(bool enabled);
 
+		// Mouse as controller: mouse movement drives the right stick, buttons/wheel map to controller buttons
+		bool GetMouseControllerEnabled() const;
+		void SetMouseControllerEnabled(bool enabled);
+		int GetMouseSensitivity() const;
+		void SetMouseSensitivity(int sensitivity);
+		int GetMouseDeadzone() const;
+		void SetMouseDeadzone(int deadzone);
+		bool GetMouseInvertY() const;
+		void SetMouseInvertY(bool invert);
+		/** @return the chiaki button bound to this mouse input, 0 for none */
+		int GetMouseButtonMapping(MouseBinding binding) const;
+		void SetMouseButtonMapping(MouseBinding binding, int chiaki_button);
+		static QString GetMouseBindingName(MouseBinding binding);
+
 		bool GetDpadTouchEnabled() const;
 		void SetDpadTouchEnabled(bool enabled);
 
@@ -483,6 +510,8 @@ class Settings : public QObject
 
 		QString GetTimeFormat() const     { return time_format; }
 		void ClearKeyMapping();
+		/** Replace the key mapping with a WASD layout suited for games played with keyboard and mouse */
+		void ApplyGamingKeyMapping();
 
 #if CHIAKI_GUI_ENABLE_SPEEX
 		bool GetSpeechProcessingEnabled() const;

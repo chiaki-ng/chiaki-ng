@@ -820,6 +820,104 @@ void QmlSettings::setKeyboardEnabled(bool enabled)
     emit keyboardEnabledChanged();
 }
 
+bool QmlSettings::mouseControllerEnabled() const
+{
+    return settings->GetMouseControllerEnabled();
+}
+
+void QmlSettings::setMouseControllerEnabled(bool enabled)
+{
+    settings->SetMouseControllerEnabled(enabled);
+    emit mouseControllerEnabledChanged();
+}
+
+int QmlSettings::mouseSensitivity() const
+{
+    return settings->GetMouseSensitivity();
+}
+
+void QmlSettings::setMouseSensitivity(int sensitivity)
+{
+    settings->SetMouseSensitivity(sensitivity);
+    emit mouseSensitivityChanged();
+}
+
+int QmlSettings::mouseDeadzone() const
+{
+    return settings->GetMouseDeadzone();
+}
+
+void QmlSettings::setMouseDeadzone(int deadzone)
+{
+    settings->SetMouseDeadzone(deadzone);
+    emit mouseDeadzoneChanged();
+}
+
+bool QmlSettings::mouseInvertY() const
+{
+    return settings->GetMouseInvertY();
+}
+
+void QmlSettings::setMouseInvertY(bool invert)
+{
+    settings->SetMouseInvertY(invert);
+    emit mouseInvertYChanged();
+}
+
+QVariantList QmlSettings::mouseButtonMapping() const
+{
+    QVariantList out;
+    for (int i = 0; i < static_cast<int>(MouseBinding::Count); i++) {
+        auto binding = static_cast<MouseBinding>(i);
+        int button = settings->GetMouseButtonMapping(binding);
+        QVariantMap m;
+        m["binding"] = i;
+        m["bindingName"] = Settings::GetMouseBindingName(binding);
+        m["buttonValue"] = button;
+        m["buttonName"] = button ? Settings::GetChiakiControllerButtonName(button) : tr("None");
+        out.append(m);
+    }
+    return out;
+}
+
+QVariantList QmlSettings::mouseBindableButtons() const
+{
+    static const int buttons[] = {
+        0,
+        CHIAKI_CONTROLLER_ANALOG_BUTTON_R2, CHIAKI_CONTROLLER_ANALOG_BUTTON_L2,
+        CHIAKI_CONTROLLER_BUTTON_R1, CHIAKI_CONTROLLER_BUTTON_L1,
+        CHIAKI_CONTROLLER_BUTTON_R3, CHIAKI_CONTROLLER_BUTTON_L3,
+        CHIAKI_CONTROLLER_BUTTON_CROSS, CHIAKI_CONTROLLER_BUTTON_MOON,
+        CHIAKI_CONTROLLER_BUTTON_BOX, CHIAKI_CONTROLLER_BUTTON_PYRAMID,
+        CHIAKI_CONTROLLER_BUTTON_DPAD_UP, CHIAKI_CONTROLLER_BUTTON_DPAD_DOWN,
+        CHIAKI_CONTROLLER_BUTTON_DPAD_LEFT, CHIAKI_CONTROLLER_BUTTON_DPAD_RIGHT,
+        CHIAKI_CONTROLLER_BUTTON_OPTIONS, CHIAKI_CONTROLLER_BUTTON_SHARE,
+        CHIAKI_CONTROLLER_BUTTON_TOUCHPAD, CHIAKI_CONTROLLER_BUTTON_PS,
+    };
+    QVariantList out;
+    for (int button : buttons) {
+        QVariantMap m;
+        m["value"] = button;
+        m["name"] = button ? Settings::GetChiakiControllerButtonName(button) : tr("None");
+        out.append(m);
+    }
+    return out;
+}
+
+void QmlSettings::setMouseButtonMapping(int binding, int button)
+{
+    if (binding < 0 || binding >= static_cast<int>(MouseBinding::Count))
+        return;
+    settings->SetMouseButtonMapping(static_cast<MouseBinding>(binding), button);
+    emit mouseButtonMappingChanged();
+}
+
+void QmlSettings::applyGamingKeyMapping()
+{
+    settings->ApplyGamingKeyMapping();
+    emit controllerMappingChanged();
+}
+
 bool QmlSettings::dpadTouchEnabled() const
 {
     return settings->GetDpadTouchEnabled();
@@ -1948,6 +2046,11 @@ void QmlSettings::refreshAllKeys()
     emit psnAccountIdChanged();
     emit mouseTouchEnabledChanged();
     emit keyboardEnabledChanged();
+    emit mouseControllerEnabledChanged();
+    emit mouseSensitivityChanged();
+    emit mouseDeadzoneChanged();
+    emit mouseInvertYChanged();
+    emit mouseButtonMappingChanged();
     emit dpadTouchEnabledChanged();
     emit iDROnFECFailureEnabledChanged();
     emit dpadTouchIncrementChanged();

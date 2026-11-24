@@ -82,6 +82,12 @@ class QmlSettings : public QObject
     Q_PROPERTY(QString psnAccountId READ psnAccountId WRITE setPsnAccountId NOTIFY psnAccountIdChanged)
     Q_PROPERTY(bool mouseTouchEnabled READ mouseTouchEnabled WRITE setMouseTouchEnabled NOTIFY mouseTouchEnabledChanged)
     Q_PROPERTY(bool keyboardEnabled READ keyboardEnabled WRITE setKeyboardEnabled NOTIFY keyboardEnabledChanged)
+    Q_PROPERTY(bool mouseControllerEnabled READ mouseControllerEnabled WRITE setMouseControllerEnabled NOTIFY mouseControllerEnabledChanged)
+    Q_PROPERTY(int mouseSensitivity READ mouseSensitivity WRITE setMouseSensitivity NOTIFY mouseSensitivityChanged)
+    Q_PROPERTY(int mouseDeadzone READ mouseDeadzone WRITE setMouseDeadzone NOTIFY mouseDeadzoneChanged)
+    Q_PROPERTY(bool mouseInvertY READ mouseInvertY WRITE setMouseInvertY NOTIFY mouseInvertYChanged)
+    Q_PROPERTY(QVariantList mouseButtonMapping READ mouseButtonMapping NOTIFY mouseButtonMappingChanged)
+    Q_PROPERTY(QVariantList mouseBindableButtons READ mouseBindableButtons CONSTANT)
     Q_PROPERTY(bool dpadTouchEnabled READ dpadTouchEnabled WRITE setDpadTouchEnabled NOTIFY dpadTouchEnabledChanged)
     Q_PROPERTY(bool iDROnFECFailureEnabled READ iDROnFECFailureEnabled WRITE setIDROnFECFailureEnabled NOTIFY iDROnFECFailureEnabledChanged)
     Q_PROPERTY(uint16_t dpadTouchIncrement READ dpadTouchIncrement WRITE setDpadTouchIncrement NOTIFY dpadTouchIncrementChanged)
@@ -550,6 +556,17 @@ public:
     bool keyboardEnabled() const;
     void setKeyboardEnabled(bool enabled);
 
+    bool mouseControllerEnabled() const;
+    void setMouseControllerEnabled(bool enabled);
+    int mouseSensitivity() const;
+    void setMouseSensitivity(int sensitivity);
+    int mouseDeadzone() const;
+    void setMouseDeadzone(int deadzone);
+    bool mouseInvertY() const;
+    void setMouseInvertY(bool invert);
+    QVariantList mouseButtonMapping() const;
+    QVariantList mouseBindableButtons() const;
+
     bool dpadTouchEnabled() const;
     void setDpadTouchEnabled(bool enabled);
 
@@ -602,6 +619,8 @@ public:
     Q_INVOKABLE void refreshAudioDevices();
     Q_INVOKABLE QString changeControllerKey(int button, int key);
     Q_INVOKABLE void clearKeyMapping();
+    Q_INVOKABLE void applyGamingKeyMapping();
+    Q_INVOKABLE void setMouseButtonMapping(int binding, int button);
     Q_INVOKABLE void exportSettings();
     Q_INVOKABLE QString chooseSteamBasePath();
     Q_INVOKABLE void exportPlaceboSettings();
@@ -682,6 +701,11 @@ signals:
     void psnAccountIdChanged();
     void mouseTouchEnabledChanged();
     void keyboardEnabledChanged();
+    void mouseControllerEnabledChanged();
+    void mouseSensitivityChanged();
+    void mouseDeadzoneChanged();
+    void mouseInvertYChanged();
+    void mouseButtonMappingChanged();
     void dpadTouchEnabledChanged();
     void dpadTouchIncrementChanged();
     void dpadTouchShortcut1Changed();

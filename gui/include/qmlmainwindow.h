@@ -266,6 +266,11 @@ private:
     void snapshotPendingFrame();
     bool handleShortcut(QKeyEvent *event);
     bool event(QEvent *event) override;
+    // mouse as controller: hide and lock the pointer so its motion becomes relative look input
+    bool mouseControllerActive() const;
+    void setMouseCaptured(bool captured);
+    void handleCapturedMouseMove(QMouseEvent *event);
+    void restoreCursor();
     QObject *focusObject() const override;
     void updateQueueDepthAverage(int depth);
     void updatePendingFrameAge(double age);
@@ -314,6 +319,9 @@ private:
     bool keep_video = false;
     RenderBackend render_backend = RenderBackend::Vulkan;
     int grab_input = 0;
+    bool mouse_captured = false;
+    bool mouse_capture_warp = true; // false where the platform can't move the pointer (Wayland)
+    QPointF mouse_capture_last_pos;
     int dropped_frames = 0;
     bool is_window_adjustable = false;
     bool is_stream_window_adjustable = false;

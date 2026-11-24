@@ -35,6 +35,8 @@
 #include <QObject>
 #include <QImage>
 #include <QMouseEvent>
+#include <QHash>
+#include "mousestick.h"
 #include <QMutex>
 #include <QTimer>
 #include <QQueue>
@@ -95,6 +97,9 @@ class SdeckHapticsWorker;
 		bool enable_keyboard;
 		bool keyboard_controller_enabled;
 		bool mouse_touch_enabled;
+		bool mouse_controller_enabled;
+		MouseStickMapper::Params mouse_stick_params;
+		QMap<MouseBinding, int> mouse_map;
 		bool enable_dualsense;
 		bool auto_regist;
 		float haptic_override;
@@ -220,6 +225,7 @@ class StreamSession : public QObject
 		bool rumble_haptics_on;
 		float PS_TOUCHPAD_MAX_X, PS_TOUCHPAD_MAX_Y;
 		ChiakiControllerState keyboard_state;
+		ChiakiControllerState mouse_state;
 		ChiakiControllerState touch_state;
 		QMap<int, uint8_t> touch_tracker;
 		int8_t mouse_touch_id;
@@ -229,6 +235,21 @@ class StreamSession : public QObject
 		float haptic_override;
 		bool keyboard_controller_enabled;
 		bool mouse_touch_enabled;
+		bool mouse_controller_enabled;
+		// keyboard: key id (scan code when available) -> controller button it pressed,
+		// so the release always matches the press even if modifiers changed in between
+		QHash<quint64, int> pressed_keys;
+		// stick directions currently held on the keyboard (ControllerButtonExt bits)
+		int held_stick_dirs = 0;
+		// mouse as controller
+		MouseStickMapper mouse_stick;
+		QTimer *mouse_stick_timer = nullptr;
+		QElapsedTimer mouse_stick_clock;
+		QMap<MouseBinding, int> mouse_map;
+		QHash<int, int> mouse_buttons_held; // chiaki button -> number of mouse inputs holding it
+		QTimer *mouse_wheel_release_timer = nullptr;
+		int mouse_wheel_button = 0;
+		void SetMouseButtonState(int button, bool pressed);
 		bool dpad_regular;
 		bool dpad_regular_touch_switched;
 		uint dpad_touch_shortcut1;
@@ -371,6 +392,15 @@ class StreamSession : public QObject
 		void HandleMouseReleaseEvent(QMouseEvent *event);
 		void HandleMousePressEvent(QMouseEvent *event);
 		void HandleMouseMoveEvent(QMouseEvent *event, qreal width, qreal height);
+		// mouse as controller (mouse-look); the window captures the pointer and reports raw deltas
+		bool GetMouseControllerEnabled() const { return mouse_controller_enabled; }
+		bool GetKeyboardControllerEnabled() const { return keyboard_controller_enabled; }
+		bool IsKeyMapped(Qt::Key key) const { return keyboard_controller_enabled && key_map.contains(key); }
+		void HandleMouseDelta(double dx, double dy);
+		void HandleMouseButton(Qt::MouseButton button, bool pressed);
+		void HandleMouseWheel(int angle_delta_y);
+		/** Release every key and mouse button and center the sticks, e.g. when the window loses focus */
+		void ReleaseKeyboardMouseInput();
 #if CHIAKI_GUI_ENABLE_SPEEX
 		bool ProcessMicFrame(int16_t *echo_buf);
 #endif
@@ -378,7 +408,7 @@ class StreamSession : public QObject
 		void DrainMicRingBuffer();
 		void ReadMic(const QByteArray &micdata);
 
-		void BlockInput(bool block) { input_block = block ? 1 : 2; SendFeedbackState(); }
+		void BlockInput(bool block) { if(block) ReleaseKeyboardMouseInput(); input_block = block ? 1 : 2; SendFeedbackState(); }
 
 	signals:
 		void FfmpegFrameAvailable();

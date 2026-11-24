@@ -2517,6 +2517,128 @@ DialogView {
                                 }
                             }
                         }
+
+                        // Keyboard & mouse gaming: mouse-look and mouse buttons
+                        ColumnLayout {
+                            Layout.columnSpan: 3
+                            Layout.fillWidth: true
+                            Layout.topMargin: 25
+                            spacing: 8
+
+                            Label {
+                                text: qsTr("Mouse as Controller")
+                                font.bold: true
+                                font.pixelSize: 20
+                            }
+
+                            Label {
+                                Layout.maximumWidth: 640
+                                wrapMode: Text.WordWrap
+                                text: qsTr("Mouse movement drives the right stick (camera / aim) and mouse buttons press controller buttons. Click the stream to lock the mouse, press F10 to release it. Overrides the mouse touchpad.")
+                            }
+
+                            RowLayout {
+                                spacing: 20
+                                C.Button {
+                                    text: qsTr("Apply WASD Gaming Layout")
+                                    onClicked: Chiaki.settings.applyGamingKeyMapping()
+                                }
+                                Label {
+                                    Layout.maximumWidth: 400
+                                    wrapMode: Text.WordWrap
+                                    text: qsTr("WASD move, Space ✕, C ○, R □, F △, Q L1, E R1, Shift L3, V R3, Tab touchpad, Esc Options")
+                                }
+                            }
+
+                            C.CheckBox {
+                                text: qsTr("Enable Mouse as Controller (mouse-look)")
+                                checked: Chiaki.settings.mouseControllerEnabled
+                                onToggled: Chiaki.settings.mouseControllerEnabled = checked
+                            }
+
+                            RowLayout {
+                                spacing: 20
+                                enabled: Chiaki.settings.mouseControllerEnabled
+                                Label {
+                                    Layout.preferredWidth: 200
+                                    horizontalAlignment: Text.AlignRight
+                                    text: qsTr("Sensitivity")
+                                }
+                                C.Slider {
+                                    id: mouseSensitivitySlider
+                                    Layout.preferredWidth: 250
+                                    from: 1
+                                    to: 100
+                                    stepSize: 1
+                                    value: Chiaki.settings.mouseSensitivity
+                                    onMoved: Chiaki.settings.mouseSensitivity = value
+                                }
+                                Label {
+                                    text: mouseSensitivitySlider.value.toFixed(0)
+                                }
+                            }
+
+                            RowLayout {
+                                spacing: 20
+                                enabled: Chiaki.settings.mouseControllerEnabled
+                                Label {
+                                    Layout.preferredWidth: 200
+                                    horizontalAlignment: Text.AlignRight
+                                    text: qsTr("Game Deadzone Compensation")
+                                }
+                                C.Slider {
+                                    id: mouseDeadzoneSlider
+                                    Layout.preferredWidth: 250
+                                    from: 0
+                                    to: 50
+                                    stepSize: 1
+                                    value: Chiaki.settings.mouseDeadzone
+                                    onMoved: Chiaki.settings.mouseDeadzone = value
+                                }
+                                Label {
+                                    text: qsTr("%1 %").arg(mouseDeadzoneSlider.value.toFixed(0))
+                                }
+                            }
+
+                            C.CheckBox {
+                                enabled: Chiaki.settings.mouseControllerEnabled
+                                text: qsTr("Invert Mouse Y")
+                                checked: Chiaki.settings.mouseInvertY
+                                onToggled: Chiaki.settings.mouseInvertY = checked
+                            }
+
+                            Repeater {
+                                model: Chiaki.settings.mouseButtonMapping
+
+                                RowLayout {
+                                    spacing: 20
+                                    enabled: Chiaki.settings.mouseControllerEnabled
+                                    Label {
+                                        Layout.preferredWidth: 200
+                                        horizontalAlignment: Text.AlignRight
+                                        text: modelData.bindingName
+                                    }
+                                    C.ComboBox {
+                                        Layout.preferredWidth: 250
+                                        lastInFocusChain: index == 6
+                                        model: Chiaki.settings.mouseBindableButtons
+                                        textRole: "name"
+                                        valueRole: "value"
+                                        // indexOfValue() runs before the model is loaded and returns -1,
+                                        // so look the value up in the list directly
+                                        currentIndex: {
+                                            const buttons = Chiaki.settings.mouseBindableButtons;
+                                            for (let i = 0; i < buttons.length; i++) {
+                                                if (buttons[i].value === modelData.buttonValue)
+                                                    return i;
+                                            }
+                                            return 0;
+                                        }
+                                        onActivated: (i) => Chiaki.settings.setMouseButtonMapping(modelData.binding, valueAt(i))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
