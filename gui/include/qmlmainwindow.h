@@ -69,6 +69,10 @@ class QmlMainWindow : public QWindow
     Q_PROPERTY(double pendingFrameAge READ pendingFrameAge NOTIFY pendingFrameAgeChanged)
 
 public:
+    /// Quit the application, stopping a running session first (used for SIGINT/SIGTERM)
+    void quitApplication();
+
+public:
     enum class UpdateRequestReason {
         Unknown,
         SceneChanged,
