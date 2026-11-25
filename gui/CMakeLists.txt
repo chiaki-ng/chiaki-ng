@@ -111,6 +111,39 @@ if (NOT APPLE)
 	target_compile_definitions(chiaki PRIVATE CHIAKI_HAVE_DBUS)
 endif()
 endif()
+# Wayland idle-inhibit, used to keep the display awake when
+# org.freedesktop.ScreenSaver is not available (Hyprland, Sway, ...)
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND ${Qt6DBus_FOUND})
+	find_package(PkgConfig QUIET)
+	if (PKG_CONFIG_FOUND)
+		pkg_check_modules(WaylandClient QUIET IMPORTED_TARGET wayland-client)
+		pkg_check_modules(WaylandProtocols QUIET wayland-protocols)
+		pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+		find_program(WAYLAND_SCANNER wayland-scanner)
+	endif()
+	set(IDLE_INHIBIT_XML "${WAYLAND_PROTOCOLS_DIR}/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml")
+	if (WaylandClient_FOUND AND WAYLAND_SCANNER AND EXISTS "${IDLE_INHIBIT_XML}")
+		set(IDLE_INHIBIT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/idle-inhibit-unstable-v1-client-protocol.h")
+		set(IDLE_INHIBIT_CODE "${CMAKE_CURRENT_BINARY_DIR}/idle-inhibit-unstable-v1-protocol.c")
+		add_custom_command(OUTPUT "${IDLE_INHIBIT_HEADER}"
+			COMMAND ${WAYLAND_SCANNER} client-header "${IDLE_INHIBIT_XML}" "${IDLE_INHIBIT_HEADER}"
+			DEPENDS "${IDLE_INHIBIT_XML}")
+		add_custom_command(OUTPUT "${IDLE_INHIBIT_CODE}"
+			COMMAND ${WAYLAND_SCANNER} private-code "${IDLE_INHIBIT_XML}" "${IDLE_INHIBIT_CODE}"
+			DEPENDS "${IDLE_INHIBIT_XML}")
+		target_sources(chiaki PRIVATE
+			include/waylandidleinhibitor.h
+			src/waylandidleinhibitor.cpp
+			"${IDLE_INHIBIT_HEADER}"
+			"${IDLE_INHIBIT_CODE}")
+		target_include_directories(chiaki PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+		target_link_libraries(chiaki PkgConfig::WaylandClient)
+		target_compile_definitions(chiaki PRIVATE CHIAKI_HAVE_WAYLAND_IDLE_INHIBIT)
+		message(STATUS "Wayland idle-inhibit support enabled")
+	else()
+		message(STATUS "Wayland idle-inhibit support disabled (needs wayland-client, wayland-protocols and wayland-scanner)")
+	endif()
+endif()
 if (${Qt6WebEngineQuick_FOUND})
 	target_link_libraries(chiaki Qt::WebEngineQuick)
 	target_compile_definitions(chiaki PRIVATE CHIAKI_HAVE_WEBENGINE)

@@ -2,6 +2,8 @@
 
 #include <QObject>
 
+class WaylandIdleInhibitor;
+
 class SystemdInhibit : public QObject
 {
     Q_OBJECT
@@ -26,4 +28,6 @@ private:
     QString what;
     QString mode;
     int fd = -1;
+    bool screensaver_available = true;
+    WaylandIdleInhibitor *wayland_idle_inhibitor = nullptr;
 };

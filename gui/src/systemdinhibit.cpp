@@ -1,5 +1,16 @@
 #include "systemdinhibit.h"
 
+#ifdef CHIAKI_HAVE_WAYLAND_IDLE_INHIBIT
+#include "waylandidleinhibitor.h"
+
+// How long the display is kept awake after the last controller movement when
+// falling back to Wayland idle-inhibit. The compositor's own idle timeout
+// starts counting once the inhibitor is released.
+#ifndef WAYLAND_IDLE_INHIBIT_HOLD_MS
+#define WAYLAND_IDLE_INHIBIT_HOLD_MS (60 * 1000)
+#endif
+#endif
+
 #ifdef CHIAKI_HAVE_DBUS
 #include <fcntl.h>
 #include <unistd.h>
@@ -55,6 +66,14 @@ void SystemdInhibit::inhibit()
 
 void SystemdInhibit::simulateUserActivity()
 {
+#ifdef CHIAKI_HAVE_WAYLAND_IDLE_INHIBIT
+    if (!screensaver_available)
+    {
+        if (wayland_idle_inhibitor)
+            wayland_idle_inhibitor->poke();
+        return;
+    }
+#endif
 #ifdef CHIAKI_HAVE_DBUS
     QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.ScreenSaver"),
                                                        QStringLiteral("/ScreenSaver"),
@@ -66,8 +85,29 @@ void SystemdInhibit::simulateUserActivity()
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher]() {
         watcher->deleteLater();
         const QDBusPendingReply<void> reply = *watcher;
-        if (reply.isError())
-            qWarning() << "Simulate User Activity Error:" << reply.error().name() << reply.error().message();
+        if (!reply.isError())
+            return;
+#ifdef CHIAKI_HAVE_WAYLAND_IDLE_INHIBIT
+        // No org.freedesktop.ScreenSaver (e.g. Hyprland, Sway): fall back to
+        // the Wayland idle-inhibit protocol instead of failing on every movement.
+        const auto type = reply.error().type();
+        if (screensaver_available && (type == QDBusError::ServiceUnknown || type == QDBusError::UnknownObject
+                    || type == QDBusError::UnknownInterface || type == QDBusError::UnknownMethod))
+        {
+            screensaver_available = false;
+            qInfo() << "org.freedesktop.ScreenSaver not available (" << reply.error().name() << "), trying Wayland idle-inhibit";
+            auto inhibitor = new WaylandIdleInhibitor(WAYLAND_IDLE_INHIBIT_HOLD_MS, this);
+            if (inhibitor->isSupported())
+            {
+                wayland_idle_inhibitor = inhibitor;
+                wayland_idle_inhibitor->poke();
+            }
+            else
+                delete inhibitor;
+            return;
+        }
+#endif
+        qWarning() << "Simulate User Activity Error:" << reply.error().name() << reply.error().message();
     });
 #endif
 }
