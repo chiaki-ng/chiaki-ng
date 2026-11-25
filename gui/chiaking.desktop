@@ -5,3 +5,4 @@ Comment=PlayStation Remote Play Client
 Exec=chiaki
 Icon=chiaking
 Categories=Game;Network;RemoteAccess;
+StartupWMClass=chiaki-ng
