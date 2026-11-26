@@ -78,7 +78,8 @@ bool DualSenseBtHaptics::Open(const QString &hid_path)
 	double_block = qEnvironmentVariableIntValue("CHIAKI_BT_HAPTICS_SINGLE") == 0;
 	ctrl_buffer = (uint8_t)EnvInt("CHIAKI_BT_HAPTICS_CTRL_BUFFER", 48, 16, 128);
 	report_bytes = double_block ? 2 * DS_BT_HAPTICS_BLOCK_SIZE : DS_BT_HAPTICS_BLOCK_SIZE;
-	int prefill_ms = EnvInt("CHIAKI_BT_HAPTICS_PREFILL_MS", 32, 0, 500);
+	// Just over one double-block report (21.33 ms), so an effect starts with a full first report
+	int prefill_ms = EnvInt("CHIAKI_BT_HAPTICS_PREFILL_MS", 22, 0, 500);
 	int max_ms = EnvInt("CHIAKI_BT_HAPTICS_MAX_MS", 96, 0, 1000);
 	prefill_bytes = MsToBytes(prefill_ms);
 	max_bytes = std::max(MsToBytes(max_ms), prefill_bytes + report_bytes);

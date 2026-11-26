@@ -35,7 +35,7 @@ typedef struct SDL_hid_device_ SDL_hid_device;
 //   CHIAKI_BT_HAPTICS_SINGLE=1      one 32-frame block per report every 10.67 ms
 //                                   (default: two blocks per report every 21.33 ms)
 //   CHIAKI_BT_HAPTICS_CTRL_BUFFER=n controller-side audio buffer length, 16..128 (default 48)
-//   CHIAKI_BT_HAPTICS_PREFILL_MS=n  host jitter buffer before playback starts (default 32)
+//   CHIAKI_BT_HAPTICS_PREFILL_MS=n  host jitter buffer before playback starts (default 22)
 //   CHIAKI_BT_HAPTICS_MAX_MS=n      host queue cap before the oldest data is dropped (default 96)
 class DualSenseBtHaptics : public QObject
 {
@@ -65,7 +65,7 @@ class DualSenseBtHaptics : public QObject
 		bool double_block = true;
 		uint8_t ctrl_buffer = 48;
 		size_t report_bytes = 128;      // sample bytes per report
-		size_t prefill_bytes = 192;
+		size_t prefill_bytes = 132;
 		size_t max_bytes = 576;
 
 		// report state (sender thread only)
