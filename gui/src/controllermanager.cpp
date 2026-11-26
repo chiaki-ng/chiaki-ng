@@ -839,6 +839,23 @@ void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 #endif
 }
 
+void Controller::StopDualSenseRumbleForHaptics()
+{
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(!controller)
+		return;
+	if(!is_dualsense && !is_dualsense_edge)
+		return;
+	// Like SDL's DualSense driver: zero rumble with the rumble emulation bits off restores
+	// audio haptics, while SetDualSenseRumble() always sets "disable audio haptics" (0x02)
+	DS5EffectsState_t state;
+	SDL_zero(state);
+	state.rgucUnknown1[4] = manager->GetDualSenseIntensity();
+	state.ucEnableBits2 |= 0x40;
+	SDL_GameControllerSendEffect(controller, &state, sizeof(state));
+#endif
+}
+
 void Controller::SetRumble(uint8_t left, uint8_t right)
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER

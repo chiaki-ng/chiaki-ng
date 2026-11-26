@@ -131,6 +131,8 @@ class Controller : public QObject
 		QString GetGUIDString();
 		ChiakiControllerState GetState();
 		void SetRumble(uint8_t left, uint8_t right);
+		// Stops DualSense rumble without switching the coil out of audio haptics mode
+		void StopDualSenseRumbleForHaptics();
 		void SetTriggerEffects(uint8_t type_left, const uint8_t *data_left, uint8_t type_right, const uint8_t *data_right);
 		void SetDualsenseMic(bool on);
 		void SetHapticRumble(uint16_t left, uint16_t right);

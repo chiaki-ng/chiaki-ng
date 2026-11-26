@@ -2533,7 +2533,7 @@ void StreamSession::Event(ChiakiEvent *event)
 					if(suppress_bt_rumble && it.key() == bt_haptics_controller_id)
 					{
 						if(!bt_rumble_suppressed)
-							controller->SetRumble(0, 0);
+							controller->StopDualSenseRumbleForHaptics();
 						continue;
 					}
 #if CHIAKI_GUI_ENABLE_STEAMDECK_NATIVE
