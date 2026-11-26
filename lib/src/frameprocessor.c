@@ -44,8 +44,10 @@ struct chiaki_frame_unit_t
 CHIAKI_EXPORT void chiaki_frame_processor_init(ChiakiFrameProcessor *frame_processor, ChiakiLog *log)
 {
 	frame_processor->log = log;
+	frame_processor->frame_buf_alloc = NULL;
 	frame_processor->frame_buf = NULL;
 	frame_processor->frame_buf_size = 0;
+	frame_processor->frame_buf_prefix_size = 0;
 	frame_processor->buf_size_per_unit = 0;
 	frame_processor->buf_stride_per_unit = 0;
 	frame_processor->units_source_expected = 0;
@@ -60,7 +62,7 @@ CHIAKI_EXPORT void chiaki_frame_processor_init(ChiakiFrameProcessor *frame_proce
 
 CHIAKI_EXPORT void chiaki_frame_processor_fini(ChiakiFrameProcessor *frame_processor)
 {
-	free(frame_processor->frame_buf);
+	free(frame_processor->frame_buf_alloc);
 	free(frame_processor->unit_slots);
 }
 
@@ -131,18 +133,24 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_frame_processor_alloc_frame(ChiakiFrameProc
 	if(frame_processor->unit_slots_size > SIZE_MAX / frame_processor->buf_stride_per_unit)
 		return CHIAKI_ERR_OVERFLOW;
 	size_t frame_buf_size_required = frame_processor->unit_slots_size * frame_processor->buf_stride_per_unit;
+	if(frame_processor->frame_buf_prefix_size > SIZE_MAX - CHIAKI_VIDEO_BUFFER_PADDING_SIZE ||
+		frame_buf_size_required > SIZE_MAX - CHIAKI_VIDEO_BUFFER_PADDING_SIZE - frame_processor->frame_buf_prefix_size)
+		return CHIAKI_ERR_OVERFLOW;
+	frame_buf_size_required += frame_processor->frame_buf_prefix_size;
 	if(frame_processor->frame_buf_size < frame_buf_size_required)
 	{
-		free(frame_processor->frame_buf);
-		frame_processor->frame_buf = malloc(frame_buf_size_required + CHIAKI_VIDEO_BUFFER_PADDING_SIZE);
-		if(!frame_processor->frame_buf)
+		free(frame_processor->frame_buf_alloc);
+		frame_processor->frame_buf = NULL;
+		frame_processor->frame_buf_alloc = malloc(frame_buf_size_required + CHIAKI_VIDEO_BUFFER_PADDING_SIZE);
+		if(!frame_processor->frame_buf_alloc)
 		{
 			frame_processor->frame_buf_size = 0;
 			return CHIAKI_ERR_MEMORY;
 		}
 		frame_processor->frame_buf_size = frame_buf_size_required;
 	}
-	memset(frame_processor->frame_buf, 0, frame_buf_size_required + CHIAKI_VIDEO_BUFFER_PADDING_SIZE);
+	frame_processor->frame_buf = frame_processor->frame_buf_alloc + frame_processor->frame_buf_prefix_size;
+	memset(frame_processor->frame_buf_alloc, 0, frame_buf_size_required + CHIAKI_VIDEO_BUFFER_PADDING_SIZE);
 
 	return CHIAKI_ERR_SUCCESS;
 }
@@ -312,6 +320,7 @@ CHIAKI_EXPORT ChiakiFrameProcessorFlushResult chiaki_frame_processor_flush(Chiak
 
 	chiaki_stream_stats_frame(&frame_processor->stream_stats, (uint64_t)cur);
 
+	memset(frame_processor->frame_buf + cur, 0, CHIAKI_VIDEO_BUFFER_PADDING_SIZE);
 	*frame = frame_processor->frame_buf;
 	*frame_size = cur;
 	return result;
