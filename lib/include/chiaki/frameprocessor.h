@@ -30,8 +30,10 @@ typedef struct chiaki_frame_unit_t ChiakiFrameUnit;
 typedef struct chiaki_frame_processor_t
 {
 	ChiakiLog *log;
-	uint8_t *frame_buf;
-	size_t frame_buf_size;
+	uint8_t *frame_buf_alloc; // owns the allocation
+	uint8_t *frame_buf; // unit data, after frame_buf_prefix_size bytes of headroom
+	size_t frame_buf_size; // allocation capacity including headroom, excluding decoder padding
+	size_t frame_buf_prefix_size; // reserved, 16-byte aligned headroom before unit data
 	size_t buf_size_per_unit;
 	size_t buf_stride_per_unit;
 	unsigned int units_source_expected;
