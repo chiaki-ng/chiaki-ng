@@ -365,7 +365,7 @@ void ControllerManager::ControllerClosed(Controller *controller)
 
 Controller::Controller(int device_id, ControllerManager *manager)
 : QObject(manager), ref(0), last_motion_timestamp(0), micbutton_push(false), is_dualsense(false),
-  is_dualsense_edge(false), has_led(false), firmware_version(0), updating_mapping_button(false), is_handheld(false),
+  is_dualsense_edge(false), is_bluetooth(false), has_led(false), firmware_version(0), updating_mapping_button(false), is_handheld(false),
   is_steam_virtual(false), is_steam_virtual_unmasked(false), enable_analog_stick_mapping(false)
 {
 	this->id = device_id;
@@ -399,6 +399,8 @@ Controller::Controller(int device_id, ControllerManager *manager)
 			auto guid_controller_id = QPair<uint16_t, uint16_t>(0, 0);
 			uint16_t guid_version = 0;
 			SDL_GetJoystickGUIDInfo(guid, &guid_controller_id.first, &guid_controller_id.second, &guid_version, NULL);
+			// The first two GUID bytes hold the bus type (little endian)
+			is_bluetooth = (guid.data[0] | (guid.data[1] << 8)) == 0x05 /* SDL_HARDWARE_BUS_BLUETOOTH */;
 #ifdef Q_OS_MACOS
 			is_steam_virtual = (guid_version == 0 && chiaki_steam_virtual_controller_ids.contains(guid_controller_id));
 			is_steam_virtual_unmasked = (guid_version == 0 && chiaki_steam_virtual_controller_ids.contains(controller_id));
@@ -837,6 +839,23 @@ void Controller::SetDualSenseRumble(uint8_t left, uint8_t right)
 #endif
 }
 
+void Controller::StopDualSenseRumbleForHaptics()
+{
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(!controller)
+		return;
+	if(!is_dualsense && !is_dualsense_edge)
+		return;
+	// Like SDL's DualSense driver: zero rumble with the rumble emulation bits off restores
+	// audio haptics, while SetDualSenseRumble() always sets "disable audio haptics" (0x02)
+	DS5EffectsState_t state;
+	SDL_zero(state);
+	state.rgucUnknown1[4] = manager->GetDualSenseIntensity();
+	state.ucEnableBits2 |= 0x40;
+	SDL_GameControllerSendEffect(controller, &state, sizeof(state));
+#endif
+}
+
 void Controller::SetRumble(uint8_t left, uint8_t right)
 {
 #ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
@@ -916,6 +935,28 @@ void Controller::SetHapticRumble(uint16_t left, uint16_t right)
 		SetDualSenseRumble(left >> 8, right >> 8);
 	else
 		SDL_GameControllerRumble(controller, left, right, 5000);
+#endif
+}
+
+bool Controller::IsBluetooth()
+{
+#ifdef CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER
+	if(!controller)
+		return false;
+	return is_bluetooth;
+#endif
+	return false;
+}
+
+QString Controller::GetHidPath()
+{
+#if defined(CHIAKI_GUI_ENABLE_SDL_GAMECONTROLLER) && SDL_VERSION_ATLEAST(2, 24, 0)
+	if(!controller)
+		return QString();
+	const char *path = SDL_GameControllerPath(controller);
+	return path ? QString::fromUtf8(path) : QString();
+#else
+	return QString();
 #endif
 }
 

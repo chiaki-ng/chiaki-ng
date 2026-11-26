@@ -24,6 +24,7 @@ set(HEADER_FILES
 		include/chiaki/frameprocessor.h
 		include/chiaki/packetstats.h
 		include/chiaki/seqnum.h
+		include/chiaki/dualsensebt.h
 		include/chiaki/discovery.h
 		include/chiaki/congestioncontrol.h
 		include/chiaki/stoppipe.h
@@ -83,6 +84,7 @@ set(SOURCE_FILES
 		src/regist.c
 		src/opusdecoder.c
 		src/opusencoder.c
+		src/dualsensebt.c
 		src/orientation.c
 		src/bitstream.c
 		src/aia.c
