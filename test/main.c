@@ -4,6 +4,7 @@
 #include <chiaki/config.h>
 
 extern MunitTest tests_seq_num[];
+extern MunitTest tests_dualsense_bt[];
 extern MunitTest tests_key_state[];
 extern MunitTest tests_feedback[];
 extern MunitTest tests_reorder_queue[];
@@ -22,6 +23,13 @@ extern MunitTest tests_ffmpegdecoder[];
 #endif
 
 static MunitSuite suites[] = {
+	{
+		"/dualsense_bt",
+		tests_dualsense_bt,
+		NULL,
+		1,
+		MUNIT_SUITE_OPTION_NONE
+	},
 	{
 		"/seq_num",
 		tests_seq_num,

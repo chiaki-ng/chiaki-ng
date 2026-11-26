@@ -3,6 +3,7 @@
 #ifndef CHIAKI_DUALSENSEBTHAPTICS_H
 #define CHIAKI_DUALSENSEBTHAPTICS_H
 
+#include <chiaki/dualsensebt.h>
 #include <chiaki/log.h>
 
 #include <QByteArray>
@@ -69,7 +70,7 @@ class DualSenseBtHaptics : public QObject
 		size_t max_bytes = 576;
 
 		// report state (sender thread only)
-		uint8_t report[142];
+		uint8_t report[CHIAKI_DUALSENSE_BT_HAPTICS_REPORT_SIZE];
 		uint8_t seq = 0;
 		uint8_t packet_counter = 0;
 		int consecutive_failures = 0;

@@ -9,38 +9,11 @@
 #include <cstring>
 #include <vector>
 
-// Layout of output report 0x32 (142 bytes, Bluetooth only), as used by DS5Dongle:
-//   [0]        report id 0x32
-//   [1]        sequence number in the high nibble
-//   [2..7]     packet 0x11 (sized, 4 bytes): audio control flags, controller buffer
-//              length (x2), packet counter
-//   [8..9]     packet 0x12 header (sized, 64); bit 6 set = two 64-byte blocks follow
-//   [10..137]  samples: signed 8-bit stereo frames at 3 kHz (32 or 64 frames)
-//   [138..141] CRC32 (little endian) over the 0xA2 BT output header + bytes [0..137]
-#define DS_BT_HAPTICS_REPORT_ID 0x32
-#define DS_BT_HAPTICS_REPORT_SIZE 142
-#define DS_BT_HAPTICS_SAMPLES_OFFSET 10
-#define DS_BT_HAPTICS_BLOCK_SIZE 64
-#define DS_BT_HAPTICS_CRC_OFFSET (DS_BT_HAPTICS_REPORT_SIZE - 4)
-#define DS_BT_HAPTICS_SAMPLE_RATE 3000
+// The report layout and CRC live in lib/src/dualsensebt.c
+#define DS_BT_HAPTICS_BLOCK_SIZE CHIAKI_DUALSENSE_BT_HAPTICS_BLOCK_SIZE
+#define DS_BT_HAPTICS_SAMPLE_RATE CHIAKI_DUALSENSE_BT_HAPTICS_RATE
 #define DS_BT_HAPTICS_FRAME_BYTES 2 // L + R, one byte each
-#define DS_BT_OUTPUT_CRC_SEED 0xA2
 #define DS_BT_HAPTICS_MAX_FAILURES 50
-// Audio control flags (bit 0: controller mic, bit 5: apply buffer length)
-#define DS_BT_HAPTICS_AUDIO_FLAGS 0x66
-
-static_assert(DS_BT_HAPTICS_SAMPLES_OFFSET + 2 * DS_BT_HAPTICS_BLOCK_SIZE <= DS_BT_HAPTICS_CRC_OFFSET, "haptics samples overlap crc");
-
-static uint32_t Crc32Update(uint32_t crc, const uint8_t *data, size_t size)
-{
-	while(size--)
-	{
-		crc ^= *data++;
-		for(int i = 0; i < 8; i++)
-			crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
-	}
-	return crc;
-}
 
 static int EnvInt(const char *name, int def, int min, int max)
 {
@@ -60,7 +33,7 @@ static size_t MsToBytes(int ms)
 DualSenseBtHaptics::DualSenseBtHaptics(ChiakiLog *log, QObject *parent)
 	: QObject(parent), log(log)
 {
-	static_assert(sizeof(report) == DS_BT_HAPTICS_REPORT_SIZE, "unexpected haptics report size");
+	static_assert(sizeof(report) == CHIAKI_DUALSENSE_BT_HAPTICS_REPORT_SIZE, "unexpected haptics report size");
 	memset(report, 0, sizeof(report));
 }
 
@@ -222,30 +195,9 @@ void DualSenseBtHaptics::SenderLoop()
 
 bool DualSenseBtHaptics::SendReport(const uint8_t *samples, size_t size)
 {
-	memset(report, 0, sizeof(report));
-	report[0] = DS_BT_HAPTICS_REPORT_ID;
-	report[1] = (uint8_t)(seq << 4);
+	chiaki_dualsense_bt_haptics_report(report, seq, packet_counter, ctrl_buffer, samples, size, double_block);
 	seq = (seq + 1) & 0x0F;
-	// packet 0x11: id 0x11 | sized flag (0x80), length 4
-	report[2] = 0x11 | 0x80;
-	report[3] = 4;
-	report[4] = DS_BT_HAPTICS_AUDIO_FLAGS;
-	report[5] = ctrl_buffer;
-	report[6] = ctrl_buffer;
-	report[7] = packet_counter;
 	packet_counter += double_block ? 2 : 1;
-	// packet 0x12: id 0x12 | sized flag (0x80) | double block flag (0x40), length 64
-	report[8] = 0x12 | 0x80 | (double_block ? 0x40 : 0);
-	report[9] = DS_BT_HAPTICS_BLOCK_SIZE;
-	memcpy(report + DS_BT_HAPTICS_SAMPLES_OFFSET, samples, std::min(size, (size_t)(DS_BT_HAPTICS_CRC_OFFSET - DS_BT_HAPTICS_SAMPLES_OFFSET)));
-
-	const uint8_t crc_seed = DS_BT_OUTPUT_CRC_SEED;
-	uint32_t crc = Crc32Update(0xFFFFFFFFu, &crc_seed, 1);
-	crc = ~Crc32Update(crc, report, DS_BT_HAPTICS_CRC_OFFSET);
-	report[DS_BT_HAPTICS_CRC_OFFSET + 0] = (uint8_t)(crc & 0xFF);
-	report[DS_BT_HAPTICS_CRC_OFFSET + 1] = (uint8_t)((crc >> 8) & 0xFF);
-	report[DS_BT_HAPTICS_CRC_OFFSET + 2] = (uint8_t)((crc >> 16) & 0xFF);
-	report[DS_BT_HAPTICS_CRC_OFFSET + 3] = (uint8_t)((crc >> 24) & 0xFF);
 
 #if SDL_VERSION_ATLEAST(2, 0, 18)
 	int written = SDL_hid_write(dev, report, sizeof(report));

@@ -6,6 +6,7 @@
 #include <dualsensebthaptics.h>
 
 #include <chiaki/base64.h>
+#include <chiaki/dualsensebt.h>
 #include <chiaki/streamconnection.h>
 #include <chiaki/remote/holepunch.h>
 #include <chiaki/session.h>
@@ -14,6 +15,7 @@
 
 #include <QKeyEvent>
 #include <QMutexLocker>
+#include <QVarLengthArray>
 #include <QtMath>
 #include <atomic>
 
@@ -2331,19 +2333,10 @@ void StreamSession::PushHapticsFrame(uint8_t *buf, size_t buf_size)
 			return;
 		// 16-bit stereo -> 8-bit stereo, both at the console's native 3 kHz
 		const size_t sample_count = buf_size / sizeof(int16_t);
+		QVarLengthArray<int16_t, 64> pcm((qsizetype)sample_count);
+		memcpy(pcm.data(), buf, sample_count * sizeof(int16_t));
 		QByteArray samples((qsizetype)sample_count, Qt::Uninitialized);
-		bool nonsilent = false;
-		for(size_t i = 0; i < sample_count; i++)
-		{
-			int16_t amplitude;
-			memcpy(&amplitude, buf + i * sizeof(int16_t), sizeof(int16_t));
-			int32_t adjusted = static_cast<int32_t>(amplitude * haptic_override) / 256;
-			adjusted = (adjusted > INT8_MAX) ? INT8_MAX : adjusted;
-			adjusted = (adjusted < INT8_MIN) ? INT8_MIN : adjusted;
-			if(adjusted != 0)
-				nonsilent = true;
-			samples[(qsizetype)i] = static_cast<char>(static_cast<int8_t>(adjusted));
-		}
+		bool nonsilent = chiaki_dualsense_bt_haptics_convert(reinterpret_cast<int8_t *>(samples.data()), pcm.constData(), sample_count, haptic_override);
 		if(nonsilent)
 			bt_haptics_last_nonsilent_ms = chiaki_time_now_monotonic_ms();
 		emit BtHapticsPushed(samples);
