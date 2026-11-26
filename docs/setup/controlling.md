@@ -321,6 +321,10 @@ In order to enable DualSense haptics on MacOS please do the following:
 
 7. Play your favorite PS5 game with haptic feedback on Mac via `chiaki-ng`!
 
+!!! Note "Bluetooth"
+
+    These steps are only needed over USB. Over bluetooth, haptics work without any setup. Only haptics are sent over bluetooth; the controller's speaker and headphone jack are not used.
+
 ## Using a non-PlayStation controller with chiaki-ng
 
 ### Controller Mapping
